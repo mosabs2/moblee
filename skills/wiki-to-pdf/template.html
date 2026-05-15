@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ page_title }}</title>
+  <style>{{ brand_css }}</style>
+</head>
+<body>
+
+{# ── Running page header (appears on every body page) ── #}
+<div class="page-header-running">
+  <div class="page-header-gradient"></div>
+  <div class="page-header-row">
+    <span class="page-header-title">{{ page_title }}</span>
+    {% if inline_monogram_uri %}
+    <img class="page-header-monogram" src="{{ inline_monogram_uri }}" alt="">
+    {% endif %}
+  </div>
+</div>
+
+{# Hidden string anchor for footer date #}
+<span class="string-date">{{ date_str }}</span>
+
+{# ══════════════════════════════════════════════════════════════════
+   COVER: Briefing archetype
+   (coaching reviews, sessions for a named person, advisory)
+   ══════════════════════════════════════════════════════════════════ #}
+{% if cover_archetype == 'briefing' %}
+<div class="cover">
+  <div class="cover-top-bar"></div>
+
+  {% if category_label %}
+  <div class="cover-eyebrow">{{ brand_mark_name }} · {{ category_label }}</div>
+  {% endif %}
+
+  {% if monogram_uri %}
+  <img class="cover-monogram" src="{{ monogram_uri }}" alt="{{ brand_mark_name }} Monogram">
+  {% endif %}
+
+  <div class="cover-title">{{ page_title }}</div>
+
+  {% if prepared_for %}
+  <div class="cover-prepared-for">Prepared for {{ prepared_for }}</div>
+  {% endif %}
+
+  <div class="cover-meta-strip">
+    <span>{% if prepared_for %}Prepared for: {{ prepared_for }}{% endif %}</span>
+    <span>{% if report_id %}{{ report_id }} &nbsp;·&nbsp; {% endif %}{{ date_str }}</span>
+  </div>
+</div>
+
+{# ══════════════════════════════════════════════════════════════════
+   COVER: Reference archetype
+   (status: reference pages, brand/reference/wiki-schema pages)
+   ══════════════════════════════════════════════════════════════════ #}
+{% elif cover_archetype == 'reference' %}
+<div class="cover">
+  <div class="cover-top-bar"></div>
+
+  {% if monogram_uri %}
+  <img class="cover-monogram" src="{{ monogram_uri }}" alt="{{ brand_mark_name }} Monogram">
+  {% endif %}
+
+  <div class="cover-title">{{ page_title }}</div>
+
+  <div class="cover-meta-strip">
+    <span>Reference</span>
+    <span>{{ date_str }}</span>
+  </div>
+</div>
+
+{# ══════════════════════════════════════════════════════════════════
+   COVER: Default archetype
+   (everything else with ≥ 500 words)
+   ══════════════════════════════════════════════════════════════════ #}
+{% elif cover_archetype == 'default' %}
+<div class="cover">
+  <div class="cover-top-bar"></div>
+
+  {% if category_label %}
+  <div class="cover-eyebrow">{{ brand_mark_name }} · {{ category_label }}</div>
+  {% endif %}
+
+  {% if monogram_uri %}
+  <img class="cover-monogram" src="{{ monogram_uri }}" alt="{{ brand_mark_name }} Monogram">
+  {% endif %}
+
+  <div class="cover-title">{{ page_title }}</div>
+
+  {% if summary %}
+  <div class="cover-subtitle">{{ summary }}</div>
+  {% endif %}
+
+  <div class="cover-meta-strip">
+    <span></span>
+    <span>{{ date_str }}</span>
+  </div>
+</div>
+
+{# no-cover: fall straight through to body #}
+{% endif %}
+
+{# ══════════════════════════════════════════════════════════════════
+   TABLE OF CONTENTS (reference archetype, > 2000 words)
+   ══════════════════════════════════════════════════════════════════ #}
+{% if toc_html %}
+<div class="body-section">
+  {{ toc_html }}
+</div>
+{% endif %}
+
+{# ══════════════════════════════════════════════════════════════════
+   BODY
+   ══════════════════════════════════════════════════════════════════ #}
+<div class="body-section">
+  {{ body_html }}
+</div>
+
+</body>
+</html>
