@@ -12,13 +12,26 @@ This starter pack is opinionated but not prescriptive. The templates are seeded 
 
 ## What you'll need
 
-A list of prerequisites, quick reference. The detailed install is in `docs/01-prerequisites.md`.
+Moblee supports two paths: a Mac path (full automation through Claude Code and the bundled skills) and a Windows path (manual workflow through Claude.ai web chat, added in v0.2). Pick whichever fits the hardware you have.
+
+**Mac path (default; full automation):**
 
 - A Mac (Apple Silicon recommended; tested on M-series macOS 14 and later)
 - [Obsidian](https://obsidian.md), free
 - [Claude Code](https://claude.ai/code), needs an Anthropic account
 - Git (comes with macOS Command Line Tools, `xcode-select --install`)
 - Python 3 (for the optional PDF rendering skill)
+- Detailed install: `docs/01-prerequisites.md` then `docs/02-install.md`.
+
+**Windows path (manual workflow; v0.2):**
+
+- Windows 10 22H2 or Windows 11
+- [Obsidian](https://obsidian.md) for Windows, free
+- [claude.ai](https://claude.ai) web chat (Cowork desktop is Mac-only)
+- [Git for Windows](https://git-scm.com/download/win)
+- PowerShell 7 recommended ([github.com/PowerShell/PowerShell](https://github.com/PowerShell/PowerShell))
+- Detailed install: `docs/01-prerequisites-windows.md` then `docs/02-install-windows.md`.
+- The Windows path runs the same vault pattern with reduced automation; see `docs/07-windows-workflow.md` for the day-to-day flow and the manual workarounds for the bundled skills.
 
 ## Getting started, the one-paste route
 
@@ -46,17 +59,23 @@ moblee/
 │   ├── wiki-to-pdf/           ← renders any wiki page as a branded PDF
 │   └── design-your-brand/     ← interview that captures your visual identity
 ├── scripts/                   ← install scripts
-│   ├── install.sh             ← lays down the vault on your Mac
-│   ├── install-skills.sh      ← copies the skills to ~/.claude/skills/
-│   └── vault.sh               ← the session-start function (paste into ~/.zshrc)
-└── docs/                      ← longer-form documentation
-    ├── 00-overview.md         ← what this is and why it works
-    ├── 01-prerequisites.md    ← what to install before running Moblee
-    ├── 02-install.md          ← step-by-step install of the starter pack
-    ├── 03-first-conversation.md  ← how to work with Claude in this system
-    ├── 04-first-ingest.md     ← walk through ingesting your first source
-    ├── 05-skills.md           ← reference for the bundled skills
-    └── 06-karpathy-method.md  ← the methodology explained for a beginner
+│   ├── install.sh             ← Mac: lays down the vault
+│   ├── install.ps1            ← Windows: PowerShell installer (v0.2)
+│   ├── install-skills.sh      ← Mac: copies the skills to ~/.claude/skills/
+│   ├── vault.sh               ← Mac: session-start function (paste into ~/.zshrc)
+│   └── vault.ps1              ← Windows: session-start function (added to PowerShell profile, v0.2)
+├── docs/                      ← longer-form documentation
+│   ├── 00-overview.md         ← what this is and why it works
+│   ├── 01-prerequisites.md    ← Mac: what to install before running Moblee
+│   ├── 01-prerequisites-windows.md ← Windows prerequisites (v0.2)
+│   ├── 02-install.md          ← Mac: step-by-step install
+│   ├── 02-install-windows.md  ← Windows install walkthrough (v0.2)
+│   ├── 03-first-conversation.md  ← how to work with Claude in this system
+│   ├── 04-first-ingest.md     ← walk through ingesting your first source
+│   ├── 05-skills.md           ← reference for the bundled Claude Code skills
+│   ├── 06-karpathy-method.md  ← the methodology explained for a beginner
+│   └── 07-windows-workflow.md ← Windows-track day-to-day workflow (v0.2)
+└── CHANGELOG.md               ← v0.1 → v0.2 release notes
 ```
 
 ## License
