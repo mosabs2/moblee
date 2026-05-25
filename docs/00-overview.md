@@ -2,6 +2,8 @@
 
 Moblee is a starter pack for building your own LLM-managed personal knowledge wiki, following the pattern Andrej Karpathy described in April 2026. It bundles an opinionated vault template, four ready-to-use Claude skills, a small set of install scripts, and the documentation you're reading now. The whole package is designed to be paste-and-run: you install it once, ask Claude to walk you through the first day, and from then on you have a personal wiki that grows by use.
 
+**Mac or Windows.** As of v0.2 (25 May 2026), Moblee supports both platforms. The Mac path is the default and ships with full automation via Claude Code and the four bundled skills. The Windows path was added in v0.2 to support users without a Mac; it runs the same vault pattern through Claude.ai web chat with a manual workflow in place of the Mac-side skills. The trade-offs are documented in `docs/07-windows-workflow.md`. If you have any access to a Mac, the Mac path is materially smoother and remains the recommended route; the Windows path exists so that you can begin without a Mac and migrate cleanly if you ever get one.
+
 ## The core idea
 
 Imagine you read a long article, finish it, and want to keep what mattered. The usual options are weak. You can highlight in the app you read in, but those highlights die there. You can paste quotes into a notes app, but they pile up unsorted. You can summarise into a journal, but the journal grows linearly and never connects to anything else you've read. None of these compound.
