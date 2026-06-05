@@ -95,6 +95,18 @@ The cover layout adapts to category and word count:
 
 The skill picks the archetype based on category plus word count, with a default fallback. Word count is the count of plain-text words after stripping markdown syntax and frontmatter.
 
+## CV / statement style
+
+A second render style, selected with `--style cv` (the default is `--style brand`, everything described above). The CV style is a different visual language, not a cover archetype: **no cover, no gradient bars, no monogram cover, no variant rotation**. Instead it is a single clean statement layout with an EB Garamond masthead, a brand-colour letter-spaced subtitle line, a brand-colour rule, an EB Garamond lede paragraph, brand-colour letter-spaced uppercase section labels mapped from the page's H2 headings, body copy in your brand typeface, and one faint centred monogram watermark repeated on every page (rendered only if you have a monogram configured; if not, the style renders cleanly without one).
+
+It is brand-aware: the section labels, rule and subtitle take your `--brand-primary` colour and the body takes your `--brand-font-family`, both read from the same `brand.css` `:root` block that `design-your-brand` writes, so a single brand setup drives both render styles. The EB Garamond serif is the fixed signature of the statement style.
+
+**How the mapping works.** The page's H1 becomes the masthead. The subtitle comes from `--subtitle`, else the page's `summary` frontmatter, else its first sentence (`--subtitle ""` suppresses it). The opening paragraph, if the body begins with one, is set as the lede. Each H2 becomes a section label; H3 becomes an EB Garamond sub-heading. Use it for CVs, statements, briefs, and any single-purpose document where a cover would be overkill. Trigger on "CV style", "statement style", "the watermark style", "the Garamond style", or any clear request to match that look.
+
+## Charts (vega-lite and mermaid)
+
+Fenced ` ```vega-lite ` (inline JSON) and ` ```mermaid ` blocks are pre-rendered to inline graphics before the markdown pass, in **both** render styles. Vega-Lite renders to inline SVG; Mermaid renders to an embedded PNG (via the `mmdc` CLI, because WeasyPrint strips Mermaid's HTML-mode SVG labels). Both dependencies are optional: vega-lite needs `pip install vl-convert-python`, mermaid needs `npm i -g @mermaid-js/mermaid-cli`. If a dependency is missing or a block fails to parse, only that block degrades to a small error box and the rest of the document still renders. Pass `--no-charts` to skip the pre-render and leave fenced blocks as plain code.
+
 ## Body conventions
 
 The brand styling lives in `brand.css` and is driven by CSS custom properties at the top of that file. The structure carried across the template is:
@@ -199,7 +211,7 @@ The skill calls the script under the hood. The user does not have to type the co
 
 - The variant rotation only protects against same-category back-to-back repeats, not cross-category collisions. If two consecutive renders happen in different categories and both happen to pick the same variant, that is allowed; the rotation log is per-category by design.
 - The category resolver is heuristic. If a page does not fit cleanly into one category, the resolver picks the first matching parent in the priority order above. To force a category, override with `--variant`.
-- WeasyPrint renders most markdown features cleanly but does not handle Mermaid diagrams or HTML iframes. Pages containing those are flagged in the confirmation message; the user can decide whether to proceed without them.
+- WeasyPrint renders most markdown features cleanly. Mermaid and Vega-Lite chart blocks are supported through the optional pre-render step (see "Charts" above); if their dependencies are not installed, those blocks degrade to a small error box and the rest of the document renders. HTML iframes are not supported.
 - Bundles can grow long. A mature cluster-note collection can run to thirty-plus notes; expect 60+ pages of output and a few seconds of render time. The skill should not refuse, but should mention the page count in the confirmation.
 
 ## Examples

@@ -22,20 +22,47 @@ Optional flags:
     --report-id            "Some ID"          (briefing meta block)
     --brand-mark-name      "Your Brand"       (eyebrow line label; defaults to "")
     --skip-log             Skip appending to wiki/log.md
+
+Render styles:
+    --style brand | cv     'brand' (default) is the cover/gradient template.
+                           'cv' is the minimalist EB Garamond statement layout
+                           with a faint centred monogram watermark and no cover.
+    --subtitle "..."       (cv) override the masthead subtitle line; "" suppresses.
+    --watermark <file>     (cv) monogram filename for the watermark; defaults to
+                           your configured brand mark. Omitted if none is found.
+    --footer-label "..."   (cv) running-footer label; defaults to the page title.
+    --no-charts            Skip the vega-lite / mermaid fenced-block pre-render
+                           (both styles); leave them as plain code blocks.
+
+Charts (optional, both styles):
+    Fenced ```vega-lite (JSON) and ```mermaid blocks are pre-rendered to inline
+    SVG / PNG. vega-lite needs `pip install vl-convert-python`; mermaid needs the
+    global `mmdc` binary (`npm i -g @mermaid-js/mermaid-cli`). If a dependency is
+    missing or a block fails, that block degrades to a styled error box and the
+    rest of the document still renders.
 """
 
 import argparse
+import base64
 import datetime
+import html as html_lib
 import json
 import os
 import re
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import markdown
 import yaml
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
+
+try:
+    import vl_convert as vlc          # optional: vega-lite chart rendering
+except ImportError:
+    vlc = None
 
 # ── Constants ────────────────────────────────────────────────────────
 
@@ -338,6 +365,223 @@ def extract_summary(fm: dict, body: str) -> str:
     return m.group(1).strip() if m else ""
 
 
+# ── Chart pre-rendering: vega-lite + mermaid fenced blocks ───────────
+# A4 body width (210mm − margins) ≈ 680px at 96dpi; mermaid rendered at 2×
+# for retina sharpness, scaled back to body width via CSS max-width: 100%.
+MERMAID_WIDTH_PX = 1360
+
+CHART_BLOCK_RE = re.compile(
+    r'<pre><code class="language-(vega-lite|mermaid)">(.*?)</code></pre>',
+    re.DOTALL,
+)
+
+
+def _unescape_code(text: str) -> str:
+    return (
+        text.replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", '"')
+            .replace("&#39;", "'")
+            .replace("&amp;", "&")
+    )
+
+
+def _chart_error_block(kind: str, source: str, message: str) -> str:
+    return (
+        f'<pre class="chart-error" data-chart="{kind}">'
+        f'<strong>{kind} render failed:</strong> {html_lib.escape(message)}\n\n'
+        f'{html_lib.escape(source)}'
+        '</pre>'
+    )
+
+
+def pre_render_charts(html_text: str) -> str:
+    """Replace fenced ```vega-lite and ```mermaid blocks with inline SVG / PNG.
+
+    A block that fails to render (or whose optional dependency is missing)
+    becomes a styled <pre class="chart-error"> rather than failing the whole
+    document. v1 inlines JSON only (no external chart-ref indirection).
+    """
+    def repl(match: re.Match) -> str:
+        kind = match.group(1)
+        source = _unescape_code(match.group(2))
+        try:
+            if kind == "vega-lite":
+                if vlc is None:
+                    raise RuntimeError(
+                        "vl_convert not installed (pip install vl-convert-python)"
+                    )
+                spec = json.loads(source)
+                svg = vlc.vegalite_to_svg(spec)
+                return f'<div class="chart vega-lite-chart">{svg}</div>'
+            # mermaid: shell out to mmdc, embed PNG (WeasyPrint strips the
+            # <foreignObject> HTML labels mermaid 11 emits as SVG, so PNG via
+            # Puppeteer is the durable path).
+            in_path = out_path = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    "w", suffix=".mmd", delete=False, encoding="utf-8"
+                ) as in_f:
+                    in_f.write(source)
+                    in_path = in_f.name
+                out_path = tempfile.NamedTemporaryFile(
+                    suffix=".png", delete=False
+                ).name
+                result = subprocess.run(
+                    ["mmdc", "-i", in_path, "-o", out_path,
+                     "-w", str(MERMAID_WIDTH_PX), "-b", "transparent"],
+                    capture_output=True, text=True, timeout=30,
+                )
+                if result.returncode != 0:
+                    raise RuntimeError(
+                        (result.stderr or result.stdout or "mmdc failed").strip()
+                        or "mmdc not installed (npm i -g @mermaid-js/mermaid-cli)"
+                    )
+                b64 = base64.b64encode(Path(out_path).read_bytes()).decode("ascii")
+                return (
+                    '<div class="chart mermaid-chart">'
+                    f'<img src="data:image/png;base64,{b64}" alt="Mermaid diagram"/>'
+                    '</div>'
+                )
+            except FileNotFoundError:
+                raise RuntimeError("mmdc not installed (npm i -g @mermaid-js/mermaid-cli)")
+            finally:
+                for p in (in_path, out_path):
+                    if p:
+                        Path(p).unlink(missing_ok=True)
+        except Exception as exc:                       # noqa: BLE001
+            return _chart_error_block(kind, source, str(exc))
+
+    return CHART_BLOCK_RE.sub(repl, html_text)
+
+
+# ── CV / statement style helpers ─────────────────────────────────────
+
+def _cv_postprocess(html_text: str) -> str:
+    """Map generic markdown HTML onto the CV stylesheet's classes.
+
+    H2 headings become brand-colour section labels; the opening paragraph,
+    if the body starts with one, becomes the EB Garamond lede.
+    """
+    html_text = html_text.replace("<h2>", '<h2 class="section">')
+    if html_text.lstrip().startswith("<p>"):
+        html_text = re.sub(r"<p>", '<p class="lede">', html_text, count=1)
+    return html_text
+
+
+def _css_string_escape(s: str) -> str:
+    """Escape a string for use inside a CSS content: "..." literal."""
+    return s.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def _extract_root_block(brand_css: str) -> str:
+    """Pull the :root {...} variable block out of brand.css so cv.css can
+    reference the same brand variables (one design-your-brand run drives both
+    render styles). Returns "" if no :root block is found."""
+    m = re.search(r":root\s*\{[^}]*\}", brand_css, re.DOTALL)
+    return m.group(0) if m else ""
+
+
+def find_watermark(vault: Path, override: str | None) -> Path | None:
+    """Resolve the CV-style watermark monogram. An explicit --watermark
+    filename wins; otherwise fall back to the configured brand mark. Returns
+    None if nothing is found (the CV style then renders with no watermark)."""
+    if override:
+        found = find_monogram(vault, override)
+        if found:
+            return found
+    return find_inline_monogram(vault)
+
+
+def render_cv(args: argparse.Namespace) -> None:
+    """Minimalist CV / statement render: no cover, no variant rotation,
+    EB Garamond masthead, brand-colour section labels, faint monogram
+    watermark (only if configured). Self-contained path."""
+    vault      = detect_vault(args.vault)
+    output_dir = Path(args.output_dir).expanduser().resolve() if args.output_dir \
+                 else vault / "outputs"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    page_file = find_wiki_page(args.page, vault)
+    if not page_file:
+        sys.exit(json.dumps({"error": f"Page not found: {args.page}"}))
+
+    raw = page_file.read_text(encoding="utf-8")
+    fm, body = parse_frontmatter(raw)
+    title = get_h1(body, page_file.stem)
+    summary = extract_summary(fm, body)
+
+    # Strip the leading H1 (rendered as the masthead) to avoid duplication.
+    body_md = re.sub(r"^#\s+.+?\n+", "", body, count=1)
+    body_md = italicise_wikilinks(body_md)
+
+    md_renderer = markdown.Markdown(extensions=["tables", "fenced_code"])
+    body_html = md_renderer.convert(body_md)
+    if not args.no_charts:
+        body_html = pre_render_charts(body_html)
+    body_html = _cv_postprocess(body_html)
+
+    subtitle = args.subtitle if args.subtitle is not None else summary
+    footer_label = args.footer_label or title
+
+    watermark_path = find_watermark(vault, args.watermark)
+    watermark_src = watermark_path.as_uri() if watermark_path else ""
+
+    brand_css = (SKILL_DIR / "brand.css").read_text(encoding="utf-8")
+    cv_css = (SKILL_DIR / "cv.css").read_text(encoding="utf-8")
+    combined_css = _extract_root_block(brand_css) + "\n" + cv_css
+
+    env      = Environment(loader=FileSystemLoader(str(SKILL_DIR)), autoescape=False)
+    template = env.get_template("template-cv.html")
+    full_html = template.render(
+        title            = title,
+        subtitle         = subtitle,
+        body_html        = body_html,
+        watermark_src    = watermark_src,
+        footer_label_css = _css_string_escape(footer_label),
+        cv_css           = combined_css,
+    )
+
+    slug = slugify(title)
+    date_slug = datetime.date.today().strftime("%Y-%m-%d")
+    html_out = output_dir / f"{slug}-{date_slug}.html"
+    pdf_out  = output_dir / f"{slug}-{date_slug}.pdf"
+    html_out.write_text(full_html, encoding="utf-8")
+
+    try:
+        HTML(filename=str(html_out)).write_pdf(str(pdf_out))
+    except Exception as exc:
+        print(json.dumps({"error": f"WeasyPrint failed: {exc}"}))
+        sys.exit(1)
+
+    page_count = -1
+    try:
+        from pypdf import PdfReader
+        page_count = len(PdfReader(str(pdf_out)).pages)
+    except Exception:
+        pass
+
+    if not args.skip_log:
+        log_md = vault / "wiki" / "log.md"
+        today  = datetime.date.today().strftime("%Y-%m-%d")
+        entry  = f"\n## [{today}] render | {title}, wiki-to-pdf, cv, {page_count} pp\n"
+        try:
+            with open(log_md, "a", encoding="utf-8") as fh:
+                fh.write(entry)
+        except FileNotFoundError:
+            pass
+
+    print(json.dumps({
+        "status":      "ok",
+        "page_title":  title,
+        "style":       "cv",
+        "watermark":   watermark_path.name if watermark_path else "(none)",
+        "page_count":  page_count,
+        "output_pdf":  str(pdf_out),
+        "output_html": str(html_out),
+    }, indent=2))
+
+
 # ── Main render ──────────────────────────────────────────────────────
 
 def render(args: argparse.Namespace) -> None:
@@ -391,6 +635,8 @@ def render(args: argparse.Namespace) -> None:
         converted = italicise_wikilinks(pb)
         md_renderer.reset()
         html_part = md_renderer.convert(converted)
+        if not getattr(args, "no_charts", False):
+            html_part = pre_render_charts(html_part)
         if i > 0:
             html_part = (
                 '<div class="cluster-divider">'
@@ -506,7 +752,19 @@ def main() -> None:
     p.add_argument("--report-id",          help="Report ID for briefing meta")
     p.add_argument("--brand-mark-name",    help="Brand label for the eyebrow line")
     p.add_argument("--skip-log",           action="store_true", help="Skip wiki/log.md entry")
-    render(p.parse_args())
+    p.add_argument("--style",              choices=["brand", "cv"], default="brand",
+                   help="Render style: 'brand' (cover/gradient, default) or 'cv' "
+                        "(minimalist EB Garamond statement layout, no cover).")
+    p.add_argument("--subtitle",           help="CV style: override masthead subtitle ('' suppresses).")
+    p.add_argument("--watermark",          help="CV style: monogram filename for the watermark.")
+    p.add_argument("--footer-label",       help="CV style: running-footer label (defaults to title).")
+    p.add_argument("--no-charts",          action="store_true",
+                   help="Skip vega-lite / mermaid fenced-block pre-render (both styles).")
+    args = p.parse_args()
+    if args.style == "cv":
+        render_cv(args)
+    else:
+        render(args)
 
 
 if __name__ == "__main__":
