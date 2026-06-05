@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.3 — 5 June 2026
+
+`wiki-to-pdf` rendering upgrades, ported from the maintainer's live skill and brand-abstracted so they are driven by your own `design-your-brand` settings.
+
+### Added
+
+- **CV / statement render style** (`--style cv`). A second, distinct visual language alongside the default brand template: no cover, no gradient bars, no monogram cover. An EB Garamond masthead, a brand-colour letter-spaced subtitle, a brand-colour rule, an EB Garamond lede, brand-colour uppercase section labels mapped from H2 headings, body copy in your brand typeface, and a single faint centred monogram watermark on every page (rendered only if a monogram is configured). New files: `skills/wiki-to-pdf/cv.css` and `skills/wiki-to-pdf/template-cv.html`.
+- **Chart pre-rendering** in both styles. Fenced ` ```vega-lite ` (inline JSON) blocks render to inline SVG, and ` ```mermaid ` blocks render to an embedded PNG via the `mmdc` CLI. Both dependencies are optional (`pip install vl-convert-python`; `npm i -g @mermaid-js/mermaid-cli`); a missing dependency or a malformed block degrades to a small error box rather than failing the whole document.
+- New `render.py` flags: `--style brand|cv`, `--subtitle`, `--watermark`, `--footer-label`, and `--no-charts`.
+
+### Changed
+
+- `skills/wiki-to-pdf/render.py` gained the `render_cv` path, the `pre_render_charts` step (wired into both render styles), and the `--style` dispatch in `main()`. The brand path is unchanged in behaviour.
+- `skills/wiki-to-pdf/SKILL.md` documents the CV style, charts, and the new flags; the stale "WeasyPrint does not handle Mermaid" limitation was corrected.
+- `skills/design-your-brand/SKILL.md` notes that the configured monogram doubles as the CV-style watermark.
+
+### Brand abstraction
+
+The CV style reads `--brand-primary`, `--brand-secondary`, `--brand-body`, and `--brand-font-family` from the same `brand.css` `:root` block that `design-your-brand` writes, so one brand setup drives both render styles. No maintainer-specific colours, fonts, or assets are baked in. The EB Garamond serif is the fixed signature of the statement style.
+
 ## v0.2 — 25 May 2026
 
 Windows support added.

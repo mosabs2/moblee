@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ title }}</title>
+<style>
+{{ cv_css }}
+/* Per-render running-footer label (overrides the empty default in cv.css). */
+@page { @bottom-left { content: "{{ footer_label_css }}"; } }
+</style>
+</head>
+<body>
+
+{% if watermark_src %}
+<div class="watermark">
+  <img src="{{ watermark_src }}" alt="">
+</div>
+{% endif %}
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="name">{{ title }}</div>
+    {% if subtitle %}<div class="title">{{ subtitle }}</div>{% endif %}
+    <div class="rule"></div>
+  </header>
+
+  {{ body_html }}
+
+</div>
+</body>
+</html>

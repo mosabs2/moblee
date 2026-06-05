@@ -1,0 +1,182 @@
+/* ==========================================================================
+   cv.css — the minimalist "CV / statement" render style for wiki-to-pdf.
+
+   A second visual language, distinct from brand.css: no cover, no gradient
+   bars, no monogram cover. Instead an EB Garamond masthead, brand-colour
+   letter-spaced section labels, brand-font body copy, and a single faint
+   centred monogram watermark on every page (rendered only if a monogram is
+   configured).
+
+   Brand-driven values (--brand-primary, --brand-secondary, --brand-body,
+   --brand-font-family) come from the :root block of brand.css, which the
+   render script prepends to this stylesheet at render time, so a single
+   `design-your-brand` run drives BOTH render styles from one place. The
+   EB Garamond serif is the fixed signature of the statement style.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap');
+
+@page {
+  size: A4;
+  margin: 19mm 22mm 16mm 22mm;
+  @bottom-left {
+    content: "";   /* set per-render by template-cv.html */
+    font-family: var(--brand-font-family);
+    font-size: 6.8pt;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #9a9ba2;
+    padding-top: 2.4mm;
+    border-top: 0.5pt solid #d7d9e4;
+    width: 100%;
+  }
+  @bottom-right {
+    content: counter(page) "  /  " counter(pages);
+    font-family: var(--brand-font-family);
+    font-size: 6.8pt;
+    letter-spacing: 0.10em;
+    color: var(--brand-primary);
+    padding-top: 2.4mm;
+    border-top: 0.5pt solid #d7d9e4;
+    text-align: right;
+  }
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  font-family: var(--brand-font-family);
+  color: var(--brand-body);
+  font-size: 9.9pt;
+  line-height: 1.62;
+  background: #ffffff;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== Watermark: faint monogram, centred, every page (only if configured) ===== */
+.watermark {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 118mm;
+  height: 118mm;
+  opacity: 0.045;
+  z-index: 0;
+}
+.watermark img { width: 100%; height: 100%; object-fit: contain; }
+
+.page { position: relative; z-index: 1; }
+
+/* ===== Masthead ===== */
+.masthead { margin-bottom: 6mm; }
+.name {
+  font-family: 'EB Garamond', 'Garamond', Georgia, 'Times New Roman', serif;
+  font-weight: 500;
+  font-size: 27pt;
+  line-height: 1.08;
+  letter-spacing: 0.005em;
+  color: var(--brand-body);
+}
+.title {
+  margin-top: 3.4mm;
+  font-size: 7.6pt;
+  font-weight: 500;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--brand-primary);
+}
+.rule {
+  margin-top: 5mm;
+  height: 0;
+  border-top: 1.4pt solid var(--brand-primary);
+  width: 100%;
+}
+
+/* ===== Lede (the opening paragraph, auto-tagged) ===== */
+.page p.lede, .lede {
+  font-family: 'EB Garamond', 'Garamond', Georgia, serif;
+  font-size: 12.1pt;
+  line-height: 1.55;
+  color: var(--brand-body);
+  margin: 5.5mm 0 2mm 0;
+}
+
+/* ===== Section headings (mapped from markdown H2) ===== */
+.page h2, h2.section {
+  font-size: 8pt;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--brand-primary);
+  margin: 6mm 0 0 0;
+  padding-bottom: 1.6mm;
+  border-bottom: 0.5pt solid #d7d9e4;
+}
+
+/* ===== Sub-headings (markdown H3) ===== */
+.page h3 {
+  font-family: 'EB Garamond', 'Garamond', Georgia, serif;
+  font-size: 13pt;
+  font-weight: 500;
+  color: var(--brand-body);
+  margin-top: 4.5mm;
+}
+
+/* ===== Body copy ===== */
+.page p { margin-top: 2.6mm; color: var(--brand-body); }
+.page strong { font-weight: 600; color: var(--brand-body); }
+.page em { font-style: italic; }
+.page a { color: var(--brand-primary); text-decoration: none; }
+
+/* ===== Lists ===== */
+.page ul, .page ol { margin: 2.4mm 0 0 5.5mm; color: var(--brand-body); }
+.page li { margin-top: 1.4mm; }
+
+/* ===== Blockquote ===== */
+.page blockquote {
+  font-family: 'EB Garamond', 'Garamond', Georgia, serif;
+  font-size: 11.4pt;
+  color: var(--brand-body);
+  border-left: 1.4pt solid var(--brand-primary);
+  padding-left: 4mm;
+  margin: 3mm 0;
+}
+
+/* ===== Tables ===== */
+.page table { width: 100%; border-collapse: collapse; margin-top: 3mm; font-size: 8.6pt; }
+.page th {
+  text-align: left;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--brand-primary);
+  padding: 1.6mm 2mm;
+  letter-spacing: 0.04em;
+}
+.page td { padding: 1.4mm 2mm; border-bottom: 0.5pt solid #d7d9e4; color: var(--brand-body); }
+.page tr:nth-child(even) td { background: #f5f5f7; }
+
+/* ===== Rule ===== */
+.page hr { border: 0; border-top: 0.5pt solid #d7d9e4; margin: 5mm 0; }
+
+/* ===== Code (fenced blocks + inline) ===== */
+.page pre {
+  background: #f5f5f7; border: 0.5pt solid #d7d9e4; border-radius: 2pt;
+  padding: 2.4mm 3mm; margin-top: 2.6mm;
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 8.4pt; line-height: 1.5; color: var(--brand-body);
+  white-space: pre-wrap; word-break: break-word; page-break-inside: avoid;
+}
+.page code {
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace; font-size: 8.7pt;
+  background: #eeeef2; padding: 0.2mm 1mm; border-radius: 2pt;
+}
+.page pre code { background: none; padding: 0; font-size: 8.4pt; }
+
+/* ===== Chart blocks (vega-lite / mermaid pre-rendered) ===== */
+.page .chart { margin-top: 3mm; text-align: center; page-break-inside: avoid; }
+.page .chart svg, .page .chart img { max-width: 100%; height: auto; }
+.page .chart-error {
+  background: #fbeeee; border: 0.5pt solid #e3b7b7; color: #7a1f1f;
+  padding: 2mm 3mm; font-size: 8pt; white-space: pre-wrap; margin-top: 2.6mm;
+}

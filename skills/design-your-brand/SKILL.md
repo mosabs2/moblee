@@ -95,6 +95,8 @@ If the user wants multiple variants (different finishes, light and dark versions
 
 If the user has no monogram, do not offer to generate one. That is a separate creative task. Confirm that the brand will render without a monogram and move on.
 
+The same monogram also serves as the faint centred watermark in `wiki-to-pdf`'s CV / statement style (`--style cv`). Nothing extra needs configuring: if a monogram is present it is used for both the brand-template cover and the CV watermark; if not, the CV style simply renders without a watermark.
+
 ### Stage 6: Save and apply
 
 By this point the skill has captured:
