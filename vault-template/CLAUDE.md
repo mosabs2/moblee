@@ -12,6 +12,10 @@ This is **not a code repository**. It is an Obsidian vault implementing the **Ka
 
 At the start of any wiki work, read `wiki/_context.md` for current state and tempo (active threads, open decisions, watch list, and recent significant additions).
 
+## The "orient" command
+
+When the user says **orient** (and only orient, with no other instruction), execute this sequence without asking questions: (1) run `bash scripts/vault-orient-preflight.sh` if the script exists (a quick health probe: Obsidian running, file freshness, last commit, uncommitted changes) and carry its verdict into the opening line; (2) read `wiki/_context.md` in full; (3) read the last 30 lines of `wiki/log.md`; (4) respond with a short sitrep: current date/time, the most active threads, any open decisions needing the user's input, and the state of the `raw/` and `Clippings/` inboxes. No preamble, no "I'll now read…" narration — absorb and report. It is the canonical session-start gesture when the user has been away for more than a few hours.
+
 ## Three-layer architecture
 
 1. **Raw sources** (immutable): material the user drops in. Read from these, never modify.
@@ -36,7 +40,7 @@ At the start of any wiki work, read `wiki/_context.md` for current state and tem
 
 **Query**: answer questions by searching the wiki and citing pages with `[[Page Name]]` links. After substantive answers (comparisons, analyses, syntheses), offer to save the answer back as a wiki page so explorations compound.
 
-**Lint**: when asked to "lint" or "health-check" the wiki, scan for contradictions between pages, stale claims superseded by newer sources, orphan pages with no inbound links, important concepts mentioned but lacking their own page, missing reciprocal backlinks, and data gaps. Write the report to `outputs/lint-report-YYYY-MM-DD.md` and log it.
+**Lint**: when asked to "lint" or "health-check" the wiki, scan for contradictions between pages, stale claims superseded by newer sources, orphan pages with no inbound links, important concepts mentioned but lacking their own page, missing reciprocal backlinks, and data gaps. Write the report to `outputs/lint-report-YYYY-MM-DD.md` and log it. A companion **programmatic lint** (`scripts/lint-v2.py`) verifies the structural conventions mechanically — log-header format, dangling wikilinks, broken section anchors, attribution presence, and a **vault-weight guard** that flags always-loaded files over their token caps (`_context.md` ≤ 12k, this file ≤ 10k, `Index.md` ≤ 8k) without ever trimming. A sensible cadence is weekly. When the weight guard flags a file, the **compact skill** acts on it: mechanical rotations run freely, lossy prose trims are proposed for the user's sign-off. A **commit gate** (`scripts/vault-gate.py`, installable as `.git/hooks/pre-commit`) runs the cheap deterministic subset of these checks at write time, so the common error classes are caught before a commit exists rather than at the next lint.
 
 ## House style
 
@@ -61,6 +65,14 @@ The log is the canonical record of work, and over time it becomes queryable for 
 **1. Time-stamped headers.** Every log entry uses the format `## [YYYY-MM-DD HH:MM ±TZ] type | Title`, where `HH:MM ±TZ` is the workstation clock at the time the entry is written (typically the close of the activity it records). Verify the time via Bash `date` rather than guessing.
 
 **2. End-of-session housekeeping summary entries.** At the close of any substantive session (anything more than a single trivial ingest), append a final log entry with the type `housekeeping` (e.g. `## [YYYY-MM-DD HH:MM ±TZ] housekeeping | End-of-session summary`). This entry carries an inline metadata footer with at least: session start time, session end time, duration, total wiki pages touched, count of new wiki pages, count of new `raw/processed/` files, count of `raw/` to `raw/processed/` moves, and any tooling or schema changes. Format the metadata as a single italicised line so it greps cleanly: `*Session: started YYYY-MM-DD HH:MM; ended YYYY-MM-DD HH:MM; duration Xh Ym; wiki pages touched: N (M new, P modified); raw/processed/ files added: K; raw/ → raw/processed/ moves: L; tooling/schema: <list>*`. This is the line future metric queries will aggregate against. If the session is genuinely brief (one trivial ingest, no schema or tooling change), the housekeeping summary may be skipped; in all other cases it is mandatory.
+
+## Daily Notes (optional layer)
+
+If you use the brain skill's temporal patterns (`today`, `close-day`, `schedule`), daily notes live in `Daily Notes/YYYY-MM-DD.md`, created from `Daily Notes/_TEMPLATE.md`. A daily note is a **planning-only artefact**: a Plan section (the morning's intent), a Scheduled section, and frontmatter that gains `closed_at` when the workday closes. Unticked checkboxes mean "this was planned", not "this is unresolved" — item resolution is determined by `wiki/log.md`, not checkbox state. The workday is keyed by the date it *started* on: a session ending at 00:30 still closes the prior date's note. `close-day` is user-triggered at the end of the user's workday, never nudged on session boundaries.
+
+## Data freshness (volatile figures)
+
+Stable knowledge gets ingested; data that changes constantly gets connected. Every volatile figure written into the wiki (prices, indices, league positions, counts) carries its absolute as-of date, and the section naming it points at its live source in prose. When a query turns on a volatile figure and a live source exists, fetch the current value and answer with it, using the wiki's recorded value as the trend anchor only; update the page's figure when materially diverged and the page is being touched anyway, never as a sweeping refresh pass. A volatile number that is the *subject* of an analytical claim must always be fetched live before the claim is made.
 
 ## Source attribution and file movement
 
@@ -156,6 +168,12 @@ The three sub-categories have different handling rules:
 
 **Tweets** (`Clippings/Readwise/Tweets/`): reference layer only. Do not ingest. Available for searching if a specific saved thread becomes relevant.
 
+## Compaction discipline
+
+`wiki/_context.md` is working state and is kept light, because Claude reads it in full at every session start. When an ingest advances an item on it, **fold the superseded state into current state** rather than appending another dated bullet — the detail belongs on the parent page or cluster note; append-without-fold is the specific habit that bloats the file. When finished history accumulates, lift it to a cold-storage companion (`wiki/Wiki Operations/Context Archive.md`): older refresh notes keep only the latest three inline (only the most recent at full length), and closed items move to the archive behind a one-line strikethrough pointer. Before adding to this file (CLAUDE.md), ask whether the content is needed every session (here) or is reference detail on demand (a `wiki/Wiki Operations/` page behind a wikilink).
+
 ## Useful tools in this environment
 
-Web Clippings arrive with YAML frontmatter; preserve the source URL, author, and date when citing. PDFs and images in `raw/` can be read directly. Subfolder pages (e.g. `wiki/[Your Domain]/[Sub-page].md`, `wiki/[Your Domain] Sessions/YYYY-MM-DD ....md`) resolve via `[[basename]]` wikilinks regardless of folder, since Obsidian matches by filename across the vault.
+Web Clippings arrive with YAML frontmatter; preserve the source URL, author, and date when citing.
+
+**The dashboard** (`dashboard/` in the Moblee install) is a local web view of the vault: orientation state, an Ask box that runs Claude against the vault, and a Visuals tab whose charts are driven by `dashboard/dashboard-charts.json` — when the user asks for "a chart of X on my dashboard", edit that config (see `dashboard/README.md` for the schema). **The galaxy** (`scripts/wiki-galaxy/build.py`) renders the vault as an offline 3D knowledge graph into `outputs/galaxy/`; rebuild before opening so the view reflects current state. **The voice stack** (optional, `voice/` in the Moblee install) reads replies aloud via a Stop hook and nudges audibly when input is needed; `voice off` mutes, `voice full` reads the latest reply in full. PDFs and images in `raw/` can be read directly. Subfolder pages (e.g. `wiki/[Your Domain]/[Sub-page].md`, `wiki/[Your Domain] Sessions/YYYY-MM-DD ....md`) resolve via `[[basename]]` wikilinks regardless of folder, since Obsidian matches by filename across the vault.

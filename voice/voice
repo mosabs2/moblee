@@ -1,0 +1,19 @@
+#!/bin/zsh
+# Simple voice-out control for the Moblee Claude Code voice stack.
+# Usage: voice on | off | stop | last | full | say <text> | paste | status
+SCRIPT="$HOME/.claude/hooks/speak-elevenlabs.py"
+MUTE="$HOME/.claude/voice-mute"
+case "$1" in
+  off)    touch "$MUTE"; echo "voice: muted (replies won't be read aloud)";;
+  on)     rm -f "$MUTE"; echo "voice: on (replies read aloud)";;
+  stop)   pkill -f "speak-elevenlabs.py" 2>/dev/null
+          killall afplay 2>/dev/null
+          killall say 2>/dev/null
+          echo "voice: playback stopped";;
+  last)   (python3 "$SCRIPT" --last >/dev/null 2>&1 &); echo "voice: speaking last reply (voice stop to cut)";;
+  full)   (python3 "$SCRIPT" --last-full >/dev/null 2>&1 &); echo "voice: speaking last reply in full (voice stop to cut)";;
+  say)    shift; (python3 "$SCRIPT" "$@" >/dev/null 2>&1 &); echo "voice: speaking (voice stop to cut)";;
+  paste)  (pbpaste | python3 "$SCRIPT" --stdin >/dev/null 2>&1 &); echo "voice: speaking clipboard (voice stop to cut)";;
+  status) [ -f "$MUTE" ] && echo "voice: muted" || echo "voice: on";;
+  *)      echo "usage: voice on | off | stop | last | full | say <text> | paste | status";;
+esac

@@ -92,6 +92,27 @@ done < <(find "$VAULT_LOCATION" \
                  -o -name "*.yaml" -o -name "*.json" \) \
               -print0)
 
+# ----- copy the vault tooling (v0.4) ------------------------------------------
+echo "Copying vault tooling (lint, commit gate, preflight, galaxy, dashboard)..."
+mkdir -p "$VAULT_LOCATION/scripts"
+for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh; do
+  if [[ -f "$SCRIPT_DIR/$tool" ]]; then
+    cp "$SCRIPT_DIR/$tool" "$VAULT_LOCATION/scripts/$tool"
+  fi
+done
+if [[ -d "$SCRIPT_DIR/wiki-galaxy" ]]; then
+  cp -R "$SCRIPT_DIR/wiki-galaxy" "$VAULT_LOCATION/scripts/wiki-galaxy"
+fi
+if [[ -d "$PACKAGE_ROOT/dashboard" ]]; then
+  cp -R "$PACKAGE_ROOT/dashboard" "$VAULT_LOCATION/dashboard"
+fi
+
+# ----- record the vault path for the tooling ----------------------------------
+# lint-v2, the gate, the galaxy and the dashboard all find the vault through
+# this file (overridable with the MOBLEE_VAULT environment variable).
+mkdir -p "$HOME/.config/moblee"
+echo "$VAULT_LOCATION" > "$HOME/.config/moblee/vault-path"
+
 # ----- git init ---------------------------------------------------------------
 echo "Initialising git repository..."
 (
@@ -101,6 +122,28 @@ echo "Initialising git repository..."
   git commit --quiet -m "initial vault from Moblee starter pack" \
     || echo "  (git commit skipped, configure user.name and user.email first)"
 )
+
+# ----- install the commit gate as a pre-commit hook ---------------------------
+if [[ -f "$VAULT_LOCATION/scripts/vault-gate.py" && -d "$VAULT_LOCATION/.git" ]]; then
+  {
+    echo '#!/bin/sh'
+    echo 'exec python3 "$(git rev-parse --show-toplevel)/scripts/vault-gate.py"'
+  } > "$VAULT_LOCATION/.git/hooks/pre-commit"
+  chmod +x "$VAULT_LOCATION/.git/hooks/pre-commit"
+  echo "Commit gate installed (.git/hooks/pre-commit)."
+fi
+
+# ----- optional: voice stack (macOS) ------------------------------------------
+if [[ "$(uname)" == "Darwin" && -f "$PACKAGE_ROOT/voice/install-voice.py" ]]; then
+  echo ""
+  echo "The voice stack reads Claude's replies aloud and nudges you audibly"
+  echo "when Claude is waiting on you. Free (built-in macOS voice), upgradable"
+  echo "to ElevenLabs later. See voice/README.md."
+  read -r -p "Install the voice stack? [y/N]: " INSTALL_VOICE
+  if [[ "$INSTALL_VOICE" =~ ^[Yy]$ ]]; then
+    python3 "$PACKAGE_ROOT/voice/install-voice.py" || echo "  (voice install failed; see voice/README.md)"
+  fi
+fi
 
 # ----- optional: install the vault shell function -----------------------------
 echo ""
@@ -144,4 +187,9 @@ echo "       $VAULT_LOCATION"
 echo ""
 echo "  3. Open the vault's Welcome.md and follow it from there. Or paste"
 echo "     START_HERE.md into Claude and let it walk you through."
+echo ""
+echo "  4. Optional extras, whenever you like:"
+echo "       Dashboard:  python3 \"$VAULT_LOCATION/dashboard/server.py\"   (then open the printed URL)"
+echo "       Galaxy:     python3 \"$VAULT_LOCATION/scripts/wiki-galaxy/build.py\""
+echo "       Weekly health check: ask Claude to \"run the lint\""
 echo ""

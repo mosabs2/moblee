@@ -1,0 +1,12 @@
+{
+  "charts": [
+    {
+      "id": "wiki-growth",
+      "title": "Wiki growth",
+      "why": "How the knowledge base is compounding — cumulative pages over time.",
+      "builtin": "wiki-growth",
+      "type": "cumulative",
+      "date_x": true
+    }
+  ]
+}

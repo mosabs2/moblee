@@ -10,6 +10,8 @@ The Karpathy pattern is built on a four-file separation of concerns. `CLAUDE.md`
 
 This starter pack is opinionated but not prescriptive. The templates are seeded with sensible defaults (British English, paragraph-first prose, no em dashes, dated absolute references, structured ingest workflows) which you can keep, change, or strip as you see fit. The `CLAUDE.md` is the source of truth for your conventions; once it's installed in your vault, you own it.
 
+**New in v0.4** — the pack now carries the maintainer's battle-tested operational layer, generalised for any vault: the **brain skill grown to eleven patterns** (reflective queries, `_context` tier management, persona ghost-voices, and a daily rhythm of morning brief / close-day / week planning over a new Daily Notes layer); a **structural health layer** (`scripts/lint-v2.py` weekly checks, a `compact` skill that keeps the always-loaded files light, and a git **commit gate** that catches format drift before a commit exists); a **local dashboard** (orientation state, an Ask box that runs Claude against your vault, and a Visuals tab whose charts you add by simply asking Claude); the **3D galaxy** view of your knowledge graph; and an optional **voice stack** (replies read aloud, audible nudges when Claude needs you — free with the built-in macOS voice, upgradable to ElevenLabs). All optional, all installed by the same one-command installer.
+
 ## What you'll need
 
 Moblee supports two paths: a Mac path (full automation through Claude Code and the bundled skills) and a Windows path (manual workflow through Claude.ai web chat, added in v0.2). Pick whichever fits the hardware you have.
