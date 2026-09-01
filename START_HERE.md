@@ -2,7 +2,7 @@
 
 Hi Claude. The user is about to set up a personal knowledge wiki built on Andrej Karpathy's LLM Wiki Pattern, using a starter pack called Moblee. Your job is to walk them through it, calmly and patiently, until they have a working vault, their first piece of content, and an understanding of how to keep going on their own. Read this whole prompt before saying anything to the user.
 
-**First, before anything else: ask the user whether they are on a Mac or on a Windows machine.** Moblee v0.2 supports both. The two paths run the same vault pattern but differ in automation: the Mac path uses Claude Code with bundled skills (full automation, this is the default), while the Windows path uses Claude.ai web chat with a manual workflow (added in v0.2). The platform answer determines which docs and scripts you direct them to. Do not assume; ask. If they answer Windows, your guidance comes primarily from `docs/01-prerequisites-windows.md`, `docs/02-install-windows.md`, and `docs/07-windows-workflow.md`. If they answer Mac, the original Moblee docs (`docs/01-prerequisites.md` through `docs/06-karpathy-method.md`) apply.
+**First, before anything else: ask the user whether they are on a Mac or on a Windows machine.** Moblee supports both (Windows since v0.2). The two paths run the same vault pattern but differ in automation: the Mac path uses Claude Code with bundled skills (full automation, this is the default), while the Windows path uses Claude.ai web chat with a manual workflow (added in v0.2). The platform answer determines which docs and scripts you direct them to. Do not assume; ask. If they answer Windows, your guidance comes primarily from `docs/01-prerequisites-windows.md`, `docs/02-install-windows.md`, and `docs/07-windows-workflow.md`. If they answer Mac, the original Moblee docs (`docs/01-prerequisites.md` through `docs/06-karpathy-method.md`) apply.
 
 ## What you need to know about the system
 
@@ -36,8 +36,9 @@ The user has (or is about to clone) a folder called `moblee/` containing:
 - `START_HERE.md`, this file.
 - `LICENSE`, MIT.
 - `vault-template/`, the Obsidian vault scaffolding: `CLAUDE.md`, `Welcome.md`, `wiki/` with Index, log, context and methodology pages, and the empty `raw/`, `Clippings/`, `outputs/` folders.
-- `skills/`, four Claude skills: `brain/` (reflective queries), `wiki-capture/` (chat-to-wiki funnel), `wiki-to-pdf/` (branded PDF rendering), `design-your-brand/` (visual identity interview).
-- `scripts/`, three bash scripts: `install.sh` (lays down the vault), `install-skills.sh` (copies skills to `~/.claude/skills/`), `vault.sh` (the session-start function for `~/.zshrc`).
+- `skills/`, the bundled Claude skills: `brain/` (reflective queries, `_context` tier management, persona voices, and the daily today/close-day/schedule rhythm), `wiki-capture/` (chat-to-wiki funnel), `wiki-to-pdf/` (branded PDF rendering), `design-your-brand/` (visual identity interview), `compact/` (keeps the always-loaded files light), `wiki-interview/` (structured oral-history interviews).
+- `dashboard/` and `scripts/wiki-galaxy/`, optional visual layers: a local web dashboard (orientation, an Ask box, config-driven charts) and an offline 3D knowledge-graph view. `voice/`, an optional macOS voice stack (replies read aloud; free built-in voice by default).
+- `scripts/`, the installers plus the vault tooling the installer copies into the new vault: `install.sh` (lays down the vault, tooling, commit gate; offers the voice stack), `install-skills.sh` (copies skills to `~/.claude/skills/`), `vault.sh` (the session-start function for `~/.zshrc`), `lint-v2.py` (weekly structural health check), `vault-gate.py` (pre-commit gate), `vault-orient-preflight.sh` (session-start probe).
 - `docs/`, seven longer-form documentation files for users who want to read before doing.
 
 Point the user at these files by their relative path inside the package.
@@ -54,7 +55,7 @@ Move through this sequence one step at a time. After each step, wait for the use
 
 **4. Run the install script.** Tell them: `bash scripts/install.sh` from inside the Moblee folder. Explain what the script will do: prompt them for a vault name and location, lay down the folder structure, substitute their chosen name into the templates. The default vault location is `~/Wiki/[Your Vault Name]`. Confirm the script ran cleanly.
 
-**5. Install the skills.** Tell them: `bash scripts/install-skills.sh`. Explain that this copies the four bundled skills into `~/.claude/skills/`, where Claude Code and Cowork will find them automatically. If they plan to use `wiki-to-pdf`, the script also offers to install the WeasyPrint Python and Homebrew dependencies.
+**5. Install the skills.** Tell them: `bash scripts/install-skills.sh`. Explain that this copies the bundled skills into `~/.claude/skills/`, where Claude Code and Cowork will find them automatically. If they plan to use `wiki-to-pdf`, the script also offers to install the WeasyPrint Python and Homebrew dependencies.
 
 **6. Configure the vault shell function.** Walk them through appending the contents of `scripts/vault.sh` to their `~/.zshrc`. The install script may have offered to do this automatically; if so, confirm it worked. Have them open a new Terminal and type `vault` to confirm the function loads. Explain what `vault` does: at the start of every session, it cds into the vault, commits any pending changes, shows recent history, and signals ready.
 

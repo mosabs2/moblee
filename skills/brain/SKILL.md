@@ -1,295 +1,190 @@
 ---
 name: brain
-description: Run reflective queries against the user's personal Obsidian wiki, without writing to it. Trigger when the user wants substantive analytical output drawing across multiple wiki pages or sources. Six patterns: trace (how an idea has evolved over time), connect (bridges between two domains), emerge (latent themes the vault implies but never states), challenge (pressure-test a belief against the vault's history), ideas (vault-wide ideation against active threads and the watch list), and synthesise (place a new source into the existing corpus). Trigger on phrases like "trace X across my wiki", "how has X evolved", "connect X and Y", "bridge these domains", "what does my vault imply", "surface unstated patterns", "challenge my view that X", "pressure-test this against my wiki", "find counter-evidence", "give me ideas from my vault", "what should I work on next", "synthesise this against my wiki", "comparative postscript", or any clear variant. Operates read-only on wiki/, raw/processed/ and Clippings/processed/; never writes to wiki/ directly. Save-back is routed through the wiki-capture skill, which writes to raw/ for a later ingest pass. Uses obsidian-cli for link-graph queries when running in Claude Code; falls back to file-system reads (Grep, Read) when running in Cowork. Do not trigger on simple lookups, factual recall, or capture-only requests (those route to wiki-capture directly).
+description: Run reflective queries against the user's personal Obsidian wiki. Trigger when the user wants substantive analytical output drawing across multiple wiki pages or sources, when the user wants to move items between status tiers on _context.md, when the user wants to channel a wiki-documented persona's voice, or when the user wants a morning brief, an end-of-day close, or forward planning. Eleven patterns. Six read-only originals: trace (how an idea or stated belief has evolved over time; the drift variant handles position shifts), connect (bridges between two domains), emerge (latent themes the vault implies but never states), challenge (pressure-test a belief against the vault's history), ideas (vault-wide ideation against active threads and the watch list), synthesise (place a new source into the existing corpus). Two with narrow writeback — graduate (promote/demote items between Active Threads / Open Decisions / Watch List / Closed on _context.md) and ghost (adopt the voice of a persona the wiki documents deeply, read-only). Three temporal patterns operating on the Daily Notes layer — today (morning brief), close-day (end-of-workday reflection writing closed_at to the current workday's daily note), schedule (planning ahead into future daily notes). Trigger on phrases like "trace X across my wiki", "connect X and Y", "what does my vault imply", "challenge my view that X", "give me ideas from my vault", "synthesise this against my wiki", "promote X to active", "close the Y decision", "what would [persona] say about Z", "today", "morning brief", "close the day", "plan the week", or any clear variant. Do not trigger on simple lookups, factual recall, or capture-only requests (those route to wiki-capture directly).
 ---
 
-# Brain: reflective queries against the wiki
+# Brain — reflective queries against the wiki
 
-A skill for asking the wiki questions that draw across multiple pages and sources, rather than retrieving a single fact. Six patterns (trace, connect, emerge, challenge, ideas, synthesise) cover the reflective work the Karpathy LLM Wiki pattern grows into once the corpus has accumulated enough material to reflect on.
+A skill for asking the wiki questions that draw across multiple pages and sources, rather than retrieving a single fact, and for the temporal patterns that operate on the Daily Notes layer. **Eleven patterns** in three groups:
+
+- **Six read-only analytical patterns**: **trace** (how an idea or stated belief has evolved over time; `drift` is a triggerable variant focused on position shifts), **connect** (bridges between two domains), **emerge** (latent themes the vault implies but never states), **challenge** (pressure-test a belief against the vault's history), **ideas** (vault-wide ideation against active threads and the watch list), and **synthesise** (place a new source into the existing corpus).
+- **Two governance/persona patterns**: **graduate** (promote/demote items between `_context.md` status tiers — narrow writeback to `_context.md` plus `log.md`), and **ghost** (adopt the voice of a wiki-documented persona to answer a question, read-only).
+- **Three temporal patterns** operating on the `Daily Notes/` layer: **today** (morning brief), **close-day** (end-of-workday reflection with narrow writeback), and **schedule** (planning ahead, narrow writeback to future daily notes).
 
 ## Why this exists
 
-The wiki's three core operations are ingest, query, and lint. Ingest writes new material in; query retrieves; lint health-checks. What is missing is the reflective layer, the patterns that take the corpus as it stands and produce analytical synthesis from it: how a position has evolved, what two domains share, what the vault implies but never says, where a stated belief contradicts the vault's own history.
+The wiki's three core operations are ingest, query, and lint. Ingest writes new material in; query retrieves; lint health-checks. What is missing without this skill is the reflective layer — patterns that take the corpus as it stands and produce analytical synthesis: how a position has evolved, what two domains share, what the vault implies but never says, where a stated belief contradicts the vault's own history — plus the daily rhythm: what today looks like, how the workday closed, what the week ahead holds.
 
-Brain exposes six reflective patterns through natural-language triggering rather than a typed command vocabulary. The skill is deliberately read-only. It produces output in chat; if the user wants results saved back into the vault, the save passes through `wiki-capture`, which writes to `raw/` for a later ingest pass. This preserves the agent-versus-human zone separation: brain reflects, wiki-capture writes, the ingest pass integrates.
+**Writeback discipline.** Eight of the eleven patterns are read-only and use `wiki-capture` for save-back, preserving the separation between reflection and writing. Three patterns have narrow scoped writeback: `graduate` writes only to `_context.md` (the file it operates on by definition), `log.md` (so every move is audited), and optionally `Index.md` (catalogue moves); `close-day` writes only `closed_at` to the current workday's daily-note frontmatter, a `workday-close` housekeeping entry to `wiki/log.md`, and the next calendar day's daily note (created from template with carry-forwards seeded into Plan); `schedule` writes only to future `Daily Notes/YYYY-MM-DD.md` files. None of the three write to any other `wiki/` page, and none write to a daily note's body (the daily note is a planning-only artefact).
 
 ## The corpus
 
-The vault lives at the user's configured vault path (typically `[Your Vault]/` on the user's Mac). Four locations are in scope, all read-only:
+The vault lives at the user's configured vault path (the directory this repository's installer created, e.g. `[Your Vault]/`). Four locations are in scope, all read-only:
 
-- **`wiki/`**, compiled wiki pages. The primary corpus.
-- **`wiki/log.md`**, append-only chronology. Use this for absolute-time anchoring (`## [YYYY-MM-DD]` headers).
-- **`raw/processed/`**, source material already merged into the wiki. Use to verify claims against original sources where needed.
-- **`Clippings/processed/`**, Web Clipper articles already merged. Same use.
+- **`wiki/`** — compiled wiki pages. The primary corpus.
+- **`wiki/log.md`** — append-only chronology. Use this for absolute-time anchoring (`## [YYYY-MM-DD HH:MM ±TZ]` headers).
+- **`raw/processed/`** — source material already merged into the wiki. Use to verify claims against original sources where needed.
+- **`Clippings/processed/`** — clipped articles already merged. Same use.
 
-Three locations are deliberately out of scope by default:
+Two locations are deliberately out of scope by default:
 
-- **`raw/`** (unprocessed), material the wiki has not yet adopted a view on. Querying this would mix the vault's own positions with material it has not yet integrated. The user can override by asking explicitly ("include unprocessed material").
-- **`Clippings/`** (unprocessed), same reasoning.
-- **Any one-time legacy notes import** (e.g. an Apple Notes inbox under `[Your Vault]/Apple Notes/`), out of scope unless the user explicitly invokes it.
+- **`raw/`** (unprocessed) — material the wiki has not yet adopted a view on. Querying it would mix the vault's positions with material it has not yet integrated. The user can override explicitly ("include unprocessed material"). Exception: the `ideas` pattern scans the inbox by design.
+- **`Clippings/`** (unprocessed) — same reasoning.
 
-The schema layer (`CLAUDE.md`, `wiki/_context.md`, `wiki/How to Use This Wiki.md`, `wiki/Karpathy LLM Wiki Pattern.md`) is read at session start but is not treated as analytical material; it is the rules and the state, not content to reflect on.
+The schema layer (`CLAUDE.md`, `wiki/_context.md`, `wiki/How to Use This Wiki.md`, `wiki/Karpathy LLM Wiki Pattern.md`) is read at session start but is not treated as analytical material — it is the rules and the state, not content to reflect on.
 
-## When to use this skill
-
-### Explicit triggers
-
-Each pattern has its own trigger phrases, listed in its subsection below. The headline criterion is the affirmative one in the description field: the user wants substantive analytical output drawing across multiple wiki pages or sources. If a request can be satisfied by reading one page and quoting it, that is `query`, not `brain`. If it requires reading two or more pages and synthesising across them, this skill applies.
-
-### Combined-pattern requests
-
-Compound requests like "trace X then challenge it" or "connect A and B then run synthesise on the bridge" are natural and should be handled as sequential chains rather than fragmented into separate sessions. Run the first pattern to completion, present its output, then feed that output into the second pattern. The user is asking for one continuous piece of analysis, not two unrelated runs.
-
-### Proactive offer (gentle)
-
-After a substantive query response that has implicitly drawn across multiple pages, offer brain explicitly once at the end:
-
-> *Want me to run a proper trace / connect / etc on this rather than just answer the surface question?*
-
-The bar is the same as `wiki-capture`'s proactive offer: only when the response has already done analytical work that brain would do more thoroughly. Never offer twice in one chat if declined. Never offer for simple lookups, debugging, or chitchat.
+**Restricted folders, if the user creates any.** If the vault grows folders the user marks as restricted (private material, or AI voice-reconstructions), exclude them from every pattern's default reads; they are opt-in only when the prompt names the folder or a page in it. A `restricted:` frontmatter field on a page is the marker to respect.
 
 ## House style
 
-All output follows the wiki's house style as recorded in `CLAUDE.md`. The points that matter most for brain output:
+All output follows the vault's house style as recorded in its `CLAUDE.md`. The points that matter most for brain output: analytical prose rather than bullet lists; absolute dates only ("14 April 2026", never "last week"); quotations under fifteen words with attribution, otherwise paraphrase; cite with `[[Page Name]]` and section anchors; and the verification rule — never invent; if the corpus does not say something, do not say it; mark uncertainty `[Unverified]`.
 
-- **British English** throughout: colour, analyse, defence, behaviour, organisation. (Adjust to the user's preferred spelling convention if they have configured one.)
-- **Analytical prose, not bullet lists.** Reflective output is by definition argumentative; it should read as paragraphs that develop a line of thought, with bolded inline labels where they help. Reserve bullet points for genuinely list-like content (dated chronology entries, candidate ideas, evidence lists).
-- **No em dashes.** Use commas, semicolons, parentheses, or split sentences.
-- **Absolute dates only.** "14 April 2026", never "last week" or "yesterday". When a wiki page uses relative dates, convert them.
-- **No emojis.**
-- **Quotations under fifteen words, only when exact wording matters, in quotation marks with attribution.** Otherwise paraphrase.
-- **Cite with `[[Page Name]]` and section anchors `[[Page Name#Heading]]`.** For log entries, quote the `## [YYYY-MM-DD] ingest | …` header.
-- **Verification rule.** Never invent. If the corpus does not say something, do not say it. Mark uncertainty `[Unverified]`.
+## The six analytical patterns
 
-## The six patterns
+### trace — how an idea has evolved over time
 
-### trace: how an idea has evolved over time
+Use when the user asks to follow a single concept, theme, or position through the wiki and see how it has changed. Two registers under one workflow: concept-history (how coverage evolved) and **drift** (how the *stated position* shifted, including the user's own recorded stance).
 
-Use when the user asks to follow a single concept, theme, or position through the wiki and see how it has changed.
+**Triggers:** "trace X across my wiki", "show me the history of X", "track X over time", "how have my views on X drifted", "where has my thinking on X moved".
 
-**Trigger phrases:**
+**Workflow:** identify the concept (one clarifying question if ambiguous); search the corpus for the term and close synonyms; cross-reference each occurrence against `wiki/log.md` for absolute time; group hits into chronological buckets, compressing each to one or two sentences naming what was claimed and what changed; close with a synthesis paragraph naming the arc and any active uncertainty (cross-reference `_context.md`'s watch list).
 
-- "trace X across my wiki"
-- "trace how X has evolved"
-- "show me the history of X"
-- "how have my views on X developed"
-- "track X over time"
-- "X timeline from the wiki"
+**Output:** dated chronology plus closing synthesis, 300-600 words (up to 1000 for long arcs). Ends with the save-back offer.
 
-**Workflow:**
-
-1. Identify the target concept. If ambiguous (the term could mean several different things across the wiki), ask one focused clarifying question before proceeding.
-2. Search the corpus for occurrences of the term and close synonyms. Use `obsidian-cli search` if available; otherwise `Grep` on `wiki/`, `raw/processed/` and `Clippings/processed/`.
-3. Cross-reference each occurrence against `wiki/log.md` to anchor it in absolute time. The log's `## [YYYY-MM-DD]` headers are the canonical timestamp; page-internal dates come second.
-4. Group hits into chronological buckets (typically by week or by analytical phase). Within each bucket, compress to one or two sentences naming what was claimed, who claimed it, and what changed from the previous bucket.
-5. Close with a synthesis paragraph naming the arc: where the position started, the inflection points, where it stands now, and any active uncertainty (cross-reference the Watch list in `wiki/_context.md`).
-
-**Output:** analytical prose with dated chronology and closing synthesis. 300 to 600 words for a single concept, up to 1000 if the arc spans many sources. Ends with the save-back offer.
-
-**Default scope:** whole wiki.
-
-**Example (generic):** following a single topic, say [your-topic], across the wiki from its first appearance to the present, surfacing the inflection points where the claim or position shifted.
-
-### connect: bridges between two domains
+### connect — bridges between two domains
 
 Use when the user asks how two named domains, pages, or topics relate.
 
-**Trigger phrases:**
+**Triggers:** "connect X and Y", "what's the link between X and Y", "find the overlap", "X meets Y in my wiki".
 
-- "connect X and Y"
-- "what's the link between X and Y"
-- "bridge these two"
-- "find the overlap between X and Y"
-- "compare these domains"
-- "X meets Y in my wiki"
+**Workflow:** identify the two targets (propose the closest match if one has no page); read both pages in full; walk one level of backlinks out from each (bridges are most often in pages that link to both); identify shared entities, dates, sources, and thematic threads; rank bridges by non-obviousness — a shared person appearing in two eras is a high-value bridge, "both pages mention money" is not.
 
-**Workflow:**
+**Output:** structured synthesis naming each bridge with citations to both sides, 400-800 words. Flag any single-direction link as a candidate reciprocal-backlink fix for the next lint pass.
 
-1. Identify the two targets. Both should map to existing wiki pages or sections; if one does not, propose the closest match and confirm before proceeding.
-2. Read both target pages in full.
-3. Walk one level of backlinks out from each via `obsidian-cli backlinks <page>` (Claude Code) or by searching for `[[Page]]` references (Cowork). The bridges are most often in the pages that link to both.
-4. Identify shared entities (people, organisations, places), shared dates, shared sources, and thematic threads.
-5. Rank bridges by non-obviousness. A bridge that surfaces a recurring person or recurring source across two apparently unrelated domains is high-value; a bridge that says "both pages mention oil" is not.
+### emerge — latent themes the vault implies but never states
 
-**Output:** structured synthesis naming each bridge with citations to both sides; 400 to 800 words. Flag any single-page bridge as a candidate for a reciprocal-backlink fix that the next lint pass should pick up.
+Use when the user asks what the vault knows but has not yet named.
 
-**Default scope:** the two named pages plus their one-step backlink neighbourhoods.
+**Triggers:** "what does my vault imply", "surface unstated patterns", "what's emerging", "what am I not yet seeing".
 
-**Example (generic):** identifying the people, sources or themes that recur across two top-level pages, for instance [Your Domain] and another domain, ranked by how non-obvious the bridge is.
+**Workflow:** take a scope (default: the last 30 days of `log.md`; the user may narrow or widen); scan for recurring concepts appearing in three or more pages without having their own page; weight by recency and cross-domain spread; discard candidates that already have `[[Page]]` status; present survivors with evidence.
 
-### emerge: latent themes the vault implies but never states
+**Distinction from `ideas`:** emerge surfaces patterns that exist but are unnamed (passive observation); ideas surfaces actions worth taking (active proposals).
 
-Use when the user asks what the vault knows but has not yet named explicitly.
+**Output:** 3-7 candidate patterns, each with 2-4 citations and one sentence on why it is non-trivial. Ends with the offer to promote any candidate to a new wiki page (routed through `wiki-capture`).
 
-**Trigger phrases:**
-
-- "what does my vault imply"
-- "surface unstated patterns"
-- "what's emerging across these pages"
-- "what am I not yet seeing"
-- "find latent themes"
-- "what does the vault know that I haven't named"
-
-**Workflow:**
-
-1. Take a scope. Default: the last 30 days of `log.md`. The user may narrow ("emerge across two named domains only") or widen ("scan the whole vault").
-2. Scan the scope for recurring concepts that appear in three or more pages without having their own page. The `obsidian-cli` graph queries help here in Claude Code; in Cowork, fall back to `Grep` for repeated proper nouns and noun phrases.
-3. Weight candidates by recency (in-scope appearances in the last 30 days score higher) and cross-domain spread (a concept appearing in three different domains scores higher than one appearing three times in the same domain).
-4. Filter: discard candidates that are already `[[Page Name]]` references, since those are already named.
-5. Present the surviving candidates with evidence.
-
-**Distinction from `ideas`:** emerge surfaces patterns that exist in the vault but have not been named (passive observation). `ideas` surfaces actions worth taking (active proposals). If the user is asking "what should I do", that is `ideas`. If asking "what is my vault telling me", that is `emerge`.
-
-**Output:** 3 to 7 candidate patterns, each with 2 to 4 supporting citations and one sentence on why this is non-trivial. 500 to 1000 words. Ends with offer to promote any candidate to a new wiki page (routed through `wiki-capture`).
-
-**Default scope:** last 30 days of `log.md`, all domains.
-
-**Example (generic):** scanning the recent log for a recurring concept that has appeared in three different domains without yet having its own page, then proposing the page.
-
-### challenge: pressure-test a belief against the vault's history
+### challenge — pressure-test a belief against the vault's history
 
 Use when the user asks the wiki to argue against a stated position.
 
-**Trigger phrases:**
+**Triggers:** "challenge my view that X", "pressure-test this", "what contradicts X in my wiki", "where am I wrong about X", "steel-man the opposite".
 
-- "challenge my view that X"
-- "pressure-test this"
-- "what evidence contradicts X in my wiki"
-- "find counter-evidence"
-- "where am I wrong about X"
-- "steel-man the opposite of X"
+**Workflow:** locate the stated belief in the wiki (or accept it as given from chat); search for contradicting evidence in related pages and `raw/processed/`; identify prior position shifts via log timestamps; surface the wiki's own uncertainty markers; present a structured rebuttal.
 
-**Workflow:**
+**Output:** belief in one sentence; contradicting evidence with citations; prior shifts; residual uncertainty; a verdict line ("The wiki strongly / partially / does not support this view, with [main caveat]"). 400-700 words.
 
-1. Locate the stated belief in the wiki, or accept it as given if the user has just stated it in chat.
-2. Search the corpus for contradicting evidence. Look in: same-page revisions (older sections that say something different), related pages, source material in `raw/processed/`.
-3. Identify prior position shifts using log timestamps. A claim made earlier in the year may have been qualified or reversed since; the log shows when.
-4. Surface qualifying caveats, places where the wiki itself flags uncertainty (`[Unverified]` markers, lint-report findings).
-5. Present a structured rebuttal.
-
-**Output:** stated belief in one sentence; contradicting evidence with citations; prior shifts; residual uncertainty. 400 to 700 words. End with a verdict line: "The wiki strongly supports / partially supports / does not support this view, with [main caveat]."
-
-**Default scope:** whole wiki, weighted toward recent material.
-
-**Example (generic):** the user states a working assumption; brain searches the wiki for the strongest contradicting evidence and the moments when the user's own prior writing complicates the claim.
-
-### ideas: vault-wide ideation against active threads and the watch list
+### ideas — vault-wide ideation against active threads and the watch list
 
 Use when the user asks what to work on or where the live opportunities are.
 
-**Trigger phrases:**
+**Triggers:** "give me ideas from my vault", "what should I work on next", "what's interesting in my wiki right now".
 
-- "give me ideas from my vault"
-- "what should I work on next"
-- "vault-wide ideation"
-- "surface project candidates"
-- "what's interesting in my wiki right now"
-- "ideas pass"
+**Workflow:** read `_context.md` in full; scan the last 30 days of `log.md` for ingested-but-unintegrated material; cross-reference active threads against unprocessed `raw/` and `Clippings/` items (the inbox is in scope for this pattern only); look for cross-domain intersections; group candidates by horizon (immediate, medium, speculative).
 
-**Workflow:**
+**Output:** 5-10 candidate ideas, each one paragraph with rationale and 1-3 citations, grouped by horizon. 600-1000 words.
 
-1. Read `wiki/_context.md` in full: active threads, open decisions, watch list, recent additions.
-2. Scan the last 30 days of `log.md` for material the wiki has ingested but not yet integrated into a project or follow-up.
-3. Cross-reference active threads against unprocessed `raw/` and `Clippings/` items (these *are* in scope for ideas, even though they are out of scope for trace and challenge; ideas wants to see the inbox).
-4. Look for cross-domain intersections: where two active threads might combine, where a watch-list item has just landed in the inbox, where an open decision has fresh evidence.
-5. Group candidates by horizon: immediate next session, medium term, speculative.
+### synthesise — place a new source into the existing corpus
 
-**Distinction from `emerge`:** see the emerge subsection above. ideas proposes actions; emerge surfaces patterns.
+Use when a new source has been provided and the user wants a structured comparative reading against the existing wiki.
 
-**Output:** 5 to 10 candidate ideas, each one paragraph with rationale and 1 to 3 wiki citations, grouped by horizon. 600 to 1000 words.
+**Triggers:** "synthesise this against my wiki", "cross-reference this new source", "place this in context", "comparative postscript".
 
-**Default scope:** `wiki/_context.md` plus last 30 days of `log.md` plus current `raw/` and `Clippings/` (ideas explicitly scans the inbox).
+**Workflow:** read the new source in full; identify its core claim, the author's perspective, and its relevance to existing domains; search the corpus for related material; walk one level of backlinks from the most relevant page; produce a four-thread postscript: (1) **personal connection** (where the source's author or subjects appear elsewhere in the wiki), (2) **substantive connection** (where the argument fits existing analytical clusters), (3) **historical pattern** (what the source repeats or extends), (4) **strategic implications** (what it implies for active threads, with concrete tracking suggestions).
 
-**Example (generic):** the user opens a session unsure what to pick up; brain reads `_context.md`, scans the inbox, and proposes one immediate-next-session candidate, two medium-term candidates, and one speculative candidate.
+**Output:** four numbered subsections, 500-1500 words. Ends with the offer to file as a postscript on the relevant page (routed through `wiki-capture`).
 
-### synthesise: place a new source into the existing corpus
+## graduate — move items between status tiers on _context.md
 
-Use when a new source has been provided (in chat, in `raw/`, or in `Clippings/`) and the user wants a structured comparative reading against the existing wiki.
+Use when the user wants to move an item between the tiers on `wiki/_context.md`: **Active Threads**, **Open Decisions**, **Watch List**, and the closed (~~struck-through~~) historical record. Graduate's write access is scoped narrowly: `_context.md`, `log.md` (every move is audited), and optionally `Index.md` (catalogue changes only).
 
-**Trigger phrases:**
-
-- "synthesise this against my wiki"
-- "cross-reference this new source"
-- "place this in context"
-- "fit this into the existing corpus"
-- "comparative postscript"
+**Triggers:** "graduate X to active", "promote X", "retire the Y watch-list item", "close the Z decision", "the X thread is done — close it".
 
 **Workflow:**
 
-1. Read the new source in full. If provided as a file path, read the file; if provided as a paste, work from the paste.
-2. Identify the source's core claim, its author's perspective, and its relevance to existing wiki domains.
-3. Search the corpus for related material via `obsidian-cli search` (Claude Code) or `Grep` (Cowork) on the source's key entities and concepts.
-4. Walk one level of backlinks from the most relevant target page.
-5. Produce a four-thread structure:
-   1. **Personal connection.** Where the source's author or subjects appear elsewhere in the wiki, and what that vantage point adds.
-   2. **Substantive connection.** Where the source's argument fits in the existing analytical clusters.
-   3. **Historical pattern.** Where this source repeats or extends a pattern the wiki has already noticed.
-   4. **Strategic implications.** What the source implies for active threads or watch-list items, with concrete tracking suggestions.
+1. Read the relevant `_context.md` section and locate the item's exact wording; ask one clarifying question if ambiguous.
+2. Identify the move: promote (watch → active, or watch → open decision), demote (active → watch), close (any tier → struck-through record), or reopen (rare).
+3. Verify the move is sensible: promotions need named triggering evidence; closures need a named resolution. Ask for the rationale in one sentence if it has not been given — it gets folded into the edit.
+4. Make the edit following the file's conventions: closures use a `~~CLOSED [YYYY-MM-DD HH:MM ±TZ]~~` strikethrough prefix with the resolution appended; keep original wording where possible.
+5. **Closures only:** if the closed item leaves an unresolved variable behind, spawn it as a discrete Watch List item (concrete name, options, a date or condition trigger) and mention the spawn in the closure rationale, so nothing fades silently with a closure. Ask the user if unsure whether a variable remains open.
+6. Append a one-line `## [YYYY-MM-DD HH:MM ±TZ] graduate | <descriptor>` entry to `log.md` (verify the time with `date` first).
+7. Confirm by quoting the new `_context.md` entry back in chat.
 
-**Output:** structured postscript with four numbered subsections. 500 to 1500 words. Ends with offer to file as a postscript section on the relevant page (routed through `wiki-capture`).
+**The verification rule applies even here:** if the user asks to close a thread the wiki shows as still active, push back.
 
-**Default scope:** the new source plus the most relevant existing page plus its one-step backlink neighbourhood.
+## ghost — adopt the voice of a wiki-documented persona
 
-**Example (generic):** a new clipping lands in `Clippings/` on a topic the wiki already covers; brain produces a four-part postscript locating the new piece against the existing corpus.
+Use when the user wants a question answered in the voice of a persona the wiki documents in substantial depth — a family member with a rich page, a historical figure whose writing the vault holds, a mentor whose views are recorded. Ghost is read-only; the persona's response is **reconstructed from the wiki's record** of what they said, wrote, and how they reasoned — never invented.
+
+**Triggers:** "what would [persona] say about X", "channel [persona] on Y", "in [persona]'s voice".
+
+**Eligibility:** the persona needs substantial wiki documentation — a dedicated page, recorded positions, quoted material. For thinly-documented people, fall back to "the wiki records this person as holding X; the available material suggests…" rather than ghosting fully.
+
+**Workflow:** read the persona's pages in full; read the question's target; identify the persona's documented positions on adjacent topics, their characteristic reasoning mode and voice; produce the response opening with a **"Ghost-voice: [persona]"** header so the framing is unmistakable; cite the wiki sources inline; where the persona has no documented position, say so explicitly inside the ghost voice. Close with a citation list and the save-back offer.
+
+**If the user keeps accepted ghost outputs**, store them in a dedicated folder (e.g. `wiki/Ghost Reconstructions/`) marked `restricted: ghost-only` in frontmatter, excluded from every skill's default reads, with links flowing one direction only (reconstruction → subject page, never back). AI inference of a real person's voice must never surface to other patterns as if it were the person's documented position.
+
+## The three temporal patterns (Daily Notes layer)
+
+These operate on `<vault>/Daily Notes/` (created from `Daily Notes/_TEMPLATE.md`). A daily note is a **planning-only artefact**: frontmatter (`date`, `day`, `created`, and `closed_at` once closed), a Plan section (checkboxes), a Scheduled section, Body and Notes. Item resolution is determined by `log.md`, not checkbox state.
+
+### today — morning brief
+
+**Triggers:** "today", "morning brief", "what's on my plate today", "what does today look like".
+
+**Workflow:** verify the date via `date`; open today's daily note (create from `_TEMPLATE.md` if absent — the single write this pattern makes); check the prior note's `closed_at` (if absent, the prior workday never closed — flag it and offer `close-day` on it); read `_context.md` for date triggers due today and threads with movement; read `log.md` since the last workday-close (cross-reference seeded Plan items against log evidence — tick what is already done); compose the brief: today's plan, scheduled items, threads with movement, watch-list triggers, overnight activity, and a one-sentence shape of the day.
+
+**Output:** structured brief, 200-500 words. No save-back offer — the brief is operational.
+
+### close-day — end-of-workday reflection
+
+**Triggers:** "close the day", "wrap up", "end of day", "close out today".
+
+**Workday-bounded, not calendar-bounded:** the workday is keyed by the date it *started* on; a day that ends at 00:30 still closes the prior date's note, stamps `closed_at` with the actual fire time, and creates the new date's note.
+
+**Workflow:**
+
+1. Verify date and time via `date`.
+2. Identify the current workday's note: the most recent `Daily Notes/YYYY-MM-DD.md` with no `closed_at`. If several are unclosed, ask which to close.
+3. Read the note's Plan; read all `log.md` entries since the prior `workday-close` entry.
+4. Walk Plan checkboxes against log evidence; items with evidence are done; for the rest, ask the user in one consolidated message (done / partial / carry forward).
+5. Check `_context.md` for staleness: if the day's work moved state the file has not absorbed, offer to apply the refresh as part of the close.
+6. Compose the `workday-close` entry for `log.md`: one paragraph on the shape of the day, one on carry-forwards, one as the wiki-activity roll-up, and an italicised footer (start, close, duration, session count).
+7. Stamp `closed_at: YYYY-MM-DD HH:MM ±TZ` on the note's frontmatter; append the log entry; create the next day's note from template with carry-forwards seeded into Plan.
+8. Confirm in chat briefly (under 200 words) — the log entry is the durable artefact.
+
+### schedule — plan ahead
+
+**Triggers:** "plan tomorrow", "plan the week", "plan before [date]", "schedule the week".
+
+**Workflow:** identify the horizon (ask one clarifying question if ambiguous); verify the date; read `_context.md` for deadlines and date-shaped next steps in the horizon; read any existing future daily notes (schedule adds, never overwrites); propose a draft schedule in chat with per-day rationale; **ask for confirmation**; on approval, write Plan entries to the relevant future daily notes, creating missing ones from template; confirm each write.
 
 ## Reading the corpus
 
-Before any pattern runs, detect the environment and pick the query path.
-
-### In Claude Code (with `obsidian-cli`)
-
-If the user has installed `obsidian-cli` on PATH (the standard install for Karpathy LLM Wiki users on a Mac), detect with:
-
-```bash
-which obsidian-cli
-```
-
-If present, prefer it for:
-
-- **Backlink traversal:** `obsidian-cli backlinks "Page Name"` returns the list of pages that link to this one. Used by `connect`, `emerge`, `synthesise`.
-- **Content search:** `obsidian-cli search "query"` returns matches across the vault, respecting wikilink structure. Used by all six patterns.
-- **Page enumeration and graph queries** for cross-domain pattern detection in `emerge` and `ideas`.
-
-Treat `obsidian-cli` as a shell command rather than a chained skill invocation; it is faster and the binary is on PATH already.
-
-### In Cowork (without `obsidian-cli`)
-
-The vault is mounted at the user's configured vault path in Cowork sessions. `obsidian-cli` is not on PATH in the Cowork sandbox.
-
-Fall back to:
-
-- `Grep` for content search across `wiki/`, `raw/processed/`, `Clippings/processed/`.
-- `Read` for full-page reads.
-- Manual `[[Page Name]]` reference scanning for backlinks.
-
-When running without `obsidian-cli`, warn the user explicitly at the start of the response:
-
-> *Running without `obsidian-cli` (Cowork environment); this is a flat-text scan, not a backlink-graph traversal, results may miss implicit cross-references that only the graph would surface.*
-
-The warning matters most for `connect` and `emerge`, both of which depend on graph traversal. Trace, challenge, ideas, and synthesise are largely text-driven and degrade more gracefully.
-
-## Output conventions
-
-- **Open with the pattern name and target.** First line: "Trace of *[concept]* across the wiki" or "Connect: [[Page A]] and [[Page B]]" or similar.
-- **Citations inline.** Every claim drawn from the wiki cites its page, ideally with a section anchor. Every dated claim cites the corresponding `## [YYYY-MM-DD]` log header.
-- **Length targets per pattern** as listed in each subsection. Soft caps: if material genuinely warrants more, expand and say so.
-- **Close with the save-back offer**, exactly one sentence, exactly once. Do not pester.
+If `obsidian-cli` is installed, prefer it for backlink traversal (`obsidian-cli backlinks file="Page Name"` — named arguments; positional silently returns nothing) and content search (`obsidian-cli search query="text"`). Otherwise fall back to Grep for content search, Read for full pages, and manual `[[Page Name]]` scanning for backlinks — and say so once at the start of the response, since flat-text scanning may miss cross-references only the link graph would surface (this matters most for `connect` and `emerge`).
 
 ## Saving results back
 
-Brain itself is read-only. The vault is never written to from inside this skill.
+Brain is **read-only with three narrow exceptions** (`graduate`, `close-day`, `schedule`, each scoped as described above). For the read-only patterns, when the user accepts a save-back offer, compose the result as a capture note in the format `wiki-capture` expects and hand it to `wiki-capture` for the write into `raw/`; the next ingest pass integrates it. If the user explicitly says "write it directly into [[Page]]", honour it — but flag once that this bypasses the ingest pass.
 
-If the user accepts the save-back offer, brain composes the result as a `raw/` capture note in the format `wiki-capture` expects (title, target page, source context, content, suggested integration) and hands the composed note to `wiki-capture` for the actual write. The user can then ingest it on the next pass.
-
-This preserves three things at once: the agent-versus-human zone-separation discipline; the `raw/` → ingest pass workflow that the rest of the wiki uses; and the testability of `wiki-capture` as the single write path into the vault.
-
-If the user explicitly says "write it directly into [[Page]]", honour the request, but flag once that this bypasses the standard ingest pass and ask for confirmation.
+Daily-note writes are deliberately outside git-churn concerns: if the user's vault ignores `Daily Notes/` in git, that is fine — the log entries carry the durable record.
 
 ## What this skill does not do
 
-- It does not write to `wiki/` directly. Save-back is routed through `wiki-capture`.
-- It does not perform `wiki-capture`'s job. If the user says "save this", "capture this", "log this", that is `wiki-capture`, not brain. Brain only handles save-back when it has just produced reflective output.
-- It does not perform ingest. Ingest reads `raw/` and `Clippings/` and integrates into `wiki/`; brain reads the integrated layer (plus the `processed/` originals) and reflects on it.
-- It does not perform lint. Lint is a structural health-check (contradictions, orphans, missing backlinks); brain is analytical synthesis. They share corpus-reading machinery but produce different output. If the user asks for "a lint pass", that is the wiki's separate lint operation.
-- It does not run on raw or unprocessed material by default. The user can override.
-- It does not invent. The verification rule applies: if the corpus does not say it, brain does not say it.
+- It does not write to `wiki/` for any pattern other than `graduate` (and `close-day`'s log entry). Save-back routes through `wiki-capture`.
+- It does not perform ingest or lint; those are the wiki's separate operations.
+- It does not run on raw/unprocessed material by default (exception: `ideas` scans the inbox).
+- It does not invent — the verification rule applies to every pattern, including `ghost` (never invent a persona's position) and the temporal patterns (never invent a deadline, a completion, or a carry-forward the record does not support).
+
+## The proactive offer
+
+After a substantive query response that has implicitly drawn across multiple pages, offer brain explicitly **once**: *"Want me to run a proper trace / connect on this rather than just answer the surface question?"* Never offer twice in one chat if declined; never offer for simple lookups.

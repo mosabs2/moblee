@@ -1,25 +1,34 @@
 # 05. The bundled skills
 
-Moblee ships with four Claude skills, installed by `scripts/install-skills.sh` into `~/.claude/skills/`. Each skill is a folder containing a `SKILL.md` (the instructions Claude reads) plus any companion files. Claude auto-triggers the relevant skill from your natural-language phrasing; you never need to remember tool names.
+Moblee ships with its Claude skills installed by `scripts/install-skills.sh` into `~/.claude/skills/`. Each skill is a folder containing a `SKILL.md` (the instructions Claude reads) plus any companion files. Claude auto-triggers the relevant skill from your natural-language phrasing; you never need to remember tool names.
 
 This document is a quick reference for what each skill does, when to use it, and the trigger phrases that activate it.
 
 ## brain
 
-**What it does.** Reflective queries against the wiki. Six patterns for asking your vault questions that draw across multiple pages and sources: trace (follow a thread of thought through the wiki), connect (find non-obvious links between two domains), emerge (surface what's been quietly accumulating), challenge (identify weak claims or under-evidenced sections), ideas (brainstorm new directions for an existing topic), synthesise (compress what's been said across many pages into a single coherent paragraph).
+**What it does.** Reflective queries against the wiki, plus your daily rhythm. Eleven patterns in three groups. Six analytical patterns ask your vault questions that draw across multiple pages: trace (follow a thread of thought or a position shift through the wiki), connect (find non-obvious links between two domains), emerge (surface what's been quietly accumulating), challenge (pressure-test a belief against the vault's own history), ideas (what should I work on next, judged against your active threads and inbox), synthesise (place a brand-new source into your existing corpus as a structured postscript). Two governance patterns: graduate (promote, demote or close items between the Active Threads / Open Decisions / Watch List tiers on `_context.md`, with every move logged) and ghost (answer a question in the reconstructed voice of a person your wiki documents deeply — always labelled as reconstruction, never invention). Three temporal patterns run your day against a `Daily Notes/` layer: today (a morning brief of your plan, due triggers and overnight activity), close-day (an end-of-workday reflection that writes the day's roll-up to the log and seeds tomorrow's plan with carry-forwards), and schedule (plan tomorrow, the week, or the run-up to a deadline into future daily notes, always proposed before written).
 
-**When to use.** When you want to think with your wiki rather than just read it. Periodic queries against your accumulated material are how the system pays back the cost of ingest: the more you've put in, the more interesting the answers get.
+**When to use.** When you want to think with your wiki rather than just read it — and, with the temporal patterns, when you want the wiki to run your working day's rhythm. The more you've put in, the more interesting the answers get.
 
 **Trigger phrases.**
 
 - "Trace how my notes on X evolved over time."
 - "Connect what I think about X to what I think about Y."
 - "What's quietly emerging in my wiki right now?"
-- "Challenge my page on X; what's weakest?"
-- "Give me five ideas to develop the X page further."
-- "Synthesise what my wiki says about X into one paragraph."
+- "Challenge my view that X."
+- "What should I work on next?"
+- "Synthesise this article against my wiki."
+- "Promote X to active threads." / "Close the Y decision."
+- "What would [person my wiki documents] say about X?"
+- "Today." / "Close the day." / "Plan the week."
 
-The skill is read-only by default. If a query yields something worth keeping, it routes the save-back through `wiki-capture` rather than writing directly.
+The analytical and ghost patterns are read-only; save-back routes through `wiki-capture`. Graduate, close-day and schedule have narrowly scoped writes (`_context.md` + log; daily-note frontmatter + log; future daily notes respectively) and nothing else.
+
+## compact
+
+**What it does.** Keeps the always-loaded files light. The programmatic lint's vault-weight guard flags files over their token caps (`_context.md`, `CLAUDE.md`, `Index.md`) but never trims; compact is the half that acts. Mechanical, reversible rotations (old refresh notes and closed items moved to a Context Archive page behind one-line pointers) run without asking; lossy prose trims are proposed with before/after sizes and executed only on your explicit sign-off, with a reviewable git diff.
+
+**When to use.** When the weekly lint flags a file over cap, or whenever Claude mentions the vault is getting heavy. "Compact the wiki", "trim _context", "the vault's heavy".
 
 ## wiki-capture
 

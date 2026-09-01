@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wiki Galaxy</title>
+<style>
+  :root { --accent: #38bdf8; --panel: rgba(10,13,18,.84); --line: #1f2937; --txt: #cbd5e1; --dim: #64748b; }
+  html, body { margin: 0; height: 100%; background: #060914; overflow: hidden;
+    font-family: -apple-system, "SF Pro Text", Inter, sans-serif; }
+  #g { width: 100vw; height: 100vh; }
+
+  #side {
+    position: fixed; left: 14px; top: 14px; bottom: 14px; width: 250px; z-index: 10;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    backdrop-filter: blur(10px); color: var(--txt);
+    display: flex; flex-direction: column; overflow: hidden;
+    transition: transform .35s cubic-bezier(.4,0,.2,1); user-select: none;
+  }
+  body.collapsed #side { transform: translateX(-288px); }
+  #side .scroll { overflow-y: auto; padding: 0 14px 14px; flex: 1; scrollbar-width: thin; scrollbar-color: #283548 transparent; }
+  #side .brandrow { margin: 14px 14px 4px; }
+  #side h1 { font-size: 14px; margin: 0; color: #f1f5f9; letter-spacing: .08em; }
+  #side .sub { font-size: 11px; color: var(--dim); margin-top: 2px; }
+  #side .sec { font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--dim); margin: 14px 0 7px; }
+  #side .card { background: rgba(255,255,255,.03); border: 1px solid var(--line); border-radius: 11px; padding: 9px 10px; }
+  #side input.search {
+    width: 100%; box-sizing: border-box; margin: 10px 0 0;
+    background: #0d1320; color: #e5e7eb; border: 1px solid #283548;
+    border-radius: 999px; padding: 7px 12px; font: inherit; font-size: 12.5px; outline: none;
+  }
+  #side input.search:focus { border-color: var(--accent); }
+  .nrow { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 7px; cursor: pointer; font-size: 12.5px; min-height: 20px; }
+  .nrow:hover { background: rgba(255,255,255,.06); }
+  .nrow .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .nrow .lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nrow .deg { margin-left: auto; color: var(--dim); font-size: 11px; }
+  #insp .placeholder { color: var(--dim); font-size: 12px; padding: 4px 6px; line-height: 1.5; }
+  #insp .head { display: flex; align-items: center; gap: 8px; padding: 2px 6px 6px; font-size: 13.5px; font-weight: 600; color: #f1f5f9; }
+  #insp .meta { font-size: 11px; color: var(--dim); padding: 0 6px 6px; }
+  #insp .prev { font-size: 11.5px; color: #9fb0c4; font-style: italic; line-height: 1.5;
+    padding: 7px 9px; margin: 0 2px 8px; background: rgba(255,255,255,.04); border-left: 2px solid var(--accent); border-radius: 0 8px 8px 0; }
+  #insp .obs { display: inline-block; margin: 0 6px 8px; font-size: 11.5px; color: var(--accent);
+    border: 1px solid #283548; border-radius: 999px; padding: 4px 12px; cursor: pointer; text-decoration: none; }
+  #insp .obs:hover { border-color: var(--accent); }
+  #insp .depth { display: flex; align-items: center; gap: 5px; padding: 0 6px 8px; font-size: 11px; color: var(--dim); }
+  #insp .depth b { color: var(--txt); font-weight: 500; margin-right: 2px; }
+  #insp .depth button { width: 22px; height: 22px; border-radius: 6px; border: 1px solid #283548; background: #111827; color: #d1d5db; font-size: 11px; cursor: pointer; }
+  #insp .depth button.on { background: var(--accent); color: #06281c; border-color: transparent; font-weight: 700; }
+  .ctl { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 5px 6px; }
+  .ctl label { flex: 1; color: var(--txt); }
+  .ctl input[type=range] { width: 104px; accent-color: var(--accent); }
+  .ctl input[type=checkbox] { accent-color: var(--accent); }
+  #themes { display: flex; gap: 8px; padding: 4px 6px; }
+  #themes .sw { width: 34px; height: 24px; border-radius: 7px; cursor: pointer; border: 2px solid transparent; }
+  #themes .sw.on { border-color: var(--accent); }
+  #modeSeg { display: flex; gap: 6px; padding: 6px 6px 2px; }
+  #modeSeg button { flex: 1; padding: 5px 0; border-radius: 8px; border: 1px solid #283548; background: #111827; color: #d1d5db; font-size: 11.5px; cursor: pointer; }
+  #modeSeg button.on { background: var(--accent); color: #06281c; border-color: transparent; font-weight: 600; }
+  #side .foot { font-size: 10.5px; color: var(--dim); padding: 9px 14px; border-top: 1px solid var(--line); line-height: 1.6; }
+  #collapse {
+    position: fixed; top: 22px; left: 274px; z-index: 11; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--panel); border: 1px solid var(--line); color: var(--txt); cursor: pointer; font-size: 12px; line-height: 1;
+    transition: left .35s cubic-bezier(.4,0,.2,1), transform .35s;
+  }
+  body.collapsed #collapse { left: 14px; transform: rotate(180deg); }
+
+  #legend {
+    position: fixed; right: 18px; top: 18px; z-index: 10; font-size: 12.5px; color: var(--txt);
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 6px;
+    backdrop-filter: blur(8px); user-select: none; min-width: 138px; max-height: 80vh; overflow-y: auto;
+  }
+  #legend .row { display: flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 7px; cursor: pointer; }
+  #legend .row:hover { background: rgba(255,255,255,.05); }
+  #legend .row.off { opacity: .32; }
+  #legend .dot { width: 9px; height: 9px; border-radius: 50%; }
+  #legend .n { margin-left: auto; color: var(--dim); font-size: 11px; }
+  #legend .title { padding: 1px 10px 6px; color: var(--dim); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; }
+
+  #hud {
+    position: fixed; left: 50%; top: 16px; transform: translateX(-50%); z-index: 10;
+    display: flex; gap: 8px; padding: 8px 13px; border-radius: 999px;
+    background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(8px);
+    font-size: 13px; color: #9ca3af; user-select: none;
+  }
+  #hud button { background: #111827; color: #d1d5db; border: 1px solid #283548; border-radius: 999px; padding: 6px 12px; font: inherit; cursor: pointer; }
+  #hud button:hover { background: #1c2a3f; color: #fff; }
+  #brand { position: fixed; right: 18px; bottom: 16px; font-size: 12px; color: #475569; pointer-events: none; z-index: 9; }
+  #hint { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); font-size: 12px; color: #475569; pointer-events: none; z-index: 9; }
+  #toast {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 25; display: none;
+    font-size: 12.5px; color: #f1f5f9; background: var(--panel); border: 1px solid var(--accent);
+    border-radius: 999px; padding: 8px 16px; backdrop-filter: blur(8px);
+  }
+  @keyframes jcard-in { from { opacity: 0; transform: translateY(-10px) scale(.96); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+<div id="g"></div>
+
+<aside id="side">
+  <div class="brandrow">
+    <h1 id="brandName">WIKI</h1>
+    <div class="sub" id="counts">loading…</div>
+  </div>
+  <input class="search" id="search" placeholder="Search the galaxy…" autocomplete="off">
+  <div class="scroll">
+    <div class="sec">Inspector</div>
+    <div class="card" id="insp"><div class="placeholder">Click a node to focus it — only that node and its connections light up, and the page excerpt appears here. Shift-click a second node to trace the link path between them.</div></div>
+    <div class="sec">Top Hubs</div>
+    <div class="card" id="hubs"></div>
+    <div class="sec">Colour by</div>
+    <div class="card">
+      <div id="modeSeg">
+        <button id="modeType" class="on">Domain</button>
+        <button id="modeHeat">Links</button>
+        <button id="modeRec">Recent</button>
+      </div>
+    </div>
+    <div class="sec">Forces</div>
+    <div class="card">
+      <div class="ctl"><label>Repel</label><input type="range" id="fRepel" min="0.3" max="2.4" step="0.05" value="1"></div>
+      <div class="ctl"><label>Link length</label><input type="range" id="fDist" min="0.5" max="2" step="0.05" value="1"></div>
+    </div>
+    <div class="sec">Display</div>
+    <div class="card">
+      <div class="ctl"><label>Hub labels</label><input type="checkbox" id="dLabels" checked></div>
+      <div class="ctl"><label>Particle flow</label><input type="checkbox" id="dFlow" checked></div>
+      <div class="ctl"><label>Auto-rotate</label><input type="checkbox" id="dRot" checked></div>
+      <div class="ctl"><label>Starfield</label><input type="checkbox" id="dStars" checked></div>
+    </div>
+    <div class="sec">Theme</div>
+    <div class="card"><div id="themes"></div></div>
+  </div>
+  <div class="foot">drag = orbit · scroll = zoom · click = focus<br>shift-click = path · right-click = card · I = isolate · esc = clear</div>
+</aside>
+<button id="collapse">«</button>
+
+<div id="legend"><div class="title">Filter</div></div>
+<div id="hud">
+  <button id="fit">⊙ Fit</button>
+  <button id="iso" title="Isolate focused">🎯</button>
+  <button id="snap" title="Save PNG">📸</button>
+</div>
+<div id="brand"></div>
+<div id="toast"></div>
+
+<script src="galaxy-libs.min.js"></script>
+<script src="graph-data.js"></script>
+<script>
+(function(){
+const THREE = window.THREE, ForceGraph3D = window.ForceGraph3D, SpriteText = window.SpriteText;
+const STYLE = new Proxy(GRAPH.groups || {}, { get:(t,k)=> (k in t) ? t[k] : { c:'#8aa39b', name:(typeof k==='string'?k:''), major:false } });
+const BRAND = GRAPH.brand || { name: 'WIKI', vault: '' };
+const MAJOR = new Set(Object.keys(STYLE).filter(k => STYLE[k].major));
+document.title = BRAND.name + ' — Knowledge Galaxy';
+document.getElementById('brandName').textContent = BRAND.name;
+document.getElementById('brand').textContent = BRAND.name + ' · Knowledge Galaxy';
+
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const obsidianUrl = rel => 'obsidian://open?vault=' + encodeURIComponent(BRAND.vault) +
+  '&file=' + encodeURIComponent(rel.replace(/\.md$/, ''));
+
+const THEMES = {
+  Midnight: { bg: '#060914', link: '#3a5170', star: '#3d5680', accent: '#38bdf8' },
+  Workshop: { bg: '#04050a', link: '#42537a', star: '#46587a', accent: '#34d399' },
+  Obsidian: { bg: '#0d0d16', link: '#5b5689', star: '#6c6aa0', accent: '#a78bfa' },
+  Matrix:   { bg: '#010803', link: '#1f6b40', star: '#1f7a46', accent: '#22c55e' },
+};
+let theme = THEMES.Midnight;
+
+// ---- data + degree + heat + recency ----
+const deg = new Array(GRAPH.nodes.length).fill(0);
+for (const l of GRAPH.links) { deg[l.s]++; deg[l.t]++; }
+const maxDeg = Math.max(1, ...deg);
+const HEAT = ['#27548f', '#3f83c9', '#60a5fa', '#ffd34d', '#fb923c', '#ff5d3b'];
+const RECENT = ['#fff7d6', '#ffd34d', '#fb923c', '#8a5fd0', '#3f4d8f', '#232c47'];  // today -> old
+function lerpHex(a, b, t) {
+  const av = parseInt(a.slice(1), 16), bv = parseInt(b.slice(1), 16);
+  const c = i => Math.round(((av >> i) & 255) + (((bv >> i) & 255) - ((av >> i) & 255)) * t);
+  return `rgb(${c(16)},${c(8)},${c(0)})`;
+}
+function ramp(pal, t) {
+  t = Math.max(0, Math.min(1, t)) * (pal.length - 1);
+  const i = Math.min(pal.length - 2, Math.floor(t));
+  return lerpHex(pal[i], pal[i + 1], t - i);
+}
+const heatColor = d => ramp(HEAT, Math.sqrt(d / maxDeg));
+const recColor = days => ramp(RECENT, Math.sqrt(Math.min(days, 365) / 365));
+function agoLabel(days) {
+  if (days === 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 31) return days + ' days ago';
+  if (days < 365) return Math.round(days / 30.4) + ' months ago';
+  return (days / 365).toFixed(1) + ' years ago';
+}
+const data = {
+  nodes: GRAPH.nodes.map((n, i) => ({ id: i, rel: n.id, label: n.label, g: n.g, p: n.p || '',
+    days: n.days == null ? 9999 : n.days, dg: deg[i],
+    val: (n.g === 'sun' ? 14 : 1) + Math.sqrt(deg[i]) * 1.6,
+    heat: heatColor(deg[i]), rec: recColor(n.days == null ? 9999 : n.days) })),
+  links: GRAPH.links.map(l => ({ source: l.s, target: l.t })),
+};
+const adj = new Map();
+for (const l of GRAPH.links) {
+  (adj.get(l.s) || adj.set(l.s, new Set()).get(l.s)).add(l.t);
+  (adj.get(l.t) || adj.set(l.t, new Set()).get(l.t)).add(l.s);
+}
+const orphans = data.nodes.filter(n => !n.dg).length;
+document.getElementById('counts').textContent =
+  `${data.nodes.length} pages · ${data.links.length} links · ${orphans} orphans`;
+
+// ---- state ----
+let focusNode = null, focusDepth = 1, searchTerm = '', colorMode = 'type';
+let showHubLabels = true, flowOn = true, isolateOn = false;
+let pathInfo = null;
+let litSet = null, litLinks = null;
+const groupOn = Object.fromEntries(Object.keys(STYLE).map(g => [g, true]));
+const lid = x => (x && x.id !== undefined) ? x.id : x;
+
+function neighborhood(id, depth) {
+  const s = new Set([id]);
+  let frontier = [id];
+  for (let d = 0; d < depth; d++) {
+    const next = [];
+    for (const u of frontier) for (const v of adj.get(u) || []) {
+      if (!s.has(v)) { s.add(v); next.push(v); }
+    }
+    frontier = next;
+  }
+  return s;
+}
+function shortestPath(a, b) {
+  const prev = new Map([[a, null]]);
+  let frontier = [a];
+  while (frontier.length) {
+    const next = [];
+    for (const u of frontier) for (const v of adj.get(u) || []) {
+      if (prev.has(v)) continue;
+      prev.set(v, u);
+      if (v === b) { const p = [v]; let c = v; while (prev.get(c) !== null) { c = prev.get(c); p.unshift(c); } return p; }
+      next.push(v);
+    }
+    frontier = next;
+  }
+  return null;
+}
+function recomputeLit() {
+  if (pathInfo) { litSet = pathInfo.set; litLinks = pathInfo.links; return; }
+  if (focusNode) { litSet = neighborhood(focusNode.id, focusDepth); litLinks = null; return; }
+  litSet = null; litLinks = null;
+}
+
+// ---- 3d-force-graph ----
+const Graph = ForceGraph3D({ controlType: 'orbit', rendererConfig: { preserveDrawingBuffer: true, antialias: true } })
+  (document.getElementById('g'))
+  .showNavInfo(false)
+  .graphData(data)
+  .backgroundColor(theme.bg)
+  .enableNodeDrag(false)
+  .nodeRelSize(4)
+  .nodeVal(n => n.val)
+  .nodeOpacity(0.95)
+  .nodeResolution(12)
+  .nodeColor(nodeColor)
+  .nodeVisibility(n => groupOn[n.g] && (!isolateOn || (litSet && litSet.has(n.id))))
+  .nodeLabel(n => `<div style="font-family:-apple-system,sans-serif;font-size:13px;background:rgba(10,13,18,.92);border:1px solid #283548;border-radius:8px;padding:6px 10px;color:#f1f5f9;max-width:240px">${esc(n.label)}<br><span style="color:#64748b;font-size:11px">${esc(STYLE[n.g].name)} · ${n.dg} links · ${agoLabel(n.days)}</span></div>`)
+  .nodeThreeObjectExtend(true)
+  .nodeThreeObject(labelObject)
+  .linkVisibility(l => groupOn[gOf(l.source)] && groupOn[gOf(l.target)] && (!isolateOn || (litSet && litSet.has(lid(l.source)) && litSet.has(lid(l.target)))))
+  .linkColor(linkColor)
+  .linkOpacity(0.28)
+  .linkWidth(linkWidth)
+  .linkDirectionalParticles(linkParticles)
+  .linkDirectionalParticleSpeed(0.0035)
+  .linkDirectionalParticleWidth(1.5)
+  .linkDirectionalParticleColor(() => theme.accent)
+  .onNodeClick(onNodeClick)
+  .onNodeRightClick((n, evt) => showNodeCard(n, evt))
+  .onBackgroundClick(() => { clearFocus(); hideNodeCard(); });
+
+// explicit sizing — the container can measure 0×0 if the tab loads in the background,
+// and the library only measures once at init; track it ourselves instead
+const gEl = document.getElementById('g');
+function sizeGraph() {
+  const w = gEl.clientWidth || innerWidth, h = gEl.clientHeight || innerHeight;
+  if (w && h) Graph.width(w).height(h);
+}
+sizeGraph();
+addEventListener('resize', sizeGraph);
+new ResizeObserver(sizeGraph).observe(gEl);
+window.__galaxy = { Graph };
+
+// ---- right-click node card ----
+let nodeCardEl = null;
+function hideNodeCard(){ if (nodeCardEl) { nodeCardEl.remove(); nodeCardEl = null; } }
+function showNodeCard(n, evt){
+  if (evt && evt.preventDefault) evt.preventDefault();
+  hideNodeCard();
+  const st = STYLE[n.g];
+  const excerpt = (n.p || '').trim();
+  const card = document.createElement('div');
+  card.innerHTML =
+    `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">`+
+      `<span style="width:10px;height:10px;border-radius:50%;background:${st.c};box-shadow:0 0 8px ${st.c};flex:none;"></span>`+
+      `<b style="font-size:14.5px;color:#f1f5f9;line-height:1.3;">${esc(n.label)}</b>`+
+      `<span class="card-x" style="margin-left:auto;cursor:pointer;color:#5a6b62;font-size:16px;padding:0 2px;">✕</span></div>`+
+    `<div style="color:#64748b;font-size:11px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;">${esc(st.name)} · ${n.dg} connection${n.dg===1?'':'s'} · ${agoLabel(n.days)}</div>`+
+    (excerpt ? `<div style="color:#c9d5cf;font-size:12.5px;line-height:1.55;max-height:180px;overflow-y:auto;">${esc(excerpt.slice(0, 600))}${excerpt.length>600?'…':''}</div>`
+             : `<div style="color:#5a6b62;font-size:12px;font-style:italic;">No excerpt on this one.</div>`)+
+    `<div style="margin-top:10px;"><a href="${obsidianUrl(n.rel)}" style="font-size:11.5px;color:${theme.accent};text-decoration:none;border:1px solid #283548;border-radius:999px;padding:4px 12px;">Open in Obsidian ↗</a></div>`;
+  Object.assign(card.style, {
+    position: 'fixed', zIndex: 80, width: '320px', maxWidth: '86vw',
+    background: 'rgba(10,14,22,.94)', border: '1px solid rgba(56,189,248,.4)',
+    borderRadius: '14px', padding: '14px 16px', backdropFilter: 'blur(10px)',
+    boxShadow: '0 14px 48px rgba(0,0,0,.6)', fontFamily: '-apple-system,system-ui,sans-serif',
+    animation: 'jcard-in .22s ease-out'
+  });
+  const x = (evt && evt.clientX != null) ? evt.clientX : innerWidth / 2;
+  const y = (evt && evt.clientY != null) ? evt.clientY : innerHeight / 2;
+  card.style.left = Math.min(x + 14, innerWidth - 350) + 'px';
+  card.style.top = Math.min(y - 10, innerHeight - 300) + 'px';
+  document.body.appendChild(card);
+  nodeCardEl = card;
+  card.querySelector('.card-x').onclick = hideNodeCard;
+}
+document.getElementById('g').addEventListener('contextmenu', e => e.preventDefault());
+
+function gOf(x) { return (x && x.g) ? x.g : GRAPH.nodes[lid(x)].g; }
+function isLit(n) {
+  if (litSet) return litSet.has(n.id);
+  if (searchTerm) return n.label.toLowerCase().includes(searchTerm);
+  return true;
+}
+function nodeColor(n) {
+  if (!isLit(n)) return (searchTerm && !litSet) ? '#1c2433' : '#11161f';
+  return colorMode === 'heat' ? n.heat : colorMode === 'rec' ? n.rec : STYLE[n.g].c;
+}
+function linkLit(l) {
+  if (!litSet) return !searchTerm;
+  const s = lid(l.source), t = lid(l.target);
+  if (litLinks) return litLinks.has(s + '-' + t) || litLinks.has(t + '-' + s);
+  return litSet.has(s) && litSet.has(t);
+}
+function linkColor(l) { return linkLit(l) ? theme.accent : (litSet ? '#0d1119' : theme.link); }
+function linkWidth(l) { return (litSet && linkLit(l)) ? 0.9 : 0; }
+function linkParticles(l) {
+  if (!flowOn) return 0;
+  if (litSet) return linkLit(l) ? 3 : 0;
+  const sg = gOf(l.source), tg = gOf(l.target);
+  return (MAJOR.has(sg) && MAJOR.has(tg)) ? 1 : 0;
+}
+function labelVisible(n) {
+  // a big lit neighbourhood labels only its strongest nodes — 200 labels is soup
+  if (litSet) return litSet.has(n.id) && (litSet.size <= 40 || n.dg >= 8 || (focusNode && n.id === focusNode.id));
+  if (searchTerm) return n.label.toLowerCase().includes(searchTerm);
+  return showHubLabels && (n.g === 'sun' || (MAJOR.has(n.g) && n.dg >= 4));
+}
+function labelObject(n) {
+  if (!labelVisible(n)) return undefined;
+  const hero = focusNode && n.id === focusNode.id;
+  const s = new SpriteText(n.label);
+  s.color = hero ? '#ffffff' : '#e6ebf2';
+  s.textHeight = hero ? Math.min(9, 4.5 + n.dg * 0.12) : Math.min(7, 3.2 + n.dg * 0.12);
+  s.fontWeight = hero ? '700' : '500';
+  s.position.y = -(4 + n.val * 1.1);
+  s.material.depthWrite = false;
+  return s;
+}
+function refresh() {
+  Graph.nodeColor(nodeColor).nodeVisibility(Graph.nodeVisibility())
+    .linkColor(linkColor).linkWidth(linkWidth).linkVisibility(Graph.linkVisibility())
+    .linkDirectionalParticles(linkParticles)
+    .nodeThreeObject(labelObject);
+}
+
+function onNodeClick(n, evt) {
+  userMoved = true;
+  if (evt && evt.shiftKey && focusNode && n.id !== focusNode.id) {
+    const p = shortestPath(focusNode.id, n.id);
+    if (p) {
+      const set = new Set(p), links = new Set();
+      for (let i = 0; i < p.length - 1; i++) { links.add(p[i] + '-' + p[i + 1]); links.add(p[i + 1] + '-' + p[i]); }
+      pathInfo = { list: p, set, links };
+      recomputeLit(); refresh(); updateInspector();
+      return;
+    }
+    showToast('No link path between those two');
+    return;
+  }
+  pathInfo = null;
+  focusNode = n;
+  recomputeLit(); refresh(); updateInspector();
+  const dist = Math.max(220, Math.min(560, 220 + Math.sqrt(n.dg || 1) * 30));
+  const r = 1 + dist / Math.hypot(n.x || 1, n.y || 1, n.z || 1);
+  Graph.cameraPosition({ x: n.x * r, y: n.y * r, z: n.z * r }, n, 1200);
+}
+function clearFocus() {
+  focusNode = null; pathInfo = null; isolateOn = false;
+  recomputeLit(); refresh(); updateInspector();
+}
+
+// ---- atmosphere ----
+const scene = Graph.scene();
+scene.fog = new THREE.FogExp2(theme.bg, 0.00055);
+const starGeo = new THREE.BufferGeometry();
+const starPos = new Float32Array(1800 * 3);
+for (let i = 0; i < 1800; i++) {
+  const r = 900 + Math.random() * 1600, th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1);
+  starPos[i*3] = r*Math.sin(ph)*Math.cos(th); starPos[i*3+1] = r*Math.sin(ph)*Math.sin(th); starPos[i*3+2] = r*Math.cos(ph);
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color: theme.star, size: 1.4, sizeAttenuation: true, transparent: true, opacity: 0.7 }));
+scene.add(stars);
+
+// ---- forces ----
+Graph.d3Force('charge').strength(-130);
+Graph.d3Force('link').distance(36);
+
+// ---- intro ----
+Graph.cameraPosition({ x: 0, y: 0, z: 2400 });
+let fitted = false, userMoved = false;
+const fitOnce = () => { if (fitted || userMoved) return; fitted = true;
+  Graph.zoomToFit(1600, 64);
+  setTimeout(() => { if (userMoved) return; const c = Graph.cameraPosition(); Graph.cameraPosition({ x: c.x*0.62, y: c.y*0.62, z: c.z*0.62 }, undefined, 1500); }, 1750); };
+Graph.onEngineStop(fitOnce);
+setTimeout(fitOnce, 9000);
+
+// ---- controls ----
+const oc = Graph.controls();
+oc.autoRotate = true; oc.autoRotateSpeed = 0.5;
+let rot = true;
+function setRot(on) { rot = on; oc.autoRotate = on; document.getElementById('dRot').checked = on; }
+oc.addEventListener('start', () => { oc.autoRotate = false; userMoved = true; });
+oc.addEventListener('end', () => { oc.autoRotate = rot; });
+
+// ---- inspector / sidebar ----
+function depthHtml() { return `<div class="depth"><b>Depth</b>${[1,2,3].map(d => `<button class="${focusDepth===d?'on':''}" data-d="${d}">${d}</button>`).join('')}</div>`; }
+function updateInspector() {
+  const el = document.getElementById('insp');
+  if (pathInfo) {
+    const p = pathInfo.list.map(i => data.nodes[i]);
+    el.innerHTML = `<div class="head"><span class="dot" style="width:10px;height:10px;border-radius:50%;background:${theme.accent}"></span>Path · ${p.length-1} hops</div>` +
+      p.map(m => `<div class="nrow" data-i="${m.id}"><span class="dot" style="background:${STYLE[m.g].c}"></span><span class="lbl">${esc(m.label)}</span><span class="deg">${m.dg}</span></div>`).join('');
+    wireRows(el); return;
+  }
+  const n = focusNode;
+  if (!n) { el.innerHTML = '<div class="placeholder">Click a node to focus it — only that node and its connections light up, and the page excerpt appears here. Shift-click a second node to trace the link path between them.</div>'; return; }
+  const neigh = [...(adj.get(n.id) || [])].map(j => data.nodes[j]).sort((a,b) => b.dg - a.dg);
+  let html = `<div class="head"><span class="dot" style="width:10px;height:10px;border-radius:50%;background:${nodeColor(n)}"></span>${esc(n.label)}</div>`;
+  html += `<div class="meta">${esc(STYLE[n.g].name)} · ${neigh.length} connections · ${agoLabel(n.days)}${isolateOn?' · 🎯 isolated':''}</div>`;
+  const pLong = n.p && n.p.length > 170;
+  const pShort = pLong ? n.p.slice(0, 170).trimEnd() + '…' : (n.p || '');
+  if (n.p) html += `<div class="prev" id="prevTxt">${esc(pShort)}</div>`;
+  if (pLong) html += `<div class="prevMore" style="font-size:11px;color:var(--accent);cursor:pointer;padding:0 9px 9px;margin-top:-4px;user-select:none">Read full excerpt ▾</div>`;
+  html += `<a class="obs" href="${obsidianUrl(n.rel)}">Open in Obsidian ↗</a>`;
+  html += depthHtml();
+  html += neigh.slice(0, 14).map(m => `<div class="nrow" data-i="${m.id}"><span class="dot" style="background:${STYLE[m.g].c}"></span><span class="lbl">${esc(m.label)}</span><span class="deg">${m.dg}</span></div>`).join('');
+  if (neigh.length > 14) html += `<div class="meta">+ ${neigh.length-14} more</div>`;
+  el.innerHTML = html;
+  wireRows(el);
+  el.querySelectorAll('.depth button').forEach(b => b.onclick = () => { focusDepth = +b.dataset.d; recomputeLit(); refresh(); updateInspector(); });
+  const pm = el.querySelector('.prevMore');
+  if (pm) { let exp = false; pm.onclick = () => { exp = !exp; el.querySelector('#prevTxt').textContent = exp ? n.p : pShort; pm.textContent = exp ? 'Show less ▴' : 'Read full excerpt ▾'; }; }
+}
+function wireRows(el) { el.querySelectorAll('.nrow').forEach(r => r.onclick = () => onNodeClick(data.nodes[+r.dataset.i])); }
+function buildHubs() {
+  const el = document.getElementById('hubs');
+  const top = [...data.nodes].sort((a,b) => b.dg - a.dg).slice(0, 8);
+  el.innerHTML = top.map(n => `<div class="nrow" data-i="${n.id}"><span class="dot" style="background:${STYLE[n.g].c}"></span><span class="lbl">${esc(n.label)}</span><span class="deg">${n.dg}</span></div>`).join('');
+  wireRows(el);
+}
+buildHubs(); updateInspector();
+document.getElementById('collapse').onclick = () => document.body.classList.toggle('collapsed');
+
+// ---- toast ----
+const toast = document.getElementById('toast');
+let toastTimer;
+function showToast(m) { toast.textContent = m; toast.style.display = 'block'; clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.style.display = 'none', 2600); }
+
+// ---- search ----
+const searchEl = document.getElementById('search');
+searchEl.addEventListener('input', () => {
+  searchTerm = searchEl.value.trim().toLowerCase();
+  if (searchTerm && (focusNode || pathInfo)) { focusNode = null; pathInfo = null; recomputeLit(); updateInspector(); }
+  refresh();
+});
+searchEl.addEventListener('keydown', e => {
+  e.stopPropagation();
+  if (e.key === 'Enter' && searchTerm) {
+    const m = data.nodes.filter(n => n.label.toLowerCase().includes(searchTerm)).sort((a,b) => b.dg - a.dg);
+    if (m.length) { showToast(`${m.length} match${m.length>1?'es':''} — focusing “${m[0].label}”`); searchEl.value=''; searchTerm=''; onNodeClick(m[0]); }
+    else showToast('No match');
+  }
+  if (e.key === 'Escape') { searchEl.value=''; searchTerm=''; refresh(); searchEl.blur(); }
+});
+
+// ---- legend filters ----
+const legend = document.getElementById('legend');
+const counts = {};
+for (const n of data.nodes) counts[n.g] = (counts[n.g]||0)+1;
+for (const g of Object.keys(STYLE)) {
+  if (!counts[g]) continue;
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.innerHTML = `<span class="dot" style="background:${STYLE[g].c}"></span>${esc(STYLE[g].name)}<span class="n">${counts[g]}</span>`;
+  row.onclick = () => { groupOn[g] = !groupOn[g]; row.classList.toggle('off', !groupOn[g]); refresh(); };
+  legend.appendChild(row);
+}
+
+// ---- forces sliders ----
+document.getElementById('fRepel').oninput = e => { Graph.d3Force('charge').strength(-130*(+e.target.value)); Graph.d3ReheatSimulation(); };
+document.getElementById('fDist').oninput = e => { Graph.d3Force('link').distance(36*(+e.target.value)); Graph.d3ReheatSimulation(); };
+
+// ---- display toggles ----
+document.getElementById('dLabels').onchange = e => { showHubLabels = e.target.checked; refresh(); };
+document.getElementById('dFlow').onchange = e => { flowOn = e.target.checked; refresh(); };
+document.getElementById('dRot').onchange = e => setRot(e.target.checked);
+document.getElementById('dStars').onchange = e => { stars.visible = e.target.checked; };
+
+// ---- themes ----
+const themesEl = document.getElementById('themes');
+for (const [name, t] of Object.entries(THEMES)) {
+  const sw = document.createElement('div');
+  sw.className = 'sw' + (t === theme ? ' on' : '');
+  sw.title = name;
+  sw.style.background = `linear-gradient(135deg, ${t.bg} 50%, ${t.accent} 50%)`;
+  sw.onclick = () => {
+    theme = t;
+    document.documentElement.style.setProperty('--accent', t.accent);
+    Graph.backgroundColor(t.bg);
+    scene.fog.color.set(t.bg); stars.material.color.set(t.star);
+    themesEl.querySelectorAll('.sw').forEach(x => x.classList.remove('on'));
+    sw.classList.add('on');
+    refresh();
+  };
+  themesEl.appendChild(sw);
+}
+const modeBtns = { type: document.getElementById('modeType'), heat: document.getElementById('modeHeat'), rec: document.getElementById('modeRec') };
+for (const [mode, btn] of Object.entries(modeBtns)) {
+  btn.onclick = () => { colorMode = mode;
+    Object.values(modeBtns).forEach(b => b.classList.remove('on')); btn.classList.add('on'); refresh(); };
+}
+
+// ---- hud ----
+document.getElementById('fit').onclick = () => { fitted = true; Graph.zoomToFit(1000, 90); };
+document.getElementById('iso').onclick = () => {
+  if (!focusNode) { showToast('Click a node first, then isolate'); return; }
+  isolateOn = !isolateOn; refresh(); updateInspector();
+  if (isolateOn) { Graph.zoomToFit(900, 60, n => litSet.has(n.id)); }
+};
+document.getElementById('snap').onclick = () => {
+  const a = document.createElement('a');
+  a.download = 'wiki-galaxy.png';
+  a.href = Graph.renderer().domElement.toDataURL('image/png');
+  a.click();
+};
+
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if ((e.key === 'i' || e.key === 'I') && focusNode) document.getElementById('iso').click();
+  if (e.key === 'Escape') { clearFocus(); hideNodeCard(); searchEl.value=''; searchTerm=''; refresh(); }
+});
+})();
+</script>
+</body>
+</html>
