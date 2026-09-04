@@ -91,26 +91,54 @@ if [[ ${#SKIPPED[@]} -gt 0 ]]; then
 fi
 
 # ----- WeasyPrint dependencies (optional) -------------------------------------
+# This step is entirely optional and only matters for PDF rendering. Skipping it
+# is the recommended default: nothing else in the pack depends on it, and Claude
+# can set it up on request the first time a PDF is actually wanted.
 echo ""
-echo "The \`wiki-to-pdf\` skill needs Python 3 plus WeasyPrint and a few"
-echo "system libraries. The bundled SKILL.md describes them in full."
+echo "Optional: the \`wiki-to-pdf\` skill renders wiki pages as PDFs. It needs"
+echo "WeasyPrint and a few system libraries."
 echo ""
-read -r -p "Install the WeasyPrint dependencies now? [y/N]: " INSTALL_DEPS
+echo "You can safely skip this. Nothing else needs it, and you can just ask"
+echo "Claude to set it up the first time you want a PDF."
+echo ""
+read -r -p "Install the PDF dependencies now? (press Return to skip) [y/N]: " INSTALL_DEPS
 if [[ "$INSTALL_DEPS" =~ ^[Yy]$ ]]; then
   echo ""
   echo "Installing Python packages..."
-  pip install --break-system-packages weasyprint markdown jinja2 PyYAML pypdf \
-    || echo "  (pip install failed; install manually with the command above)"
+  # Stock macOS ships pip3 (/usr/bin/pip3) and no `pip` at all, so resolve the
+  # command rather than assuming. Fall back to `python3 -m pip --user`, which
+  # works even where neither wrapper is on PATH.
+  PIP_CMD=""
+  if command -v pip3 >/dev/null 2>&1; then
+    PIP_CMD="pip3"
+  elif command -v pip >/dev/null 2>&1; then
+    PIP_CMD="pip"
+  fi
+
+  PIP_OK=0
+  if [[ -n "$PIP_CMD" ]]; then
+    "$PIP_CMD" install --break-system-packages weasyprint markdown jinja2 PyYAML pypdf && PIP_OK=1
+  fi
+  if [[ $PIP_OK -eq 0 ]]; then
+    python3 -m pip install --user --break-system-packages weasyprint markdown jinja2 PyYAML pypdf && PIP_OK=1
+  fi
+  if [[ $PIP_OK -eq 0 ]]; then
+    echo ""
+    echo "  Could not install the Python packages automatically."
+    echo "  This is not a problem: everything else is installed and working."
+    echo "  Ask Claude to set up WeasyPrint when you first want a PDF."
+  fi
 
   if command -v brew >/dev/null 2>&1; then
     echo ""
-    echo "Installing Homebrew dependencies..."
+    echo "Installing system libraries via Homebrew..."
     brew install cairo pango gdk-pixbuf libffi \
-      || echo "  (brew install failed; install manually)"
+      || echo "  (skipped; ask Claude to finish this when you first want a PDF)"
   else
     echo ""
-    echo "Homebrew not found. Install it from https://brew.sh, then run:"
-    echo "  brew install cairo pango gdk-pixbuf libffi"
+    echo "System libraries: not installed (Homebrew is not on this Mac)."
+    echo "This is fine and expected. Ask Claude to finish the PDF setup when"
+    echo "you first want a PDF, and it will handle Homebrew for you."
   fi
 fi
 
