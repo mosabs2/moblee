@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.4.1 — 4 September 2026
+
+First-install fixes, found by running the installer as a fresh user on a stock Mac rather than on the maintainer's machine.
+
+### Fixed
+
+- **`install-skills.sh` called `pip`, which does not exist on a stock Mac.** macOS ships `pip3` at `/usr/bin/pip3` and no bare `pip`, so accepting the optional PDF-dependencies step ended a successful install with `pip: command not found` followed by a Homebrew warning — alarming output at the end of a run that had in fact worked. The script now resolves `pip3`, then `pip`, then falls back to `python3 -m pip --user`, and reports a calm, accurate message if none succeeds.
+- **The optional PDF step now reads as optional.** It says plainly that skipping is safe, that nothing else depends on it, and that Claude can set it up on request the first time a PDF is wanted. The Homebrew-absent branch no longer reads as an error.
+
 ## v0.4 — 1 September 2026
 
 The maintainer's operational layer, generalised. Everything below was built and battle-tested on the maintainer's live vault June-August 2026, then ported with all personal content stripped and vault-path detection generalised (`~/.config/moblee/vault-path`, written by the installer; `MOBLEE_VAULT` env override; walk-up fallback).
