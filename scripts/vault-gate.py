@@ -221,8 +221,14 @@ def main() -> int:
                         hard.append(f"G5 {f} adds a link into a restricted folder: [[{m.group(1).strip()[:50]}]]")
 
     # W1 — superlatives in added prose (advisory)
+    # Scope: wiki/ only. raw/ and Clippings/ hold source material the user
+    # dropped in and Claude must not rewrite, so flagging its wording is noise;
+    # a first-time user adding "my first note" to raw/ should not be answered
+    # with a style warning on their first commit.
     for f in files:
         if not f.endswith(".md"):
+            continue
+        if not f.startswith("wiki/"):
             continue
         for line in added_lines(f):
             if line.lstrip().startswith(("#", "|")):
