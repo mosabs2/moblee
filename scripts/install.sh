@@ -118,6 +118,18 @@ echo "Initialising git repository..."
 (
   cd "$VAULT_LOCATION"
   git init --quiet --initial-branch=main 2>/dev/null || git init --quiet
+  # Give the repo a local identity so the user's first real commit does not
+  # print git's "your name and email address were configured automatically"
+  # notice, which reads like an error to someone who has never used git.
+  # Repo-local only; the user's global git config is left untouched.
+  if [[ -z "$(git config user.email || true)" ]]; then
+    if [[ "$USER_NAME" != "[Your Name]" ]]; then
+      git config user.name "$USER_NAME"
+    else
+      git config user.name "$(id -un)"
+    fi
+    git config user.email "$(id -un)@$(hostname -s).local"
+  fi
   git add . >/dev/null
   git commit --quiet -m "initial vault from Moblee starter pack" \
     || echo "  (git commit skipped, configure user.name and user.email first)"

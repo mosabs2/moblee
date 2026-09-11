@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.4.2 — 11 September 2026
+
+Three fixes found by installing the pack as a fourteen-year-old would: fresh clone, stock Mac, no Homebrew, no git experience. Every one of them is output that reads as failure at a moment when a beginner is deciding whether the thing works.
+
+### Fixed
+
+- **The optional PDF step failed twice on a stock Mac and printed two pages of usage text.** v0.4.1 resolved `pip3` correctly but passed `--break-system-packages`, an option that arrived in pip 23.0; macOS ships **pip 21.2.4**, which aborts with a usage dump on an unknown option. Both the primary and the fallback attempt failed this way before the calm recovery message was reached. The step now checks for Homebrew first and skips cleanly when it is absent, since the Python packages are useless without the system libraries underneath them; where Homebrew is present, the flag is probed for rather than assumed and the verbose output goes to a log rather than the screen.
+- **The user's first real commit printed git's automatic-identity notice.** Nine lines about `git config --global --edit` and `git commit --amend --reset-author`, which read as an error to someone who has never used git. The installer now gives the new vault a repo-local identity from the name already collected at the first prompt. The user's global git config is untouched.
+- **The commit gate ran its prose advisory over `raw/` and `Clippings/`.** Those folders hold source material the user drops in and Claude never rewrites, so flagging their wording is noise; the concrete symptom was a first commit of a file containing "my first note" answered with a superlative warning. The check is now scoped to `wiki/`, where the prose is Claude's own.
+
+### Verified
+
+Installed end to end three times in a sandboxed `HOME` on a stock `PATH`, with Homebrew and the user's dotfiles deliberately absent. Confirmed working from that environment: the installer, the skills installer, the six bundled skills, placeholder substitution, the orient preflight, `lint-v2.py`, the commit gate (both that it stays silent on `raw/` and that it still fires on `wiki/`), the galaxy build, and the dashboard serving on `127.0.0.1:7373`. The dashboard and galaxy need only the Python that macOS already ships.
+
 ## v0.4.1 — 4 September 2026
 
 First-install fixes, found by running the installer as a fresh user on a stock Mac rather than on the maintainer's machine.

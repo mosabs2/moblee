@@ -103,42 +103,62 @@ echo "Claude to set it up the first time you want a PDF."
 echo ""
 read -r -p "Install the PDF dependencies now? (press Return to skip) [y/N]: " INSTALL_DEPS
 if [[ "$INSTALL_DEPS" =~ ^[Yy]$ ]]; then
-  echo ""
-  echo "Installing Python packages..."
-  # Stock macOS ships pip3 (/usr/bin/pip3) and no `pip` at all, so resolve the
-  # command rather than assuming. Fall back to `python3 -m pip --user`, which
-  # works even where neither wrapper is on PATH.
-  PIP_CMD=""
-  if command -v pip3 >/dev/null 2>&1; then
-    PIP_CMD="pip3"
-  elif command -v pip >/dev/null 2>&1; then
-    PIP_CMD="pip"
-  fi
+  # The Python packages are useless without the system libraries underneath
+  # them, so Homebrew decides whether this step can run at all. Checking it
+  # first means a Mac without Homebrew skips cleanly instead of failing twice
+  # on its way to the same answer.
+  DEPS_LOG="$HOME/.claude/moblee-pdf-setup.log"
 
-  PIP_OK=0
-  if [[ -n "$PIP_CMD" ]]; then
-    "$PIP_CMD" install --break-system-packages weasyprint markdown jinja2 PyYAML pypdf && PIP_OK=1
-  fi
-  if [[ $PIP_OK -eq 0 ]]; then
-    python3 -m pip install --user --break-system-packages weasyprint markdown jinja2 PyYAML pypdf && PIP_OK=1
-  fi
-  if [[ $PIP_OK -eq 0 ]]; then
+  if ! command -v brew >/dev/null 2>&1; then
     echo ""
-    echo "  Could not install the Python packages automatically."
-    echo "  This is not a problem: everything else is installed and working."
-    echo "  Ask Claude to set up WeasyPrint when you first want a PDF."
-  fi
-
-  if command -v brew >/dev/null 2>&1; then
-    echo ""
-    echo "Installing system libraries via Homebrew..."
-    brew install cairo pango gdk-pixbuf libffi \
-      || echo "  (skipped; ask Claude to finish this when you first want a PDF)"
+    echo "PDF setup needs Homebrew, which is not on this Mac yet, so this step"
+    echo "is being skipped. Nothing else is affected, and the rest of the"
+    echo "install is complete. The first time you want a PDF, ask Claude to set"
+    echo "it up and it will install what is needed for you."
   else
     echo ""
-    echo "System libraries: not installed (Homebrew is not on this Mac)."
-    echo "This is fine and expected. Ask Claude to finish the PDF setup when"
-    echo "you first want a PDF, and it will handle Homebrew for you."
+    echo "Installing the system libraries (this can take a few minutes)..."
+    if brew install cairo pango gdk-pixbuf libffi >>"$DEPS_LOG" 2>&1; then
+      echo "  System libraries installed."
+    else
+      echo "  System libraries did not install. Details: $DEPS_LOG"
+    fi
+
+    echo "Installing the Python packages..."
+    # Stock macOS ships pip3 (/usr/bin/pip3) and no `pip` at all, so resolve
+    # the command rather than assuming.
+    PIP_CMD=""
+    if command -v pip3 >/dev/null 2>&1; then
+      PIP_CMD="pip3"
+    elif command -v pip >/dev/null 2>&1; then
+      PIP_CMD="pip"
+    fi
+
+    # --break-system-packages arrived in pip 23.0. Stock macOS ships pip
+    # 21.2.4, where passing an unknown option aborts with a usage dump, so
+    # probe for the flag rather than assuming it exists.
+    BSP=""
+    if [[ -n "$PIP_CMD" ]] && "$PIP_CMD" install --help 2>/dev/null | grep -q -- "--break-system-packages"; then
+      BSP="--break-system-packages"
+    fi
+
+    PIP_OK=0
+    if [[ -n "$PIP_CMD" ]]; then
+      "$PIP_CMD" install --user $BSP weasyprint markdown jinja2 PyYAML pypdf >>"$DEPS_LOG" 2>&1 && PIP_OK=1
+    fi
+    if [[ $PIP_OK -eq 0 ]]; then
+      python3 -m pip install --user $BSP weasyprint markdown jinja2 PyYAML pypdf >>"$DEPS_LOG" 2>&1 && PIP_OK=1
+    fi
+
+    if [[ $PIP_OK -eq 1 ]]; then
+      echo "  Python packages installed. PDF rendering is ready."
+    else
+      echo ""
+      echo "  The Python packages did not install this time, which is not a"
+      echo "  problem: everything else is installed and working. Ask Claude to"
+      echo "  finish the PDF setup the first time you want a PDF."
+      echo "  Details, if they are ever wanted: $DEPS_LOG"
+    fi
   fi
 fi
 
