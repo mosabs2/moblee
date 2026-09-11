@@ -53,7 +53,7 @@ The Moblee `vault` shell function reminds you to do this if you skip it; you can
 
 ## Python 3
 
-Python 3 is needed for the optional `wiki-to-pdf` skill, which renders any wiki page as a branded PDF. If you do not plan to use the PDF renderer, you can skip this section entirely.
+Python 3 runs the vault tooling: the weekly health check (`lint-v2.py`), the commit gate, the dashboard, the galaxy view, and the optional `wiki-to-pdf` renderer. macOS already ships it, so in practice this section is a one-line check rather than an install.
 
 Recent macOS versions ship with Python 3 preinstalled. To verify:
 
@@ -63,14 +63,16 @@ python3 --version
 
 If you see something like `Python 3.11.x`, you're set. If not, install Python 3 from [python.org](https://www.python.org/downloads/) or via Homebrew (`brew install python3`).
 
-The `install-skills.sh` script offers to install the WeasyPrint Python and Homebrew dependencies automatically when you run it. If you'd rather install them by hand:
+The PDF renderer additionally needs WeasyPrint and a few system libraries. `install-skills.sh` offers to install these, and skips the step cleanly if Homebrew is not present, since the Python packages are of no use without the system libraries underneath them. There is no need to do any of it up front: ask Claude to set up the PDF renderer the first time you actually want a PDF.
+
+To install them by hand, take the system libraries first and the Python packages second:
 
 ```
-pip install --break-system-packages weasyprint markdown jinja2 PyYAML pypdf
 brew install cairo pango gdk-pixbuf libffi
+pip3 install --user weasyprint markdown jinja2 PyYAML pypdf
 ```
 
-Homebrew itself, if you don't already have it, installs from [brew.sh](https://brew.sh) with a single curl-and-pipe command. The Moblee installer prompts you to install Homebrew dependencies but won't try to install Homebrew itself.
+Note that stock macOS ships pip 21.2.4, which does not understand `--break-system-packages`; that option only exists from pip 23.0 onwards. Homebrew itself, if you do not already have it, installs from [brew.sh](https://brew.sh). The Moblee installer never tries to install Homebrew for you.
 
 ## Optional: Obsidian Web Clipper
 
