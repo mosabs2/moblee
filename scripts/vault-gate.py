@@ -64,6 +64,18 @@ def find_vault_root() -> Path:
     """Locate the vault: MOBLEE_VAULT env var, then ~/.config/moblee/vault-path,
     then walking up from the current working directory (a pre-commit hook runs
     at the repository root, so the walk-up finds the vault in normal use)."""
+    # As a git hook, the gate must judge the repository the commit is happening
+    # in, never a different vault recorded in the config file (an owner with two
+    # vaults would otherwise have one gated against the other's files).
+    git_dir = os.environ.get("GIT_DIR")
+    if git_dir:
+        p = Path(git_dir).resolve().parent
+        if (p / "wiki" / "Index.md").is_file():
+            return p
+    cur = Path.cwd()
+    for candidate in [cur, *cur.parents]:
+        if (candidate / ".git").exists() and (candidate / "wiki" / "Index.md").is_file():
+            return candidate
     env = os.environ.get("MOBLEE_VAULT")
     if env:
         p = Path(env).expanduser()

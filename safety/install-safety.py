@@ -81,9 +81,30 @@ def load_json(path: Path) -> dict:
     if not path.exists():
         return {}
     try:
-        return json.loads(path.read_text())
+        data = json.loads(path.read_text())
     except Exception as e:  # noqa: BLE001
         sys.exit(f"{path} is not valid JSON ({e}). Fix or move it aside, then re-run.")
+    if not isinstance(data, dict):
+        sys.exit(f"{path} does not hold the expected settings object. Move it aside, then re-run.")
+    return data
+
+
+def check_hook_shape(settings: dict) -> None:
+    """Stop with one plain sentence if the hooks section has a shape this
+    script cannot merge into, before anything on the machine is changed."""
+    hooks = settings.get("hooks", {})
+    if not isinstance(hooks, dict):
+        sys.exit("~/.claude/settings.json has a 'hooks' section that is not the usual "
+                 "shape (a list where an object was expected). Nothing was changed; "
+                 "ask Claude to look at that file before re-running.")
+    for event, entries in hooks.items():
+        if not isinstance(entries, list) or not all(isinstance(e, dict) for e in entries):
+            sys.exit(f"~/.claude/settings.json has an unexpected shape under hooks/{event}. "
+                     "Nothing was changed; ask Claude to look at that file before re-running.")
+        for e in entries:
+            if not isinstance(e.get("hooks", []), list):
+                sys.exit(f"~/.claude/settings.json has an unexpected shape under hooks/{event}. "
+                         "Nothing was changed; ask Claude to look at that file before re-running.")
 
 
 def write_json(path: Path, data: dict) -> None:
@@ -128,6 +149,11 @@ def main() -> int:
 
     say(f"Vault: {short(vault)}")
 
+    # 0. read the settings first, so a file this script cannot merge into stops
+    #    it before anything on the machine has changed
+    settings = load_json(SETTINGS)
+    check_hook_shape(settings)
+
     # 1. guard file
     say("Delete guard")
     if a.dry_run:
@@ -147,7 +173,6 @@ def main() -> int:
 
     # 2. hook registration
     say("Hook registration in ~/.claude/settings.json")
-    settings = load_json(SETTINGS)
     hooks = settings.setdefault("hooks", {})
     before = hook_count(hooks)
     pre = hooks.setdefault("PreToolUse", [])
@@ -202,8 +227,9 @@ def main() -> int:
         return 0
     say("")
     say("Safety layer in place. From now on, in this vault:")
-    say("  - Claude cannot delete files, empty folders, rewrite git history or")
-    say("    force-push, however the command is phrased; it is told to move instead.")
+    say("  - Claude cannot delete files, empty folders, move things out of the vault,")
+    say("    rewrite git history or force-push, however the command is phrased. If")
+    say("    something must go, Claude tells you what and you remove it yourself.")
     say("  - Routine work (reading, searching, editing inside the vault, committing)")
     say("    runs without permission prompts. Anything outside that still asks.")
     return 0

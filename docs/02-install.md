@@ -98,7 +98,9 @@ Click `Welcome.md` and read it.
 A quick checklist to confirm everything is in place:
 
 - The vault folder exists at the location you chose.
-- `~/.claude/skills/` contains four subfolders: `brain/`, `wiki-capture/`, `wiki-to-pdf/`, `design-your-brand/`.
+- `~/.claude/skills/` contains seven subfolders: `brain/`, `compact/`, `galaxy/`, `wiki-capture/`, `wiki-interview/`, `wiki-to-pdf/`, `design-your-brand/`.
+- `~/.claude/hooks/bash-guard.py` exists, and the vault's `.claude/settings.local.json` lists the permission rules (the installer printed the counts).
+- The vault's `VERSION` file reads `0.5.0`.
 - Typing `vault` in a new Terminal cds you into the vault and prints the ready signal.
 - Obsidian opens the vault and displays `Welcome.md`.
 - Running `claude` in the vault's Terminal session starts a Claude Code session that can see your vault.

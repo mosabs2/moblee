@@ -50,6 +50,19 @@ VAULT_LOCATION="${VAULT_LOCATION:-$DEFAULT_LOCATION}"
 # expand a leading ~ if the user typed one
 VAULT_LOCATION="${VAULT_LOCATION/#\~/$HOME}"
 
+# ----- an existing Moblee vault at this location is updated, not refused ------
+# (v0.5) A vault that already carries a VERSION file, or a CLAUDE.md and wiki/,
+# is handed to the updater, which brings it to this version without touching
+# its content. This is also the recovery path if a previous install stopped
+# part-way (for example at the safety step): run the installer again with the
+# same answers and it finishes the job through the updater.
+if [[ -f "$VAULT_LOCATION/CLAUDE.md" && -d "$VAULT_LOCATION/wiki" ]]; then
+  echo ""
+  echo "There is already a Moblee vault at $VAULT_LOCATION."
+  echo "Nothing there will be overwritten. Bringing it up to this version instead..."
+  exec bash "$SCRIPT_DIR/update.sh" "$VAULT_LOCATION"
+fi
+
 # ----- safety: refuse to overwrite --------------------------------------------
 if [[ -e "$VAULT_LOCATION" ]]; then
   echo ""
@@ -169,8 +182,10 @@ else
   echo ""
   echo "The safety layer did not install, so the installer has stopped here:"
   echo "a vault without it is not safe to use. The message above says why."
-  echo "Fix the cause and run this installer again, or ask Claude to read the"
-  echo "message and help."
+  echo "Once the cause is fixed, run this installer again with the same answers"
+  echo "(it will finish the job without touching what is already there), or run"
+  echo "the safety step on its own:"
+  echo "  python3 \"$PACKAGE_ROOT/safety/install-safety.py\" --vault \"$VAULT_LOCATION\""
   exit 1
 fi
 
@@ -226,6 +241,17 @@ if [[ "$INSTALL_VAULT_FN" =~ ^[Yy]$ ]]; then
   fi
 fi
 
+# ----- commit the settings the install wrote (v0.5) ---------------------------
+# The initial commit happened before the safety step; the permission rules and
+# the ignore file it added are committed now, so the vault starts clean.
+(
+  cd "$VAULT_LOCATION"
+  git add -A .claude .gitignore VERSION 2>/dev/null || true
+  if ! git diff --cached --quiet 2>/dev/null; then
+    git commit --quiet -m "moblee: safety layer and settings" 2>/dev/null || true
+  fi
+)
+
 # ----- done -------------------------------------------------------------------
 echo ""
 echo "==================================================================="
@@ -251,6 +277,7 @@ echo "       Galaxy:     say \"galaxy\" to Claude in your vault"
 echo "       Health check: runs by itself on Saturdays if you scheduled it; or ask Claude to \"run the lint\""
 echo ""
 echo "  Safety: the delete guard is on. Claude cannot delete files in this vault"
-echo "  without your explicit yes, and routine work no longer asks permission."
+echo "  at all; if something must go, Claude tells you what and you remove it"
+echo "  yourself. Routine work no longer asks permission."
 echo "  To update later: download the new Moblee and run  bash scripts/update.sh"
 echo ""

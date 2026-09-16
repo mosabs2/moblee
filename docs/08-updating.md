@@ -4,7 +4,7 @@ You never reinstall Moblee, and you never rebuild your wiki. Your pages, your lo
 
 ## What an update changes, and what it never touches
 
-An update replaces the scripts in `scripts/` and `dashboard/`, the skills in your Claude skills folder, the safety guard, and adds any new rules to `CLAUDE.md` by inserting them at named places rather than replacing the file. It never touches `wiki/`, `raw/`, `Clippings/`, `Daily Notes/` or the log. Every file it replaces is first copied to `~/.config/moblee/backups/<date and time>/`, so nothing is lost even if you change your mind.
+An update replaces the scripts in `scripts/` and `dashboard/`, the skills in your Claude skills folder, the safety guard, and adds any new rules to `CLAUDE.md` by inserting them at named places rather than replacing the file. The only thing it ever adds inside `wiki/` is `wiki/Identity.md`, and only if you do not have one; it never touches your pages, `raw/`, `Clippings/`, `Daily Notes/` or the log, and it commits only the files it changed, leaving any work of yours that was not yet committed exactly as it was. Every file it replaces is first copied to `~/.config/moblee/backups/<date and time>/`, so nothing is lost even if you change your mind.
 
 ## How to update
 

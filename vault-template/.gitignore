@@ -1,0 +1,9 @@
+# Moblee vault: what git does not need to keep.
+# Reports and renders are regenerated from the markdown; editor state and caches are noise.
+outputs/
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache
+__pycache__/
+*.pyc
+.DS_Store
