@@ -81,7 +81,7 @@ MAX_FILES_PER_CALL = 6
 KNOWN_SAFE_SHA256 = {
     "09e53a07cc802efbc4e39781bed40c5fdadca619e4e3760fd79c4fa1b05edca1": "dashboard/server.py",
     "c98790741c58336bed68ec4c0c1a40566ac25dacc77331e4c4da591d083980a3": "safety/install-safety.py",
-    "240bfbf6d74ce37085d1c20718f82fbeb1cb32e649dc11e0885064320ebf8ab6": "safety/test-guard.py",
+    "ed591ff3cba9bfaca5bb73b7fab73891ced7c4646b6ccc7e46d3f242b133a92d": "safety/test-guard.py",
     "3e314ed6bde5799b1f32c190a2a4996eb5f52107b22f9fc7a8c1a626213983dd": "scripts/add-identity.py",
     "749ed9603f05e1a633f9586383e86777289fb0eb78b8b7bd9c7e2e0706c6672d": "scripts/cadence/run-weekly-lint.sh",
     "ccd320d41251a54c6ec367513de80a8ea2dcf2bdc1b0f47943b4adc26a07c7cb": "scripts/hooks/post-commit",
