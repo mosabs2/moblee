@@ -2,17 +2,16 @@
 """vault-gate.py — write-time commit gate for a Moblee wiki vault.
 
 INSTALLATION
-    This script is designed to run as the git pre-commit hook of the vault's
-    repository (the Moblee installer wires it). To install by hand, from the
-    vault root:
+    This script runs as the git pre-commit hook of the vault's repository.
+    The tracked hook at scripts/hooks/pre-commit calls it; the Moblee
+    installer wires that folder in with
 
-        cp scripts/vault-gate.py .git/hooks/pre-commit
-        chmod +x .git/hooks/pre-commit
+        git config core.hooksPath scripts/hooks
 
-    Or, to keep a single copy in scripts/, make the hook a one-line wrapper:
-
-        printf '#!/bin/sh\nexec python3 scripts/vault-gate.py\n' > .git/hooks/pre-commit
-        chmod +x .git/hooks/pre-commit
+    To wire it by hand, run that command from the vault root (and make sure
+    scripts/hooks/pre-commit is executable). core.hooksPath is local git
+    configuration, so a vault synced to a second machine needs it set there
+    too. Do not also copy the gate into .git/hooks/, or it runs twice.
 
 WHAT IT DOES
     The periodic lint's detectors run days after an error lands; this gate
@@ -31,9 +30,22 @@ Checks (hard failures block the commit):
       folder (wiki/Private/ or wiki/Ghost Reconstructions/, one-direction
       rule; skipped when the vault has no restricted folders;
       log/Context Archive/Index exempt as records).
+  G6  Wikilinks ADDED by this commit to a wiki/ page resolve to a page that
+      exists somewhere in the vault (Obsidian resolves by basename). The
+      periodic lint finds dangling links days later; this catches them
+      before the commit exists. Scoped to the staged diff, so pre-existing
+      debt elsewhere never blocks a commit, and to wiki/ only: raw/ staging
+      notes routinely name pages that do not exist yet. Exempt: file embeds
+      (`![[...]]`), attachment links (.png, .pdf ...), memory-slug pointers,
+      restricted folders, links inside code spans, and wiki/log.md (append-
+      only, so a historical entry's link cannot be corrected). A link whose
+      target is a folder rather than a page is advisory (W2), not blocking.
 Advisory (printed, never blocks):
   W1  Superlative phrasing in added lines (first/largest/only/densest/
       on record ...) — grep the corpus before letting these stand.
+  W2  Folder links added by this commit (target is a directory with no index
+      page) — Obsidian will not resolve them, but they are a naming
+      convention rather than a broken reference, so they never block.
 
 Escape hatch for a deliberate exception: VAULT_GATE_SOFT=1 git commit ...
 (reports everything, exits 0).
@@ -97,6 +109,24 @@ SUPERLATIVE = re.compile(
     r"\b(first|largest|biggest|densest|smallest|longest|highest ever|lowest ever|on record|never before|the only)\b",
     re.IGNORECASE)
 WIKILINK = re.compile(r"\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]")
+# G6 link-resolution exemptions, kept in step with scripts/lint-v2.py.
+ATTACHMENT_SUFFIXES = {
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".pdf", ".excalidraw", ".canvas",
+}
+NON_PAGE_LINK_PREFIXES = ("reference-", "reference_", "feedback-", "feedback_", "project-", "memory/")
+ANY_WIKILINK = re.compile(r"(!?)\[\[([^\]]+)\]\]")
+
+
+def strip_code(text: str) -> str:
+    """Blank fenced blocks and inline code spans; a [[link]] in backticks is syntax, not a reference."""
+    text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
+    return re.sub(r"`[^`\n]*`", "", text)
+
+
+def vault_page_names() -> tuple[set[str], set[str]]:
+    """(markdown basenames, directory names) across the whole vault — Obsidian resolves by basename."""
+    return ({q.stem for q in VAULT.rglob("*.md") if ".git" not in q.parts},
+            {d.name for d in VAULT.rglob("*") if d.is_dir() and ".git" not in d.parts})
 
 
 def cluster_folders() -> tuple[str, ...]:
@@ -219,6 +249,39 @@ def main() -> int:
                 for m in WIKILINK.finditer(line):
                     if m.group(1).strip() in stems:
                         hard.append(f"G5 {f} adds a link into a restricted folder: [[{m.group(1).strip()[:50]}]]")
+
+    # G6 — wikilinks added by this commit must resolve. Scope: wiki/ only
+    # (raw/ staging notes name target pages that may not exist yet, and
+    # Clippings/ is source material). The log is exempt as append-only.
+    link_files = [f for f in files
+                  if f.endswith(".md")
+                  and f.startswith("wiki/")
+                  and f != "wiki/log.md"
+                  and not f.startswith(RESTRICTED_DIRS)]
+    if link_files:
+        md_basenames, folder_names = vault_page_names()
+        for f in link_files:
+            for line in added_lines(f):
+                for m in ANY_WIKILINK.finditer(strip_code(line)):
+                    if m.group(1) == "!":          # file embed, not a page reference
+                        continue
+                    target = m.group(2).split("|")[0].split("#")[0].strip()
+                    if target.endswith("\\"):     # table-escaped [[Page\|alias]]
+                        target = target[:-1].strip()
+                    if not target or target in md_basenames:
+                        continue
+                    if target.startswith(NON_PAGE_LINK_PREFIXES):
+                        continue
+                    if Path(target).suffix.lower() in ATTACHMENT_SUFFIXES:
+                        continue
+                    basename = target.split("/")[-1]
+                    if basename in md_basenames:
+                        continue
+                    if basename in folder_names or target in folder_names:
+                        if len(warn) < 10:
+                            warn.append(f"W2 folder link (Obsidian will not resolve it) in {f}: [[{target[:50]}]]")
+                        continue
+                    hard.append(f"G6 {f} adds a link to a page that does not exist: [[{target[:60]}]]")
 
     # W1 — superlatives in added prose (advisory)
     # Scope: wiki/ only. raw/ and Clippings/ hold source material the user

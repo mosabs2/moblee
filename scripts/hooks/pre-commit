@@ -1,0 +1,42 @@
+#!/bin/sh
+# Vault commit gate — the git pre-commit hook for a Moblee wiki vault.
+#
+# This tracked file is the live hook when the repository sets
+#   git config core.hooksPath scripts/hooks
+# (the Moblee installer does this). .git/hooks/ then stays empty; do not also
+# install a copy there, or the gate runs twice. core.hooksPath is local git
+# configuration, so a vault cloned or synced to a second machine needs the
+# setting made again there; verify with `git config core.hooksPath`.
+#
+# Interpreter resolution: a bare `python3` can be missing from PATH for git
+# clients launched outside a shell (GUI clients, scheduled jobs), which would
+# block every commit. vault-gate.py needs only the standard library, so any
+# python3 runs it; try PATH first, then the two standard macOS locations.
+#
+# To bypass the gate for one deliberate commit: git commit --no-verify
+# To have it report without blocking:            VAULT_GATE_SOFT=1 git commit ...
+set -e
+
+ROOT=$(git rev-parse --show-toplevel) || exit 1
+
+if command -v python3 >/dev/null 2>&1; then
+    PY=python3
+elif [ -x /opt/homebrew/bin/python3 ]; then
+    PY=/opt/homebrew/bin/python3
+elif [ -x /usr/bin/python3 ]; then
+    PY=/usr/bin/python3
+else
+    echo "pre-commit: no python3 interpreter found on PATH, at" >&2
+    echo "  /opt/homebrew/bin/python3, or at /usr/bin/python3." >&2
+    echo "  The vault commit gate cannot run. Install python3, or commit with" >&2
+    echo "  --no-verify if you have deliberately decided to bypass the gate." >&2
+    exit 1
+fi
+
+if [ ! -f "$ROOT/scripts/vault-gate.py" ]; then
+    echo "pre-commit: scripts/vault-gate.py not found in this repository;" >&2
+    echo "  the commit gate is not installed here, so the commit proceeds unchecked." >&2
+    exit 0
+fi
+
+exec "$PY" "$ROOT/scripts/vault-gate.py"

@@ -1,8 +1,12 @@
 # Moblee voice stack (macOS)
 
 Give Claude a voice. After installing, every Claude Code reply is read aloud,
-and Claude nudges you audibly when it is waiting on your input or a permission
-click — useful the moment you look away from the screen.
+which is useful the moment you look away from the screen.
+
+**One honest limit.** The stack also registers a nudge that speaks when Claude
+is waiting on a permission click. That nudge fires when Claude Code runs in the
+Terminal; the Claude desktop app does not send the signal it relies on, so in
+the app you get the read-aloud replies but not the waiting nudge.
 
 **Works out of the box, free.** The stack uses the built-in macOS voice by
 default. If you later add an ElevenLabs API key (a paid text-to-speech service

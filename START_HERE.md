@@ -35,11 +35,14 @@ The user has (or is about to clone) a folder called `moblee/` containing:
 - `README.md`, the top-level intro to the package.
 - `START_HERE.md`, this file.
 - `LICENSE`, MIT.
-- `vault-template/`, the Obsidian vault scaffolding: `CLAUDE.md`, `Welcome.md`, `wiki/` with Index, log, context and methodology pages, and the empty `raw/`, `Clippings/`, `outputs/` folders.
-- `skills/`, the bundled Claude skills: `brain/` (reflective queries, `_context` tier management, persona voices, and the daily today/close-day/schedule rhythm), `wiki-capture/` (chat-to-wiki funnel), `wiki-to-pdf/` (branded PDF rendering), `design-your-brand/` (visual identity interview), `compact/` (keeps the always-loaded files light), `wiki-interview/` (structured oral-history interviews).
+- `vault-template/`, the Obsidian vault scaffolding: `CLAUDE.md`, `Welcome.md`, `VERSION`, `wiki/` with Index, log, context, Identity and methodology pages, and the empty `raw/`, `Clippings/`, `outputs/` folders.
+- `skills/`, the bundled Claude skills: `brain/` (reflective queries, `_context` tier management, persona voices, and the daily today/close-day/schedule rhythm), `wiki-capture/` (chat-to-wiki funnel), `wiki-to-pdf/` (branded PDF rendering), `design-your-brand/` (visual identity interview), `compact/` (keeps the always-loaded files light), `wiki-interview/` (structured oral-history interviews), `galaxy/` (rebuilds and opens the 3D graph).
+- `safety/`, the delete guard and the starter permission rules, installed by the installer and not optional: Claude cannot delete in the vault without an explicit yes, and routine work stops asking permission. `docs/09-safety.md` explains it.
 - `dashboard/` and `scripts/wiki-galaxy/`, optional visual layers: a local web dashboard (orientation, an Ask box, config-driven charts) and an offline 3D knowledge-graph view. `voice/`, an optional macOS voice stack (replies read aloud; free built-in voice by default).
-- `scripts/`, the installers plus the vault tooling the installer copies into the new vault: `install.sh` (lays down the vault, tooling, commit gate; offers the voice stack), `install-skills.sh` (copies skills to `~/.claude/skills/`), `vault.sh` (the session-start function for `~/.zshrc`), `lint-v2.py` (weekly structural health check), `vault-gate.py` (pre-commit gate), `vault-orient-preflight.sh` (session-start probe).
-- `docs/`, seven longer-form documentation files for users who want to read before doing.
+- `scripts/`, the installers plus the vault tooling the installer copies into the new vault: `install.sh` (lays down the vault, tooling, commit gate, safety layer; offers the weekly health-check schedule and the voice stack), `update.sh` (brings an existing vault up to this version without touching its content), `install-skills.sh` (copies skills to `~/.claude/skills/`), `vault.sh` (the session-start function for `~/.zshrc`), `lint-v2.py` (weekly structural health check), `vault-gate.py` (commit gate, run through `scripts/hooks/`), `log-append.py` (the one way a log entry is written), `vault-orient-preflight.sh` (session-start probe).
+- `memory-seed/`, four starting memories for the owner's Claude (check the record before hedging, no superlatives, plain English on housekeeping, plain shell commands), seeded at install.
+- `clinic/`, the maintainer's tools for looking after a vault remotely: a clinic-note template and a checker. Not needed by the owner.
+- `docs/`, nine longer-form documentation files for users who want to read before doing; `08-updating.md` and `09-safety.md` are the two most owners come back to.
 
 Point the user at these files by their relative path inside the package.
 
@@ -53,7 +56,7 @@ Move through this sequence one step at a time. After each step, wait for the use
 
 **3. Get the Moblee package onto their machine.** Ask whether they already have the `moblee/` folder downloaded. If yes, ask for the path. If no, give them the git clone command if the repo is hosted, or instructions to download and unzip. Confirm the path before proceeding.
 
-**4. Run the install script.** Tell them: `bash scripts/install.sh` from inside the Moblee folder. Explain what the script will do: prompt them for a vault name and location, lay down the folder structure, substitute their chosen name into the templates. The default vault location is `~/Wiki/[Your Vault Name]`. Confirm the script ran cleanly.
+**4. Run the install script.** Tell them: `bash scripts/install.sh` from inside the Moblee folder. Explain what the script will do: prompt them for a vault name and location, lay down the folder structure, substitute their chosen name into the templates, install the safety layer (the delete guard and the permission rules, which it proves working before it moves on), then ask three yes/no questions: schedule the weekly health check (say yes), install the voice stack (their choice), add the `vault` shell function (say yes). The default vault location is `~/Wiki/[Your Vault Name]`. Confirm the script ran cleanly and ended with "Done" and the safety line.
 
 **5. Install the skills.** Tell them: `bash scripts/install-skills.sh`. Explain that this copies the bundled skills into `~/.claude/skills/`, where Claude Code and Cowork will find them automatically. If they plan to use `wiki-to-pdf`, the script also offers to install the WeasyPrint Python and Homebrew dependencies.
 
@@ -62,6 +65,8 @@ Move through this sequence one step at a time. After each step, wait for the use
 **7. Open the vault in Obsidian.** Walk them through pointing Obsidian at the newly-created vault directory. ("File, Open vault, Open folder as vault, navigate to `~/Wiki/<their vault name>`.") Once it's open, they'll see `Welcome.md` in the file pane.
 
 **8. Read the Welcome and methodology pages.** Have them read `Welcome.md`, then `wiki/How to Use This Wiki.md`, then come back to you. Encourage them to skim, not study; the system is meant to be used, not memorised.
+
+**8b. Who Claude is to them.** Their vault carries `wiki/Identity.md`, the file that tells their Claude how to behave with them: verify rather than guess, challenge rather than flatter, never delete without a yes. One list in it is blank and is theirs: what they want to be held to. Ask them, in one question: "Is there anything you want your Claude to keep you honest about, or to push you on, over time? A habit, a project, a thing you keep putting off?" Write their answer, in their words, into the blank list under "What [their name] has asked to be held to" in that file (or, if they are in Claude Code in their vault, have their Claude do it). If they have nothing yet, leave it blank and tell them they can add to it any time by saying "add this to how you work with me".
 
 **9. Design their brand (optional).** Suggest running the `design-your-brand` skill if they want PDFs of their wiki pages to be in their own visual identity rather than the neutral default. Phrase it as optional. If they say yes, prompt them to start a Claude Code session in their vault and say "design my brand", and `design-your-brand` will take over from there. If they say no or "later", note it and move on.
 

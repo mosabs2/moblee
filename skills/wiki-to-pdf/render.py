@@ -31,6 +31,7 @@ Render styles:
     --watermark <file>     (cv) monogram filename for the watermark; defaults to
                            your configured brand mark. Omitted if none is found.
     --footer-label "..."   (cv) running-footer label; defaults to the page title.
+    --font-scale 1.3       (cv) multiply every font-size in cv.css (large print).
     --no-charts            Skip the vega-lite / mermaid fenced-block pre-render
                            (both styles); leave them as plain code blocks.
 
@@ -40,7 +41,65 @@ Charts (optional, both styles):
     global `mmdc` binary (`npm i -g @mermaid-js/mermaid-cli`). If a dependency is
     missing or a block fails, that block degrades to a styled error box and the
     rest of the document still renders.
+
+Output verification (both styles):
+    After rendering, the script extracts the PDF's own text and checks the head
+    and tail pages for leak markers (draft scaffolding, staging footers,
+    frontmatter keys, unrendered [[wikilinks]] or %%comments%%). Findings are
+    reported in the JSON `leak_warnings` field and the script exits 3, so a
+    scripted caller cannot mistake a leaky render for a clean one. The em-dash
+    count across the text is reported as `em_dashes_in_text` (advisory only).
+    Exit 0 = clean render; 1 = render failed; 3 = rendered but leaks found.
 """
+
+# ---------------------------------------------------------------------------
+# Interpreter self-heal. On a Mac the render dependencies usually live under
+# Homebrew's python3, not the system python at /usr/bin/python3. A caller that
+# runs a bare `python3 render.py` from a non-login shell (a cron job, a plain
+# ssh session, an agent-routed task) can resolve to the system interpreter and
+# die on `ModuleNotFoundError: weasyprint` before argparse runs, which reads as
+# "the renderer is missing" rather than "the wrong interpreter". Re-exec under
+# an interpreter that actually has weasyprint instead of failing.
+# ---------------------------------------------------------------------------
+import os as _os
+import sys as _sys
+
+
+def _ensure_render_deps() -> None:
+    try:
+        import weasyprint  # noqa: F401
+        return
+    except ModuleNotFoundError:
+        pass
+
+    if _os.environ.get("_WIKI2PDF_REEXEC"):
+        _sys.stderr.write(
+            "wiki-to-pdf: weasyprint is not importable under %s, and the "
+            "fallback interpreter did not have it either.\n"
+            "Install with: python3 -m pip install --break-system-packages "
+            "weasyprint markdown jinja2 PyYAML pypdf\n" % _sys.executable
+        )
+        raise SystemExit(1)
+
+    here = _os.path.realpath(_sys.executable)
+    for candidate in ("/opt/homebrew/bin/python3", "/usr/local/bin/python3"):
+        if _os.path.exists(candidate) and _os.path.realpath(candidate) != here:
+            env = dict(_os.environ)
+            env["_WIKI2PDF_REEXEC"] = "1"
+            _os.execve(
+                candidate,
+                [candidate, _os.path.abspath(__file__)] + _sys.argv[1:],
+                env,
+            )
+
+    _sys.stderr.write(
+        "wiki-to-pdf: weasyprint is not importable under %s and no Homebrew "
+        "python3 was found to fall back to.\n" % _sys.executable
+    )
+    raise SystemExit(1)
+
+
+_ensure_render_deps()
 
 import argparse
 import base64
@@ -258,6 +317,100 @@ def slugify(title: str) -> str:
     return s.strip("-")
 
 
+def output_slug(title: str, page_file: Path) -> str:
+    """Non-Latin titles (Arabic, Chinese, ...) slugify to nothing; fall back to
+    the source file's stem so the output keeps a usable filename."""
+    return slugify(title) or slugify(page_file.stem) or "document"
+
+
+# ── Dates and the render log entry ───────────────────────────────────
+
+def today_long() -> str:
+    """'5 June 2026' on POSIX; Windows strftime has no %-d, so it gets
+    '05 June 2026' rather than a crash."""
+    today = datetime.date.today()
+    if sys.platform == "win32":
+        return today.strftime("%d %B %Y")
+    return today.strftime("%-d %B %Y")
+
+
+def append_log(vault: Path, title: str, variant: str, archetype: str, pages: int) -> None:
+    """Append the render entry to wiki/log.md. The header carries HH:MM and a
+    UTC offset, matching the vault's mandatory log-timestamp convention, so the
+    calling skill must not append a second, hand-written line."""
+    log_md = vault / "wiki" / "log.md"
+    if not log_md.exists():
+        return
+    now = datetime.datetime.now().astimezone()
+    offset = now.strftime("%z")            # e.g. +0100
+    stamp = f"{now.strftime('%Y-%m-%d %H:%M')} {offset[:3]}"
+    entry = (
+        f"\n## [{stamp}] render | {title}, "
+        f"wiki-to-pdf, {variant}, {archetype}, {pages} pp\n"
+    )
+    with open(log_md, "a", encoding="utf-8") as fh:
+        fh.write(entry)
+
+
+# ── Output verification: the footer-leak check ───────────────────────
+# Draft scaffolding, staging footers and unrendered wiki syntax can reach a
+# finished PDF unnoticed when the rule lives only as prose. The check reads
+# the PDF's own extracted text so the caller sees what the reader would.
+
+LEAK_MARKERS = [
+    "draft prepared",
+    "fill before",
+    "review flag",
+    "awaiting ingest",
+    "awaits an ingest pass",
+    "wiki-capture",
+    "suggested integration",
+    "pending-ingest",
+    "%%",
+    "[[",
+    "restricted:",
+    "processed_date:",
+    "wiki_target:",
+]
+
+
+def check_pdf_leaks(pdf_path: Path) -> list:
+    """Return a list of leak warnings found in the rendered PDF's text.
+
+    Head and tail pages are checked in full (that is where scaffolding lands).
+    Extraction failure is itself a warning: an unverifiable render must not
+    pass silently.
+    """
+    warnings = []
+    try:
+        from pypdf import PdfReader
+        pages = PdfReader(str(pdf_path)).pages
+        texts = [(i + 1, (p.extract_text() or "")) for i, p in enumerate(pages)]
+    except Exception as exc:                          # noqa: BLE001
+        return [f"content check FAILED: could not extract PDF text "
+                f"({exc.__class__.__name__}), verify by eye"]
+    check_set = texts[:2] + texts[-2:] if len(texts) > 4 else texts
+    seen = set()
+    for pageno, text in check_set:
+        low = text.lower()
+        for marker in LEAK_MARKERS:
+            if marker in low and marker not in seen:
+                seen.add(marker)
+                warnings.append(f"page {pageno}: leak marker {marker!r} found in rendered text")
+    return warnings
+
+
+def count_pdf_dashes(pdf_path: Path) -> int:
+    """Em-dash count across the rendered text. Advisory only, so the caller
+    knows whether a sweep is still owed on an outward deliverable."""
+    try:
+        from pypdf import PdfReader
+        return sum((p.extract_text() or "").count("—")
+                   for p in PdfReader(str(pdf_path)).pages)
+    except Exception:                                 # noqa: BLE001
+        return -1
+
+
 # ── TOC ──────────────────────────────────────────────────────────────
 
 def build_toc(html_body: str) -> str:
@@ -311,9 +464,15 @@ def find_inline_monogram(vault: Path) -> Path | None:
 
 
 # ── Rotation log ─────────────────────────────────────────────────────
+# One canonical rotation log at <vault>/outputs/ regardless of --output-dir,
+# so the back-to-back variant guarantee holds across category subfolders.
 
-def load_log(output_dir: Path) -> dict:
-    path = output_dir / ".wiki-to-pdf-history.json"
+def history_path(vault: Path) -> Path:
+    return vault / "outputs" / ".wiki-to-pdf-history.json"
+
+
+def load_log(vault: Path) -> dict:
+    path = history_path(vault)
     default = {cat: [] for cat in VARIANT_POOLS}
     if path.exists():
         try:
@@ -326,8 +485,9 @@ def load_log(output_dir: Path) -> dict:
     return default
 
 
-def save_log(output_dir: Path, log: dict) -> None:
-    path = output_dir / ".wiki-to-pdf-history.json"
+def save_log(vault: Path, log: dict) -> None:
+    path = history_path(vault)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(log, indent=2))
 
 
@@ -493,14 +653,19 @@ def find_watermark(vault: Path, override: str | None) -> Path | None:
     return find_inline_monogram(vault)
 
 
-def render_cv(args: argparse.Namespace) -> None:
+def render_cv(args: argparse.Namespace) -> int:
     """Minimalist CV / statement render: no cover, no variant rotation,
     EB Garamond masthead, brand-colour section labels, faint monogram
-    watermark (only if configured). Self-contained path."""
+    watermark (only if configured). Self-contained path. Returns the
+    process exit code (0 clean, 3 if the leak check found something)."""
     vault      = detect_vault(args.vault)
     output_dir = Path(args.output_dir).expanduser().resolve() if args.output_dir \
                  else vault / "outputs"
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.with_cluster_notes:
+        print("NOTE: --with-cluster-notes is ignored for --style cv (page-only); "
+              "render bundles in the brand style.", file=sys.stderr)
 
     page_file = find_wiki_page(args.page, vault)
     if not page_file:
@@ -508,7 +673,7 @@ def render_cv(args: argparse.Namespace) -> None:
 
     raw = page_file.read_text(encoding="utf-8")
     fm, body = parse_frontmatter(raw)
-    title = get_h1(body, page_file.stem)
+    title = get_h1(body, str(fm.get("title") or page_file.stem))
     summary = extract_summary(fm, body)
 
     # Strip the leading H1 (rendered as the masthead) to avoid duplication.
@@ -529,6 +694,14 @@ def render_cv(args: argparse.Namespace) -> None:
 
     brand_css = (SKILL_DIR / "brand.css").read_text(encoding="utf-8")
     cv_css = (SKILL_DIR / "cv.css").read_text(encoding="utf-8")
+    scale = getattr(args, "font_scale", 1.0) or 1.0
+    if scale != 1.0:
+        # Large-print edition: scale every pt font-size in the stylesheet.
+        cv_css = re.sub(
+            r"font-size:\s*([\d.]+)pt",
+            lambda m: f"font-size: {float(m.group(1)) * scale:.2f}pt",
+            cv_css,
+        )
     combined_css = _extract_root_block(brand_css) + "\n" + cv_css
 
     env      = Environment(loader=FileSystemLoader(str(SKILL_DIR)), autoescape=False)
@@ -542,14 +715,16 @@ def render_cv(args: argparse.Namespace) -> None:
         cv_css           = combined_css,
     )
 
-    slug = slugify(title)
+    slug = output_slug(title, page_file)
     date_slug = datetime.date.today().strftime("%Y-%m-%d")
     html_out = output_dir / f"{slug}-{date_slug}.html"
     pdf_out  = output_dir / f"{slug}-{date_slug}.pdf"
     html_out.write_text(full_html, encoding="utf-8")
 
     try:
-        HTML(filename=str(html_out)).write_pdf(str(pdf_out))
+        # base_url = the output directory, so markdown images referenced by a
+        # relative path resolve against --output-dir.
+        HTML(filename=str(html_out), base_url=str(output_dir)).write_pdf(str(pdf_out))
     except Exception as exc:
         print(json.dumps({"error": f"WeasyPrint failed: {exc}"}))
         sys.exit(1)
@@ -562,29 +737,28 @@ def render_cv(args: argparse.Namespace) -> None:
         pass
 
     if not args.skip_log:
-        log_md = vault / "wiki" / "log.md"
-        today  = datetime.date.today().strftime("%Y-%m-%d")
-        entry  = f"\n## [{today}] render | {title}, wiki-to-pdf, cv, {page_count} pp\n"
-        try:
-            with open(log_md, "a", encoding="utf-8") as fh:
-                fh.write(entry)
-        except FileNotFoundError:
-            pass
+        append_log(vault, title,
+                   watermark_path.name if watermark_path else "(none)",
+                   "cv", page_count)
 
+    leak_warnings = check_pdf_leaks(pdf_out)
     print(json.dumps({
-        "status":      "ok",
-        "page_title":  title,
-        "style":       "cv",
-        "watermark":   watermark_path.name if watermark_path else "(none)",
-        "page_count":  page_count,
-        "output_pdf":  str(pdf_out),
-        "output_html": str(html_out),
+        "status":            "ok" if not leak_warnings else "leaks-found",
+        "page_title":        title,
+        "style":             "cv",
+        "watermark":         watermark_path.name if watermark_path else "(none)",
+        "page_count":        page_count,
+        "output_pdf":        str(pdf_out),
+        "output_html":       str(html_out),
+        "leak_warnings":     leak_warnings,
+        "em_dashes_in_text": count_pdf_dashes(pdf_out),
     }, indent=2))
+    return 3 if leak_warnings else 0
 
 
 # ── Main render ──────────────────────────────────────────────────────
 
-def render(args: argparse.Namespace) -> None:
+def render(args: argparse.Namespace) -> int:
     vault      = detect_vault(args.vault)
     output_dir = Path(args.output_dir).expanduser().resolve() if args.output_dir \
                  else vault / "outputs"
@@ -609,7 +783,7 @@ def render(args: argparse.Namespace) -> None:
                 pages.append((cf, cb))
 
     # 4. Title
-    title = get_h1(body, page_file.stem)
+    title = get_h1(body, str(fm.get("title") or page_file.stem))
 
     # 5. Metrics
     word_count = count_words(body)
@@ -618,8 +792,8 @@ def render(args: argparse.Namespace) -> None:
     category = determine_category(fm, page_file, title, args.prepared_for)
     archetype = args.archetype or determine_archetype(category, word_count, args.prepared_for, fm)
 
-    # 7. Variant
-    log     = load_log(output_dir)
+    # 7. Variant (rotation log is canonical at <vault>/outputs/, not --output-dir)
+    log     = load_log(vault)
     variant = pick_variant(category, log, args.variant)
 
     # 8. Assets
@@ -653,7 +827,7 @@ def render(args: argparse.Namespace) -> None:
     summary = extract_summary(fm, body)
 
     # 12. Date
-    date_str = datetime.date.today().strftime("%-d %B %Y")
+    date_str = today_long()
 
     # 13. Brand CSS
     brand_css = (SKILL_DIR / "brand.css").read_text(encoding="utf-8")
@@ -679,7 +853,7 @@ def render(args: argparse.Namespace) -> None:
     )
 
     # 15. Output paths
-    slug = slugify(title)
+    slug = output_slug(title, page_file)
     if args.with_cluster_notes and len(pages) > 1:
         slug += "-bundle"
     date_slug   = datetime.date.today().strftime("%Y-%m-%d")
@@ -690,9 +864,9 @@ def render(args: argparse.Namespace) -> None:
 
     html_out.write_text(full_html, encoding="utf-8")
 
-    # 16. Render PDF
+    # 16. Render PDF (base_url = output dir, so relative image paths resolve there)
     try:
-        HTML(filename=str(html_out)).write_pdf(str(pdf_out))
+        HTML(filename=str(html_out), base_url=str(output_dir)).write_pdf(str(pdf_out))
     except Exception as exc:
         print(json.dumps({"error": f"WeasyPrint failed: {exc}"}))
         sys.exit(1)
@@ -708,39 +882,33 @@ def render(args: argparse.Namespace) -> None:
     # 18. Update rotation log (skip if variant was overridden)
     if not args.variant:
         log = update_log(log, category, variant)
-        save_log(output_dir, log)
+        save_log(vault, log)
 
-    # 19. Append to wiki/log.md
+    # 19. Append to wiki/log.md (timestamped header; the skill does not add a second line)
     if not args.skip_log:
-        log_md = vault / "wiki" / "log.md"
-        today  = datetime.date.today().strftime("%Y-%m-%d")
-        entry  = (
-            f"\n## [{today}] render | {title}, "
-            f"wiki-to-pdf, {variant}, {archetype}, {page_count} pp\n"
-        )
-        try:
-            with open(log_md, "a", encoding="utf-8") as fh:
-                fh.write(entry)
-        except FileNotFoundError:
-            pass
+        append_log(vault, title, variant, archetype, page_count)
 
-    # 20. Report
+    # 20. Verify the output, then report
+    leak_warnings = check_pdf_leaks(pdf_out)
     result = {
-        "status":      "ok",
-        "page_title":  title,
-        "category":    category,
-        "archetype":   archetype,
-        "variant":     variant,
-        "page_count":  page_count,
-        "output_pdf":  str(pdf_out),
-        "output_html": str(html_out),
+        "status":            "ok" if not leak_warnings else "leaks-found",
+        "page_title":        title,
+        "category":          category,
+        "archetype":         archetype,
+        "variant":           variant,
+        "page_count":        page_count,
+        "output_pdf":        str(pdf_out),
+        "output_html":       str(html_out),
+        "leak_warnings":     leak_warnings,
+        "em_dashes_in_text": count_pdf_dashes(pdf_out),
     }
     print(json.dumps(result, indent=2))
+    return 3 if leak_warnings else 0
 
 
 # ── Entry point ──────────────────────────────────────────────────────
 
-def main() -> None:
+def main() -> int:
     p = argparse.ArgumentParser(description="Render a wiki page as a branded PDF.")
     p.add_argument("--page",               required=True, help="Page title")
     p.add_argument("--vault",              help="Vault root path (overrides auto-detect)")
@@ -758,14 +926,16 @@ def main() -> None:
     p.add_argument("--subtitle",           help="CV style: override masthead subtitle ('' suppresses).")
     p.add_argument("--watermark",          help="CV style: monogram filename for the watermark.")
     p.add_argument("--footer-label",       help="CV style: running-footer label (defaults to title).")
+    p.add_argument("--font-scale",         type=float, default=1.0,
+                   help="CV style: multiply every font-size in cv.css by this factor "
+                        "(e.g. 1.3 for a large-print edition). Default 1.0.")
     p.add_argument("--no-charts",          action="store_true",
                    help="Skip vega-lite / mermaid fenced-block pre-render (both styles).")
     args = p.parse_args()
     if args.style == "cv":
-        render_cv(args)
-    else:
-        render(args)
+        return render_cv(args)
+    return render(args)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

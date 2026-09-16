@@ -70,6 +70,7 @@ echo "Substituting placeholders..."
 
 # Use a portable in-place sed that works on both BSD (macOS default) and GNU.
 # We write to a temp file and move it back to avoid sed -i incompatibilities.
+TODAY="$(date '+%-d %B %Y')"
 substitute_in_file() {
   local file="$1"
   local tmp
@@ -77,6 +78,7 @@ substitute_in_file() {
   sed -e "s|\[Your Name\]|$USER_NAME|g" \
       -e "s|\[Your Vault Name\]|$VAULT_NAME|g" \
       -e "s|\[Your Vault\]|$VAULT_NAME|g" \
+      -e "s|\[Install date\]|$TODAY|g" \
       "$file" > "$tmp"
   mv "$tmp" "$file"
 }
@@ -92,14 +94,18 @@ done < <(find "$VAULT_LOCATION" \
                  -o -name "*.yaml" -o -name "*.json" \) \
               -print0)
 
-# ----- copy the vault tooling (v0.4) ------------------------------------------
-echo "Copying vault tooling (lint, commit gate, preflight, galaxy, dashboard)..."
+# ----- copy the vault tooling (v0.4, extended v0.5) ---------------------------
+echo "Copying vault tooling (lint, commit gate, preflight, log appender, galaxy, dashboard)..."
 mkdir -p "$VAULT_LOCATION/scripts"
-for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh; do
+for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh log-append.py; do
   if [[ -f "$SCRIPT_DIR/$tool" ]]; then
     cp "$SCRIPT_DIR/$tool" "$VAULT_LOCATION/scripts/$tool"
   fi
 done
+if [[ -d "$SCRIPT_DIR/hooks" ]]; then
+  cp -R "$SCRIPT_DIR/hooks" "$VAULT_LOCATION/scripts/hooks"
+  chmod +x "$VAULT_LOCATION"/scripts/hooks/* 2>/dev/null || true
+fi
 if [[ -d "$SCRIPT_DIR/wiki-galaxy" ]]; then
   cp -R "$SCRIPT_DIR/wiki-galaxy" "$VAULT_LOCATION/scripts/wiki-galaxy"
 fi
@@ -135,14 +141,53 @@ echo "Initialising git repository..."
     || echo "  (git commit skipped, configure user.name and user.email first)"
 )
 
-# ----- install the commit gate as a pre-commit hook ---------------------------
-if [[ -f "$VAULT_LOCATION/scripts/vault-gate.py" && -d "$VAULT_LOCATION/.git" ]]; then
+# ----- wire the commit gate (v0.5: through scripts/hooks, never .git/hooks) ---
+# The hooks live in the vault at scripts/hooks/, where updates reach them, and
+# git is pointed at that folder. Nothing is written into .git/hooks/.
+if [[ -d "$VAULT_LOCATION/scripts/hooks" && -d "$VAULT_LOCATION/.git" ]]; then
+  ( cd "$VAULT_LOCATION" && git config core.hooksPath scripts/hooks )
+  echo "Commit gate wired (git core.hooksPath = scripts/hooks)."
+elif [[ -f "$VAULT_LOCATION/scripts/vault-gate.py" && -d "$VAULT_LOCATION/.git" ]]; then
   {
     echo '#!/bin/sh'
     echo 'exec python3 "$(git rev-parse --show-toplevel)/scripts/vault-gate.py"'
   } > "$VAULT_LOCATION/.git/hooks/pre-commit"
   chmod +x "$VAULT_LOCATION/.git/hooks/pre-commit"
   echo "Commit gate installed (.git/hooks/pre-commit)."
+fi
+
+# ----- safety layer (v0.5; not optional) --------------------------------------
+# The delete guard inspects every shell command Claude composes and refuses
+# deletion, history rewriting and force pushes; the permission rules stop the
+# constant prompts for routine work. Without this layer the vault is not safe
+# to hand to anyone, so a failure here stops the install.
+echo ""
+echo "Installing the safety layer (delete guard and permission rules)..."
+if python3 "$PACKAGE_ROOT/safety/install-safety.py" --vault "$VAULT_LOCATION"; then
+  :
+else
+  echo ""
+  echo "The safety layer did not install, so the installer has stopped here:"
+  echo "a vault without it is not safe to use. The message above says why."
+  echo "Fix the cause and run this installer again, or ask Claude to read the"
+  echo "message and help."
+  exit 1
+fi
+
+# ----- starting memories (v0.5) -----------------------------------------------
+python3 "$PACKAGE_ROOT/scripts/seed-memory.py" --vault "$VAULT_LOCATION" \
+  || echo "  (starting memories not seeded; harmless, Claude builds its own)"
+
+# ----- weekly health check on a schedule (v0.5, macOS) ------------------------
+if [[ "$(uname)" == "Darwin" && -f "$SCRIPT_DIR/install-schedule.sh" ]]; then
+  echo ""
+  echo "The weekly health check can run by itself every Saturday morning, so"
+  echo "the vault is checked without anyone having to remember."
+  read -r -p "Schedule the weekly health check? [Y/n]: " INSTALL_SCHED
+  if [[ ! "$INSTALL_SCHED" =~ ^[Nn]$ ]]; then
+    bash "$SCRIPT_DIR/install-schedule.sh" \
+      || echo "  (schedule not installed; ask Claude to set it up later)"
+  fi
 fi
 
 # ----- optional: voice stack (macOS) ------------------------------------------
@@ -202,6 +247,10 @@ echo "     START_HERE.md into Claude and let it walk you through."
 echo ""
 echo "  4. Optional extras, whenever you like:"
 echo "       Dashboard:  python3 \"$VAULT_LOCATION/dashboard/server.py\"   (then open the printed URL)"
-echo "       Galaxy:     python3 \"$VAULT_LOCATION/scripts/wiki-galaxy/build.py\""
-echo "       Weekly health check: ask Claude to \"run the lint\""
+echo "       Galaxy:     say \"galaxy\" to Claude in your vault"
+echo "       Health check: runs by itself on Saturdays if you scheduled it; or ask Claude to \"run the lint\""
+echo ""
+echo "  Safety: the delete guard is on. Claude cannot delete files in this vault"
+echo "  without your explicit yes, and routine work no longer asks permission."
+echo "  To update later: download the new Moblee and run  bash scripts/update.sh"
 echo ""

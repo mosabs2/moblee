@@ -4,10 +4,12 @@
 # Run from the root of the Moblee package:
 #
 #   bash scripts/install-skills.sh         # safe install, refuses to overwrite
-#   bash scripts/install-skills.sh -f      # force, overwrites existing skills
+#   bash scripts/install-skills.sh -f      # replace existing skills (old copies are kept)
+#   bash scripts/install-skills.sh --update  # same as -f, and skips the PDF question
 #
 # Each skill in skills/<name>/ becomes ~/.claude/skills/<name>/. Claude Code
-# and Cowork pick them up automatically at the next session.
+# and Cowork pick them up automatically at the next session. Nothing is ever
+# deleted: a skill being replaced is moved to ~/.config/moblee/backups/<stamp>/.
 
 set -euo pipefail
 
@@ -23,22 +25,30 @@ fi
 
 # ----- parse flags ------------------------------------------------------------
 FORCE=0
+UPDATE=0
 if [[ "${1:-}" == "-f" || "${1:-}" == "--force" ]]; then
   FORCE=1
 fi
+if [[ "${1:-}" == "--update" ]]; then
+  FORCE=1
+  UPDATE=1
+fi
+BACKUP_DIR="$HOME/.config/moblee/backups/$(date '+%Y%m%d-%H%M%S')/skills"
 
 # ----- destination ------------------------------------------------------------
 SKILLS_DST="$HOME/.claude/skills"
 mkdir -p "$SKILLS_DST"
 
-echo ""
-echo "==================================================================="
-echo "  Moblee skills installer"
-echo "==================================================================="
-echo ""
-echo "Source:      $SKILLS_SRC"
-echo "Destination: $SKILLS_DST"
-echo ""
+if [[ $UPDATE -eq 0 ]]; then
+  echo ""
+  echo "==================================================================="
+  echo "  Moblee skills installer"
+  echo "==================================================================="
+  echo ""
+  echo "Source:      $SKILLS_SRC"
+  echo "Destination: $SKILLS_DST"
+  echo ""
+fi
 
 # ----- copy each skill --------------------------------------------------------
 INSTALLED=()
@@ -65,12 +75,18 @@ for entry in "$SKILLS_SRC"/*; do
   fi
 
   if [[ -d "$dst" && $FORCE -eq 1 ]]; then
-    rm -rf "$dst"
+    # Never delete: the previous copy is moved aside, so it can be put back.
+    mkdir -p "$BACKUP_DIR"
+    mv "$dst" "$BACKUP_DIR/$name"
+    KEPT=1
   fi
 
   cp -R "$entry" "$dst"
   INSTALLED+=("$name")
 done
+if [[ "${KEPT:-0}" -eq 1 ]]; then
+  echo "Previous copies kept at ${BACKUP_DIR/#$HOME/~}"
+fi
 
 # ----- report -----------------------------------------------------------------
 echo "Installed:"
@@ -94,6 +110,9 @@ fi
 # This step is entirely optional and only matters for PDF rendering. Skipping it
 # is the recommended default: nothing else in the pack depends on it, and Claude
 # can set it up on request the first time a PDF is actually wanted.
+if [[ $UPDATE -eq 1 ]]; then
+  exit 0
+fi
 echo ""
 echo "Optional: the \`wiki-to-pdf\` skill renders wiki pages as PDFs. It needs"
 echo "WeasyPrint and a few system libraries."

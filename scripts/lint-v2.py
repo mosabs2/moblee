@@ -9,9 +9,12 @@ outputs/lint/lint-v2-YYYY-MM-DD.md inside the vault.
 Companion to the qualitative lint (which reads for contradictions, stale
 claims, missing concepts, and data gaps — judgement calls a script cannot
 make). This script does the things that are structural and scriptable:
-log-header timestamps, append-only ordering, dangling wikilinks, broken
-section anchors, orphan pages, source attribution, the token-budget
-weight guard, and a handful of advisory sweeps.
+log-header timestamps, append-only ordering, session-metadata footers on
+housekeeping entries, frontmatter schemas on typed folders (cluster notes,
+daily notes), duplicate frontmatter blocks, dangling wikilinks, broken
+section anchors, orphan pages, source attribution, the token-budget weight
+guard (always-loaded files and the skills layer), and a handful of advisory
+sweeps (superlatives, prose boilerplate, correction rate).
 
 Vault detection, in order of precedence:
   1. the MOBLEE_VAULT environment variable (absolute path to the vault);
@@ -110,6 +113,23 @@ def is_log_timestamp_exception(date: datetime.date, title: str) -> bool:
     return False
 
 
+# Housekeeping entries that legitimately lack the session-metadata footer and
+# cannot be retro-edited (append-only log). Same shape as the list above:
+# date, title prefix, one-line reason. Empty on a fresh vault.
+SESSION_FOOTER_EXCEPTIONS: list[dict[str, str]] = [
+    # {"date": "2027-01-01",
+    #  "title_prefix": "Small mid-session note",
+    #  "reason": "Parent session's footer landed on the closing entry of the same day."},
+]
+
+
+def is_session_footer_exception(date: datetime.date, title: str) -> bool:
+    for e in SESSION_FOOTER_EXCEPTIONS:
+        if str(date) == e["date"] and title.startswith(e["title_prefix"]):
+            return True
+    return False
+
+
 # Files that existed but could not be read this run. Reported as a loud
 # finding at the end of main(): a check that ran over "" silently reports
 # clean, which is the worst failure mode a linter has.
@@ -123,6 +143,22 @@ def page_text(path: Path) -> str:
         if path.exists():
             READ_FAILURES.append(f"{path} ({e.__class__.__name__})")
         return ""
+
+
+def _head_lines(path: Path, n: int) -> list[str]:
+    """First n lines of a file, without reading the rest of it."""
+    try:
+        with path.open(encoding="utf-8", errors="ignore") as f:
+            out: list[str] = []
+            for i, line in enumerate(f):
+                if i >= n:
+                    break
+                out.append(line.rstrip("\n"))
+            return out
+    except OSError as e:
+        if path.exists():
+            READ_FAILURES.append(f"{path} ({e.__class__.__name__})")
+        return []
 
 
 def read_frontmatter(path: Path) -> dict | None:
@@ -237,40 +273,90 @@ def check_cluster_note_coverage(vault: Path, findings: list[str]) -> tuple[int, 
     return (passed, total)
 
 
-def check_cluster_note_frontmatter(vault: Path, findings: list[str]) -> tuple[int, int]:
-    """Each cluster note carries the canonical frontmatter (date, type, parent)."""
-    folders = cluster_note_folders(vault)
-    if not folders:
+def check_frontmatter_schema(
+    vault: Path,
+    findings: list[str],
+    folder_rel: str,
+    required_fields: list[str],
+    label: str,
+    parent_required: str | None = None,
+) -> tuple[int, int]:
+    """Generic frontmatter-schema check for one folder of typed pages.
+
+    Every `*.md` in `folder_rel` (relative to the vault) must carry YAML
+    frontmatter with each of `required_fields`. When `parent_required` is
+    given, a `parent` value that does not contain it is flagged (a note filed
+    under the wrong parent page). The folder's own index page (stem equal to
+    the folder name) is navigation, not an item, and is skipped. A missing
+    folder skips silently so a fresh vault lints clean.
+    """
+    folder = vault / folder_rel
+    if not folder.is_dir():
         return (0, 0)
-    required = ["date", "type", "parent"]
     issues: list[str] = []
+    bad_files: set[str] = set()
     total = 0
-    for folder in folders:
-        for f in sorted(folder.glob("*.md")):
-            if f.stem == folder.name:  # folder index page is navigation, not an item
-                continue
-            total += 1
-            fm = read_frontmatter(f)
-            if fm is None:
-                issues.append(f"`{f.relative_to(vault)}`: no frontmatter or malformed YAML")
-                continue
-            missing_fields = [k for k in required if k not in fm]
-            if missing_fields:
-                issues.append(
-                    f"`{f.relative_to(vault)}`: missing fields → {', '.join(missing_fields)}"
-                )
+    for f in sorted(folder.glob("*.md")):
+        if f.stem == folder.name:
+            continue
+        total += 1
+        rel = f.relative_to(vault).as_posix()
+        fm = read_frontmatter(f)
+        if fm is None:
+            issues.append(f"`{rel}`: no frontmatter or malformed YAML")
+            bad_files.add(rel)
+            continue
+        missing_fields = [k for k in required_fields if k not in fm]
+        if missing_fields:
+            issues.append(f"`{rel}`: missing fields → {', '.join(missing_fields)}")
+            bad_files.add(rel)
+        if parent_required and fm.get("parent") and parent_required not in str(fm["parent"]):
+            issues.append(f"`{rel}`: parent is `{fm['parent']}`, expected `{parent_required}`")
+            bad_files.add(rel)
+    if total == 0:
+        return (0, 0)
+    clean = total - len(bad_files)
     if issues:
         findings.append(
-            f"- **Cluster-note frontmatter**: {total - len(issues)}/{total} clean. "
-            f"**{len(issues)} issue(s)**:"
+            f"- **{label} frontmatter**: {clean}/{total} clean. **{len(issues)} issue(s)**:"
         )
         for i in issues:
             findings.append(f"  - {i}")
     else:
         findings.append(
-            f"- **Cluster-note frontmatter**: {total}/{total} notes carry the canonical schema (date, type, parent). ✓"
+            f"- **{label} frontmatter**: {total}/{total} files carry the canonical schema "
+            f"({', '.join(required_fields)}). ✓"
         )
-    return (total - len(issues), total)
+    return (clean, total)
+
+
+def check_cluster_note_frontmatter(vault: Path, findings: list[str]) -> tuple[int, int]:
+    """Each cluster note carries the canonical frontmatter (date, type, parent).
+
+    Delegates to check_frontmatter_schema per `wiki/<Topic> Cluster Notes/`
+    folder. When the parent synthesis page `wiki/<Topic>.md` exists, a note's
+    `parent` must point at it; when it does not, the parent value is left
+    unchecked (the owner may have named the parent page differently).
+    """
+    folders = cluster_note_folders(vault)
+    if not folders:
+        return (0, 0)
+    passed = 0
+    total = 0
+    for folder in folders:
+        topic = folder.name[: -len(" Cluster Notes")]
+        parent_required = f"[[{topic}]]" if (vault / "wiki" / f"{topic}.md").is_file() else None
+        p, t = check_frontmatter_schema(
+            vault,
+            findings,
+            f"wiki/{folder.name}",
+            ["date", "type", "parent"],
+            f"{topic} cluster-note",
+            parent_required=parent_required,
+        )
+        passed += p
+        total += t
+    return (passed, total)
 
 
 def check_attribution_lines(vault: Path, findings: list[str]) -> tuple[int, int]:
@@ -313,7 +399,9 @@ def check_index_domains_coverage(vault: Path, findings: list[str]) -> tuple[int,
         findings.append("- **Index.md Domains coverage**: skipped — Index.md missing.")
         return (0, 0)
     index_targets = wikilink_targets(page_text(index))
-    infrastructure_exempt = {"Index", "log", "_context"}
+    # Identity.md is loaded every session by CLAUDE.md and kept off the Index
+    # by design (it is the standard Claude is held to, not catalogue content).
+    infrastructure_exempt = {"Index", "log", "_context", "Identity"}
     missing: list[str] = []
     total = 0
     for f in sorted(wiki.glob("*.md")):
@@ -460,6 +548,115 @@ def check_log_timestamps(vault: Path, findings: list[str]) -> tuple[int, int]:
     return (total - len(out_of_order) - len(fmt_violations), total)
 
 
+def check_log_session_metadata(vault: Path, findings: list[str]) -> tuple[int, int]:
+    """Session-metadata footers on housekeeping log entries.
+
+    The vault's CLAUDE.md asks the closing entry of a substantive session to
+    carry an italicised metadata line (`*Session: started …; ended …*`, or
+    `*Workday: …*` for a close-day entry). This check reads every
+    `housekeeping` entry and every `workday-close` entry and looks for that
+    footer in the entry's own body (sliced to the next header of ANY type, so
+    a neighbour's footer never satisfies it). Because the convention is
+    per-session rather than per-entry, an unfooted housekeeping entry is
+    accepted when any entry of the same day or the next day carries a footer
+    (sessions legitimately close past midnight). Titles containing
+    "addendum" are exempt. Genuine leftovers go on SESSION_FOOTER_EXCEPTIONS.
+    A log with no housekeeping entries yet passes.
+    """
+    log = vault / "wiki" / "log.md"
+    if not log.exists():
+        findings.append("- **Session metadata footers**: skipped — log.md missing.")
+        return (0, 0)
+    text = page_text(log)
+    footer_re = re.compile(r"\*(?:Session|Workday)[^:\n]{0,80}:.+?\*", re.DOTALL)
+    all_headers = [h.start() for h in re.finditer(r"^## \[", text, re.MULTILINE)]
+    all_headers.append(len(text))
+
+    def body_of(start: int) -> str:
+        for h in all_headers:
+            if h > start:
+                return text[start:h]
+        return text[start:]
+
+    any_entry_re = re.compile(
+        r"^## \[(\d{4}-\d{2}-\d{2}) \d{2}:\d{2}[^\]]*\] [\w-]+ \|", re.MULTILINE
+    )
+    footered_dates: set[datetime.date] = set()
+    for m in any_entry_re.finditer(text):
+        try:
+            d0 = datetime.date.fromisoformat(m.group(1))
+        except ValueError:
+            continue
+        if footer_re.search(body_of(m.start())):
+            footered_dates.add(d0)
+
+    hk_re = re.compile(
+        r"^## \[(\d{4}-\d{2}-\d{2}) \d{2}:\d{2}[^\]]*\] housekeeping \| (.+?)$",
+        re.MULTILINE,
+    )
+    housekeeping_entries: list[tuple[datetime.date, str, int]] = []
+    for m in hk_re.finditer(text):
+        try:
+            d = datetime.date.fromisoformat(m.group(1))
+        except ValueError:
+            continue
+        title = m.group(2)
+        if "addendum" in title.lower():
+            continue
+        housekeeping_entries.append((d, title, m.start()))
+
+    missing_footers: list[str] = []
+    suppressed = 0
+    for d, title, start in housekeeping_entries:
+        if footer_re.search(body_of(start)):
+            continue
+        if is_session_footer_exception(d, title):
+            suppressed += 1
+            continue
+        if d in footered_dates or (d + datetime.timedelta(days=1)) in footered_dates:
+            suppressed += 1  # covered by the session's own closing footer
+            continue
+        missing_footers.append(f"{d.isoformat()} | {title[:70]}")
+
+    wc_re = re.compile(
+        r"^## \[(\d{4}-\d{2}-\d{2}) \d{2}:\d{2}[^\]]*\] workday-close \| (.+?)$",
+        re.MULTILINE,
+    )
+    wc_missing: list[str] = []
+    wc_total = 0
+    for m in wc_re.finditer(text):
+        try:
+            datetime.date.fromisoformat(m.group(1))
+        except ValueError:
+            continue
+        wc_total += 1
+        if not re.search(r"\*Workday[^:\n]{0,80}:.+?\*", body_of(m.start()), re.DOTALL):
+            wc_missing.append(f"{m.group(1)} | workday-close | {m.group(2)[:60]}")
+
+    total = len(housekeeping_entries)
+    if total + wc_total == 0:
+        findings.append("- **Session metadata footers**: no housekeeping or workday-close entries yet. ✓")
+        return (1, 1)
+    note = (
+        f" ({suppressed} suppressed: known exceptions or covered by a same/next-day closing footer)"
+        if suppressed else ""
+    )
+    if missing_footers or wc_missing:
+        findings.append(
+            f"- **Session metadata footers** (housekeeping entries; addenda exempt; workday-close checked for its *Workday…* footer): "
+            f"housekeeping {total - len(missing_footers) - suppressed}/{total}, workday-close {wc_total - len(wc_missing)}/{wc_total}; "
+            f"**{len(missing_footers) + len(wc_missing)} missing**{note}:"
+        )
+        for m_str in missing_footers + wc_missing:
+            findings.append(f"  - {m_str}")
+    else:
+        findings.append(
+            f"- **Session metadata footers**: {total - suppressed}/{total} housekeeping entries and "
+            f"{wc_total}/{wc_total} workday-close entries carry their footers (addenda exempt){note}. ✓"
+        )
+    return (total + wc_total - len(missing_footers) - len(wc_missing), total + wc_total)
+
+
 # ---------------------------------------------------------------------------
 # outputs/ size guard (advisory)
 # ---------------------------------------------------------------------------
@@ -471,9 +668,10 @@ def check_outputs_size(vault: Path, findings: list[str]) -> tuple[int, int]:
     """Advisory size guard on outputs/.
 
     Reports total size; when the threshold is crossed, lists the largest
-    render artefacts. STRICTLY ADVISORY: this check never deletes anything and
-    must never be extended to delete anything — pruning happens only on the
-    vault owner's explicit approval.
+    render artefacts. STRICTLY ADVISORY: this check never removes anything
+    and must never be extended to remove anything. The only action it ever
+    suggests is moving old renders into an `archive/` folder, and only on the
+    vault owner's say-so.
     """
     outputs = vault / "outputs"
     if not outputs.is_dir():
@@ -490,10 +688,10 @@ def check_outputs_size(vault: Path, findings: list[str]) -> tuple[int, int]:
     largest = sorted(files, key=lambda f: f.stat().st_size, reverse=True)[:15]
     findings.append(
         f"- **outputs/ size guard**: **{total_mb:.0f} MB across {len(files)} files — over the {OUTPUTS_SIZE_THRESHOLD_MB} MB advisory threshold.** "
-        "Everything in `outputs/` is an ephemeral render artefact (re-renderable on demand from the markdown sources), "
-        "so pruning is safe in principle, but **nothing is deleted automatically and nothing should be deleted without the vault owner's explicit approval**. "
-        "Options: (a) tell Claude which of the files below to remove and approve the proposed list before anything is touched; "
-        "(b) delete manually in your file manager; (c) raise the threshold in `scripts/lint-v2.py` if the working set is legitimately larger now. The 15 largest:"
+        "This is information, not an instruction: nothing is touched automatically. "
+        "If the folder feels heavy, ask Claude to move old renders into an `archive/` folder "
+        "(they can be re-rendered from the markdown sources at any time), or raise the threshold "
+        "in `scripts/lint-v2.py` if the working set is legitimately larger now. The 15 largest:"
     )
     for f in largest:
         size_mb = f.stat().st_size / (1024 * 1024)
@@ -636,6 +834,56 @@ def check_vault_weight(vault: Path, findings: list[str]) -> tuple[int, int]:
 # instead of folding the superseded state into current state, and the item
 # quietly quadruples. This guard names the specific items to fold while each
 # is still one item. STRICTLY ADVISORY: it never edits anything.
+SKILL_TOKEN_FLAG = 12_000
+
+
+def check_skill_weight(vault: Path, findings: list[str]) -> tuple[int, int]:
+    """Report the token weight of every installed `SKILL.md` (informational).
+
+    Looks in two places: `skills/` inside the vault (for owners who keep their
+    skills under the vault so they travel with it) and `~/.claude/skills/`
+    (where the Moblee skills installer puts them). A skill loads only when it
+    is invoked, so this is not part of the always-loaded tax, but a heavy skill
+    on a daily pattern is a daily cost. Never trims, never blocks; both
+    locations missing means a silent skip.
+    """
+    locations = [
+        (vault / "skills", "skills/"),
+        (Path.home() / ".claude" / "skills", "~/.claude/skills/"),
+    ]
+    weights: list[tuple[int, str]] = []
+    for folder, label in locations:
+        if not folder.is_dir():
+            continue
+        for sk in sorted(folder.glob("*/SKILL.md")):
+            weights.append((est_tokens(sk), f"{label}{sk.parent.name}/SKILL.md"))
+    if not weights:
+        return (0, 0)
+    findings.append("")
+    findings.append("### Skills-layer weight (informational; never trims, never blocks)")
+    findings.append(
+        "Estimated tokens (chars/4) for each skill definition. A `SKILL.md` loads when its "
+        "skill is invoked, so these are not part of the always-loaded cost, but a heavy skill "
+        "on a daily pattern is a daily cost. Listed so the weight is visible; nothing here is "
+        "an issue, and nothing is trimmed."
+    )
+    weights.sort(reverse=True)
+    total_tok = sum(w for w, _ in weights)
+    over = [(w, n) for w, n in weights if w > SKILL_TOKEN_FLAG]
+    findings.append(
+        f"- **{len(weights)} skill(s), ~{total_tok:,} tok in total**; "
+        f"{len(over)} over the {SKILL_TOKEN_FLAG:,}-tok flag."
+    )
+    for tok, name in weights:
+        mark = (
+            f" **— over the {SKILL_TOKEN_FLAG:,}-tok flag; split-candidate "
+            "(reference detail into the skill's own `references/`)**"
+            if tok > SKILL_TOKEN_FLAG else ""
+        )
+        findings.append(f"  - `{name}` — ~{tok:,} tok{mark}")
+    return (1, 1)
+
+
 CONTEXT_ITEM_CHAR_BUDGET = 3_000   # a single Active-thread / Watch-list entry
 CONTEXT_ITEM_HARD_FLAG = 4_000     # egregious; fold at the next pass
 
@@ -890,9 +1138,12 @@ def check_orphan_pages(vault: Path, findings: list[str]) -> tuple[int, int]:
 
     # Restricted-folder pages (if the vault has any) are orphaned BY DESIGN:
     # the one-directional-link rule forbids subject pages from linking back.
+    # Identity.md is reached through CLAUDE.md's session opener, not through
+    # wikilinks, and is deliberately unlinked from the graph.
     orphans = sorted(
         s for s, p in pages.items()
         if inbound[s] == 0
+        and s != "Identity"
         and not any(part in RESTRICTED_FOLDER_NAMES for part in p.parts)
     )
 
@@ -1431,6 +1682,201 @@ def check_correction_rate(vault: Path, findings: list[str]) -> tuple[int, int]:
 
 
 # ---------------------------------------------------------------------------
+# Prose boilerplate sweep (informational)
+# ---------------------------------------------------------------------------
+
+# Stock phrases that announce rather than say anything.
+BOILERPLATE_OPENER_RE = re.compile(
+    r"(It is important to note|It is worth (noting|mentioning)|It should be noted|"
+    r"In today's (rapidly )?(changing|evolving|fast-paced)|This highlights the importance|"
+    r"This underscores the importance|By understanding [A-Za-z]+, we can|"
+    r"Ultimately, the key takeaway|serves as a testament|plays a (crucial|vital|key) role|"
+    r"It is essential to (note|understand|recognise|recognize))",
+    re.IGNORECASE,
+)
+
+# Paragraph-initial connectives. Mid-sentence "however" is ordinary English; the
+# tell is the reflex of opening a paragraph with a transition word that the
+# adjacency already implies.
+TRANSITION_OPENER_RE = re.compile(
+    r"^(\*\*)?(Furthermore|Moreover|Additionally|However|Consequently|Therefore|"
+    r"In conclusion|Notably|Importantly|Overall)\b[,:]?",
+)
+
+# Fixed-schema operational files the sweep leaves alone: the schema file and
+# the working-state bullets are not prose, and the lint's own reports quote
+# the very phrases it hunts.
+PROSE_GUARD_SKIP = {
+    "CLAUDE.md",
+    "wiki/_context.md",
+}
+PROSE_GUARD_SKIP_DIRS = ("/outputs/lint/", "/Ghost Reconstructions/")
+
+
+def check_prose_boilerplate(vault: Path, findings: list[str]) -> tuple[int, int]:
+    """Forced-look sweep (informational): lists stock openers and
+    paragraph-initial transition words in wiki pages and outputs/ markdown
+    modified in the last 7 days (the log's entry bodies included). Catches
+    the mechanical tells only; structural symmetry, forced triads and low
+    density are not greppable and stay a judgement call. Never rewrites."""
+    cutoff = datetime.datetime.now().timestamp() - 7 * 86400
+    roots = [vault / "wiki", vault / "outputs"]
+    hits: list[str] = []
+    scanned = 0
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for path in sorted(root.rglob("*.md")):
+            rel = path.relative_to(vault).as_posix()
+            if rel in PROSE_GUARD_SKIP:
+                continue
+            if any(d in f"/{rel}" for d in PROSE_GUARD_SKIP_DIRS):
+                continue
+            try:
+                if path.stat().st_mtime < cutoff:
+                    continue
+            except OSError:
+                continue
+            scanned += 1
+            text = page_text(path)
+            for lineno, line in enumerate(text.splitlines(), start=1):
+                stripped = line.strip()
+                if not stripped or stripped.startswith((">", "|", "#", "```")):
+                    continue
+                m = BOILERPLATE_OPENER_RE.search(stripped) or TRANSITION_OPENER_RE.match(stripped)
+                if m:
+                    hits.append(
+                        f"`{rel}`:{lineno} — …{stripped[max(m.start() - 20, 0):m.start() + 90]}…"
+                    )
+                if len(hits) >= 20:
+                    break
+            if len(hits) >= 20:
+                break
+        if len(hits) >= 20:
+            break
+    if hits:
+        findings.append(
+            f"- **Prose boilerplate (last 7 days, informational)**: {len(hits)} instance(s) across {scanned} recently-modified file(s) "
+            "— stock openers and paragraph-initial transitions; rewrite or justify each (capped at 20):"
+        )
+        for h in hits:
+            findings.append(f"  - {h}")
+    else:
+        findings.append(
+            f"- **Prose boilerplate (last 7 days)**: none found across {scanned} recently-modified file(s). ✓"
+        )
+    return (1, 1)
+
+
+# ---------------------------------------------------------------------------
+# Duplicate frontmatter blocks (advisory)
+# ---------------------------------------------------------------------------
+
+DUP_FM_SCAN_LINES = 40      # how far past the real frontmatter to look
+DUP_FM_MAX_BLOCK = 25       # a plausible inert block closes within this many lines
+
+
+def _yaml_mapping_keys(block: list[str]) -> list[str] | None:
+    """Keys of the block if it parses as a non-empty YAML mapping, else None.
+
+    With PyYAML absent, a line-shape test stands in: every non-blank line is
+    either `key: value` or an indented / list continuation of one.
+    """
+    if HAVE_YAML:
+        try:
+            parsed = yaml.safe_load("\n".join(block))
+        except yaml.YAMLError:
+            return None
+        if isinstance(parsed, dict) and parsed:
+            return [str(k) for k in parsed]
+        return None
+    keys: list[str] = []
+    for line in block:
+        if not line.strip():
+            continue
+        m = re.match(r"^([A-Za-z0-9_-]+):(\s|$)", line)
+        if m:
+            keys.append(m.group(1))
+        elif line.startswith((" ", "\t", "- ")):
+            continue
+        else:
+            return None
+    return keys or None
+
+
+def check_duplicate_frontmatter(vault: Path, findings: list[str]) -> tuple[int, int]:
+    """Flag a second `---` delimited YAML block shortly after the real
+    frontmatter. Obsidian parses only the first, so the second is inert and
+    renders as body text; when its values contradict the real block, every
+    schema check passes on values the page does not display. A pair of `---`
+    rules enclosing non-YAML prose is not counted, nor is a block inside a
+    code fence (documentation of the syntax, not frontmatter)."""
+    wiki = vault / "wiki"
+    if not wiki.is_dir():
+        findings.append("- **Duplicate frontmatter blocks**: skipped — wiki/ missing.")
+        return (0, 0)
+
+    issues: list[str] = []
+    total = 0
+    for path in sorted(wiki.rglob("*.md")):
+        lines = _head_lines(path, DUP_FM_SCAN_LINES + DUP_FM_MAX_BLOCK + 4)
+        if not lines or lines[0].strip() != "---":
+            continue
+        close = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+        if close is None:
+            continue
+        total += 1
+        window = lines[close + 1 : close + 1 + DUP_FM_SCAN_LINES + DUP_FM_MAX_BLOCK]
+        fenced: list[bool] = []
+        in_fence = False
+        for line in window:
+            s = line.strip()
+            if s.startswith("```") or s.startswith("~~~"):
+                fenced.append(True)
+                in_fence = not in_fence
+                continue
+            fenced.append(in_fence)
+
+        def is_delim(x: int) -> bool:
+            return window[x].rstrip() == "---" and not fenced[x]
+
+        opens = [j for j in range(min(DUP_FM_SCAN_LINES, len(window))) if is_delim(j)]
+        for j in opens:
+            k = next((x for x in range(j + 1, min(j + 1 + DUP_FM_MAX_BLOCK, len(window)))
+                      if is_delim(x)), None)
+            if k is None:
+                continue
+            block = window[j + 1 : k]
+            if not any(b.strip() for b in block):
+                continue  # two adjacent horizontal rules, nothing enclosed
+            keys = _yaml_mapping_keys(block)
+            if keys:
+                lineno = close + j + 2   # 1-based line of the second block's opener
+                issues.append(
+                    f"`{path.relative_to(vault).as_posix()}:{lineno}` — second `---` block "
+                    f"{lineno - (close + 1)} line(s) after the real frontmatter closes; "
+                    f"inert, renders as body text. Keys: {', '.join(keys[:6])[:80]}"
+                )
+            break  # one report per page is enough to force the look
+
+    if total == 0:
+        findings.append("- **Duplicate frontmatter blocks**: no pages carry frontmatter yet. ✓")
+        return (1, 1)
+    if issues:
+        findings.append(
+            f"- **Duplicate frontmatter blocks**: **{len(issues)} page(s) with a second block** "
+            f"(of {total} carrying frontmatter) — reconcile the two and remove the inert one:"
+        )
+        for i in issues:
+            findings.append(f"  - {i}")
+    else:
+        findings.append(
+            f"- **Duplicate frontmatter blocks**: none across {total} page(s) carrying frontmatter. ✓"
+        )
+    return (total - len(issues), total)
+
+
+# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 
@@ -1457,17 +1903,29 @@ def main() -> int:
     pass_, tot = check_cluster_note_frontmatter(vault, findings)
     scorecard.append(("Cluster-note frontmatter", pass_, tot))
 
+    # Typed folders with a fixed frontmatter schema. Daily notes carry at
+    # least a `date` (the template sets it). Add a line per folder the vault
+    # owner adopts; a missing folder skips silently.
+    pass_, tot = check_frontmatter_schema(vault, findings, "Daily Notes", ["date"], "Daily note")
+    scorecard.append(("Daily-note frontmatter", pass_, tot))
+
     pass_, tot = check_index_domains_coverage(vault, findings)
     scorecard.append(("Index.md Domains coverage", pass_, tot))
 
     pass_, tot = check_log_timestamps(vault, findings)
     scorecard.append(("Log header format and timestamp ordering", pass_, tot))
 
+    pass_, tot = check_log_session_metadata(vault, findings)
+    scorecard.append(("Housekeeping session-metadata footers", pass_, tot))
+
     pass_, tot = check_outputs_size(vault, findings)
-    scorecard.append(("outputs/ size guard (advisory, never deletes)", pass_, tot))
+    scorecard.append(("outputs/ size guard (advisory, never removes files)", pass_, tot))
 
     pass_, tot = check_vault_weight(vault, findings)
     scorecard.append(("Vault weight (token caps, advisory, never trims)", pass_, tot))
+
+    pass_, tot = check_skill_weight(vault, findings)
+    scorecard.append(("Skills-layer weight (informational)", pass_, tot))
 
     pass_, tot = check_dangling_links(vault, findings)
     scorecard.append(("Dangling wikilinks", pass_, tot))
@@ -1502,8 +1960,14 @@ def main() -> int:
     pass_, tot = check_superlative_phrasing(vault, findings)
     scorecard.append(("Superlative phrasing sweep (informational)", pass_, tot))
 
+    pass_, tot = check_prose_boilerplate(vault, findings)
+    scorecard.append(("Prose boilerplate sweep (informational)", pass_, tot))
+
     pass_, tot = check_correction_rate(vault, findings)
     scorecard.append(("Correction rate (informational)", pass_, tot))
+
+    pass_, tot = check_duplicate_frontmatter(vault, findings)
+    scorecard.append(("Duplicate frontmatter blocks (advisory)", pass_, tot))
 
     # Read-failure surfacing: a file that exists but could not be read makes
     # every check that touched it silently clean. Count each failure as a
@@ -1532,7 +1996,7 @@ def main() -> int:
             status = f"**{t - p} issue(s)**"
         findings.append(f"| {name} | {p} / {t} | {status} |")
 
-    if LOG_TIMESTAMP_EXCEPTIONS:
+    if LOG_TIMESTAMP_EXCEPTIONS or SESSION_FOOTER_EXCEPTIONS:
         findings.append("")
         findings.append("## Known accepted exceptions")
         findings.append("")
@@ -1540,8 +2004,17 @@ def main() -> int:
             "Entries the structural checks would otherwise flag, that cannot be rewritten without violating the `Append-only log` hard rule. Listed here for transparency; the checks above subtract these from the issue counts. Review at each lint; remove an entry only if the underlying state is corrected at the source."
         )
         findings.append("")
-        for e in LOG_TIMESTAMP_EXCEPTIONS:
-            findings.append(f"- `{e['date']}` `{e['title_prefix']}` — {e['reason']}")
+        if LOG_TIMESTAMP_EXCEPTIONS:
+            findings.append("**Log timestamp exceptions:**")
+            findings.append("")
+            for e in LOG_TIMESTAMP_EXCEPTIONS:
+                findings.append(f"- `{e['date']}` `{e['title_prefix']}` — {e['reason']}")
+            findings.append("")
+        if SESSION_FOOTER_EXCEPTIONS:
+            findings.append("**Session footer exceptions:**")
+            findings.append("")
+            for e in SESSION_FOOTER_EXCEPTIONS:
+                findings.append(f"- `{e['date']}` `{e['title_prefix']}` — {e['reason']}")
 
     findings.append("")
     findings.append("---")

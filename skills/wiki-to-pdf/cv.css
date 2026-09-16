@@ -68,6 +68,20 @@ html, body {
 
 .page { position: relative; z-index: 1; }
 
+/* ===== Markdown images: capped to page width, centred, with a soft frame.
+   An italic line directly beneath an image reads as its caption. Image paths
+   resolve relative to --output-dir (the render base URL), so place
+   screenshots there. ===== */
+.page img {
+  max-width: 100%; height: auto; display: block; margin: 16px auto;
+  border: 1px solid #d7d9e4; border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+.page em.cap, .page .cap {
+  display: block; text-align: center; color: var(--brand-secondary);
+  font-size: 9.5pt; margin: -8px auto 18px;
+}
+
 /* ===== Masthead ===== */
 .masthead { margin-bottom: 6mm; }
 .name {

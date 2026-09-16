@@ -41,10 +41,16 @@ After confirming, the script will:
 
 - Copy the `vault-template/` to your chosen location.
 - Substitute `[Your Name]`, `[Your Vault Name]`, and `[Your Vault]` placeholders inside all markdown, CSS, HTML, Python, and other text files.
-- Initialise a git repository in the new vault and make the first commit.
-- Offer to append the `vault` shell function to your `~/.zshrc`.
+- Copy the vault tooling into `scripts/` and `dashboard/`.
+- Initialise a git repository in the new vault, make the first commit, and point git at the commit gate in `scripts/hooks/`.
+- Install the safety layer: the delete guard (proved working before it is registered) and the starter permission rules. This step is not optional; if it fails, the installer stops and says why. `docs/09-safety.md` explains what it does.
+- Seed four starting memories for your Claude.
+- Ask whether to schedule the weekly health check (say yes; it runs on Saturday mornings and needs nothing from you).
+- Offer the voice stack (optional) and the `vault` shell function (say yes).
 
-If you answer yes to the `vault` shell function prompt, the installer also writes the vault path to `~/.config/moblee/vault-path` so the function knows where to `cd` to.
+If you answer yes to the `vault` shell function prompt, the installer also writes the vault path to `~/.config/moblee/vault-path` so the function knows where to `cd` to. (The safety step writes the same file, so the tooling finds the vault either way.)
+
+**Updating later.** You never run the installer twice on the same vault. When a new Moblee version comes out, download it and run `bash scripts/update.sh`; see `docs/08-updating.md`.
 
 ## Step 3: install the skills
 
@@ -52,7 +58,7 @@ If you answer yes to the `vault` shell function prompt, the installer also write
 bash scripts/install-skills.sh
 ```
 
-This copies the four bundled skills from `skills/<name>/` to `~/.claude/skills/<name>/`. If a skill is already present, the script skips it (use `-f` to force overwrite).
+This copies the seven bundled skills from `skills/<name>/` to `~/.claude/skills/<name>/`. If a skill is already present, the script skips it (use `-f` to replace it; the previous copy is kept under `~/.config/moblee/backups/`, never deleted).
 
 The script then prompts you to install the WeasyPrint dependencies that the `wiki-to-pdf` skill needs. Answer yes if you plan to use the PDF renderer; otherwise no.
 

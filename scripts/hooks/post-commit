@@ -1,0 +1,12 @@
+#!/bin/sh
+# Vault post-commit hook for a Moblee wiki vault.
+#
+# Live via the same wiring as the pre-commit gate (`git config core.hooksPath
+# scripts/hooks`). It runs after every successful commit and must never make
+# a commit fail, so it always exits 0.
+#
+# At present this is a deliberate no-op placeholder. A later version of the
+# pack may wire a background job here (for example, rebuilding a local search
+# index when the commit touched wiki/), launched detached so the commit never
+# waits on it. Until then there is nothing to do.
+exit 0

@@ -51,7 +51,7 @@ The default categories are:
 - **Reference docs.** Pages flagged `status: reference` in frontmatter, plus the wiki's own How to Use This Wiki and Karpathy LLM Wiki Pattern pages.
 - **General / fallback.** Anything else.
 
-The user can add or remove categories to match their own top-level domains (for instance Golf, Geopolitics, Reading). The variant pool for each category is a list of filenames in the user's brand-mark folder; the canonical brand mark (the one named in the `--brand-mark-path` CSS variable) is always a safe fallback.
+The user can add or remove categories to match their own top-level domains (for instance Cooking, History, Reading). The variant pool for each category is a list of filenames in the user's brand-mark folder; the canonical brand mark (the one named in the `--brand-mark-path` CSS variable) is always a safe fallback.
 
 ### Determining the category
 
@@ -101,7 +101,11 @@ A second render style, selected with `--style cv` (the default is `--style brand
 
 It is brand-aware: the section labels, rule and subtitle take your `--brand-primary` colour and the body takes your `--brand-font-family`, both read from the same `brand.css` `:root` block that `design-your-brand` writes, so a single brand setup drives both render styles. The EB Garamond serif is the fixed signature of the statement style.
 
-**How the mapping works.** The page's H1 becomes the masthead. The subtitle comes from `--subtitle`, else the page's `summary` frontmatter, else its first sentence (`--subtitle ""` suppresses it). The opening paragraph, if the body begins with one, is set as the lede. Each H2 becomes a section label; H3 becomes an EB Garamond sub-heading. Use it for CVs, statements, briefs, and any single-purpose document where a cover would be overkill. Trigger on "CV style", "statement style", "the watermark style", "the Garamond style", or any clear request to match that look.
+**How the mapping works.** The page's H1 becomes the masthead. The subtitle comes from `--subtitle`, else the page's `summary` frontmatter, else its first sentence (`--subtitle ""` suppresses it). The opening paragraph, if the body begins with one, is set as the lede. Each H2 becomes a section label; H3 becomes an EB Garamond sub-heading. Markdown images (`![alt](file.png)`) render too, capped to page width with a soft frame, centred, with an italic line beneath read as a caption; image paths resolve relative to `--output-dir` (the render base URL), so place screenshots there. Use it for CVs, statements, briefs, and any single-purpose document where a cover would be overkill. Trigger on "CV style", "statement style", "the watermark style", "the Garamond style", or any clear request to match that look.
+
+**Bundles.** The CV style is page-only; `--with-cluster-notes` is ignored with a note on stderr. Render cluster bundles in the brand style.
+
+**Large print.** `--font-scale 1.3` (CV style only) multiplies every font size in `cv.css` for a large-print edition; the layout otherwise stays the same.
 
 ## Charts (vega-lite and mermaid)
 
@@ -146,21 +150,23 @@ Write two files into `outputs/`:
 - `<slug>-<YYYY-MM-DD>.pdf`, the rendered PDF.
 - `<slug>-<YYYY-MM-DD>.html`, the source HTML (kept alongside for debugging and re-render).
 
-Slug is the page title lowercased, non-alphanumeric runs replaced by single hyphens, leading and trailing hyphens trimmed.
+Slug is the page title lowercased, non-alphanumeric runs replaced by single hyphens, leading and trailing hyphens trimmed. A title with no Latin characters (Arabic, Chinese, and so on) would slugify to nothing, so the script falls back to the source file's stem, and then to `document`, to keep a usable filename.
 
 If the named page is a bundle (page plus cluster notes), the slug is the synthesis page's slug, with "-bundle" appended.
 
-After a successful render, append a single line to `wiki/log.md` in the standard form:
+The rotation log lives at `outputs/.wiki-to-pdf-history.json` at the vault's `outputs/` root regardless of `--output-dir`, so the back-to-back variant guarantee holds even when renders land in category subfolders.
+
+After a successful render, a single line is appended to `wiki/log.md` in the standard form; the header carries the time and offset, exactly like every other log entry:
 
 ```
-## [YYYY-MM-DD] render | <Page Title>: wiki-to-pdf, <variant filename>, <archetype>, <pages> pp
+## [YYYY-MM-DD HH:MM ±TZ] render | <Page Title>, wiki-to-pdf, <variant filename>, <archetype>, <pages> pp
 ```
 
-The render log line is part of the operation, not optional. It mirrors the discipline used by ingest entries.
+The render log line is part of the operation, not optional. It mirrors the discipline used by ingest entries. `render.py` writes this line itself (unless `--skip-log` is passed): when the script has appended it, do not append a duplicate by hand.
 
 ## How the render runs
 
-1. Resolve the source: if the user quotes `[[Page]]`, look up the file by exact title under `wiki/`. If a path is named, use it. Confirm the file exists; if not, ask before guessing.
+1. Resolve the source: if the user quotes `[[Page]]`, look up the file by exact title under `wiki/`. If a path is named, use it. Confirm the file exists; if not, ask before guessing. **Restricted folders are excluded by default**: any folder the vault's `CLAUDE.md` marks restricted, and any page carrying `restricted:` frontmatter. Never resolve a render target into one unless the user names the restricted page explicitly, and never render one to a shareable PDF without saying what it is.
 2. Detect bundle intent from the request phrasing.
 3. Read the source markdown plus any cluster notes.
 4. Strip frontmatter and remember the `parent`, `summary`, and `status` fields.
@@ -171,8 +177,9 @@ The render log line is part of the operation, not optional. It mirrors the disci
 9. Compose the full HTML document by injecting the body HTML into the template at the staged `template.html`, with `brand.css` inlined.
 10. Render to PDF using WeasyPrint. Save the HTML and PDF side-by-side under the slug-and-date filename in `outputs/`.
 11. Update the rotation log.
-12. Append the log line.
-13. Confirm to the user: file path, variant chosen, page count, archetype.
+12. **Verify the rendered output before it is handed over (mandatory).** `render.py` runs this check itself: it extracts the PDF's text, checks the head and tail pages for leak markers (draft scaffolding, staging footers, frontmatter keys, unrendered `[[..]]` or `%%..%%`), reports them in the JSON `leak_warnings` field, counts em dashes into `em_dashes_in_text`, and **exits 3 when leaks are found**. Treat exit 3 as a failed render: fix the source copy and re-render; never hand over the leaky PDF. Read the JSON; a non-zero em-dash count on an outward deliverable means the sweep is still owed (it is not automatic). A `leak_warnings` entry saying the content check itself failed means verify by eye. Page count and exit code 0 alone are not verification: read the actual head and tail of the rendered document before handing it over.
+13. The log line has been appended by the script (step 10); do not add a second one.
+14. Confirm to the user: file path, variant chosen, page count, archetype, and that the content check ran clean.
 
 ## Tooling
 
@@ -204,6 +211,17 @@ Optional flags:
 - `--variant <filename>` to override automatic variant selection (does not touch the rotation log when overridden).
 - `--prepared-for "Recipient Name"` for briefing covers.
 - `--report-id "Some ID"` to populate a report-id meta block.
+- `--style brand|cv` to select the render style (`brand` is the default; see "CV / statement style").
+- `--subtitle "..."` (CV style) overrides the masthead subtitle line; `--subtitle ""` suppresses it.
+- `--watermark <filename>` (CV style) overrides the watermark monogram.
+- `--footer-label "..."` (CV style) overrides the running-footer label (default the page title).
+- `--font-scale 1.3` (CV style) for a large-print edition.
+- `--no-charts` to skip the vega-lite / mermaid pre-render pass (both styles).
+- `--skip-log` to suppress the `wiki/log.md` entry (for test renders).
+
+The script's exit code is part of the contract: 0 is a clean render, 1 is a failed render, 3 is a rendered PDF in which the leak check found something (see step 12 above). The JSON on stdout carries `leak_warnings` and `em_dashes_in_text` alongside the paths and page count.
+
+If the script is invoked with a Python that lacks WeasyPrint (typically the macOS system python from a non-login shell), it re-executes itself under the Homebrew python3 if one is present, so a bare `python3 render.py` from a cron job or an agent-routed task does not fail as "renderer missing" when the real problem is the interpreter.
 
 The skill calls the script under the hood. The user does not have to type the command; they name the page and the skill assembles the rest.
 

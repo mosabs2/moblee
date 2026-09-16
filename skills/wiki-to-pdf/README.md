@@ -7,7 +7,7 @@ This skill renders any page in your Obsidian vault as a branded PDF (and accompa
 - `SKILL.md`, the skill's instruction file. Describes the trigger surface, content categories, variant rotation, cover archetypes, output naming, and the operation-log discipline.
 - `template.html`, Jinja2 HTML template with cover and body sections.
 - `brand.css`, brand stylesheet. Top of file declares CSS custom properties (`--brand-primary`, `--brand-secondary`, gradient stops, typeface, brand-mark path). The rest of the file references those variables, so changing them in one place re-skins every render.
-- `render.py`, Python 3 entry point. Resolves the page, picks the cover variant, italicises wikilinks, renders to HTML and then to PDF via WeasyPrint, updates the rotation log, and appends a one-line entry to `wiki/log.md`.
+- `render.py`, Python 3 entry point. Resolves the page, picks the cover variant, italicises wikilinks, pre-renders Vega-Lite and Mermaid chart blocks, renders to HTML and then to PDF via WeasyPrint, updates the rotation log (canonical at `outputs/.wiki-to-pdf-history.json`), appends a timestamped one-line entry to `wiki/log.md`, and then verifies its own output: it extracts the PDF's text, checks the head and tail pages for leak markers (draft scaffolding, unrendered `[[wikilinks]]`, frontmatter keys), reports them in the JSON as `leak_warnings` alongside an advisory `em_dashes_in_text` count, and exits 3 when leaks are found so a scripted caller cannot mistake a leaky render for a clean one. If invoked with a Python that lacks WeasyPrint, it re-executes under the Homebrew python3 when one is present.
 - `README.md`, this file.
 
 ## Recommended workflow

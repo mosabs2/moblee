@@ -11,6 +11,13 @@ A skill for funnelling knowledge from scattered Claude chats into a single Obsid
 
 The wiki is maintained by Claude in a dedicated Cowork project, but the user interacts with Claude across many one-off chats throughout the day. Substantive material from those chats, a research answer, a decision, a new contact, a domain-specific insight, tends to evaporate when the chat closes. This skill makes capture a one-step operation: produce a well-formed note destined for `raw/`, either written directly (when the vault is on the filesystem) or as a copy-paste artifact (everywhere else). The ingest pass that runs in the dedicated wiki project handles promotion from `raw/` into the proper `wiki/` pages; this skill never touches `wiki/` itself.
 
+Routing every save-back through this one skill gives three things. It is a **single, auditable write path** toward the vault. It is a **review gate**: content waits in `raw/` for a deliberate ingest pass rather than being silently injected into compiled pages. And it gives captured content **real provenance**: a `raw/` note becomes a source with attribution, moved to `raw/processed/` by the ingest that consumes it, exactly like any clipped article. It is also the executor for the save-back offers other skills make: when the user accepts a `brain` save-back offer, or the "save this answer" offer after a substantive query, `wiki-capture` performs the write.
+
+```
+chat / brain output ──(wiki-capture)──▶ raw/ ──(ingest)──▶ wiki/ + log + commit
+user drops a PDF ─────────────────────▶ raw/ ──(ingest)──▶ wiki/ + log + commit
+```
+
 ## Vault location
 
 The vault lives on the user's Mac at their configured vault path, typically:
@@ -72,28 +79,38 @@ Clearly substantive means the response produced something worth keeping: researc
 
 ## What a capture note looks like
 
-Use this structure for every capture. It is the contract the ingest pass expects.
+Use this structure for every capture. It is the contract the ingest pass expects. A blank fillable copy lives at `references/capture-template.md` in this skill's folder.
 
 ```
 # [Short title: noun phrase, not a sentence]
 
-**Captured**: YYYY-MM-DD
-**Target page**: [[Exact Wiki Page Name]]
-**Source context**: [one-line description of what prompted this capture]
+**Captured**: YYYY-MM-DD HH:MM ±TZ ([runtime: Claude Code / Cowork / claude.ai]; [one line on how the content was produced])
+**Target page**: [[Exact Wiki Page Name]] (add secondary targets after it, in priority order, if the material also informs another page)
+**Source context**: [what prompted this capture, what the user asked, and any facts or decisions the user supplied in conversation that the content depends on]
 
 ## Content
 
-[Compiled synthesis of the knowledge in analytical prose. Preserve key facts,
-names, dates, numbers. British English. Under 500 words unless the material
-genuinely warrants more. No bullet soup, no emojis. Convert any relative dates
-("last week", "yesterday") to absolute dates.]
+[The material itself. For a chat exchange, a compiled synthesis in analytical
+prose: preserve key facts, names, dates, numbers; British English; under 500
+words unless the material genuinely warrants more. For a save-back of an
+answer or a brain-skill output, the produced text in full: do not summarise or
+truncate it, because this note becomes the source of record for the later
+ingest. No bullet soup, no emojis. Convert any relative dates ("last week",
+"yesterday") to absolute dates.]
 
 ## Suggested integration
 
-[One paragraph explaining which section of the target wiki page this should
-be added to or extended, and naming any cross-references to other wiki pages
-using [[Wiki Link]] syntax.]
+[Per target page, what should change and where: which section of the target
+wiki page this should be added to or extended, naming any cross-references to
+other wiki pages using [[Wiki Link]] syntax. This is the block the ingest pass
+reads to route the material.]
+
+*[Provenance footer: one italic line recording what the capture was composed
+from (the pages, sources or conversation it draws on) and that it awaits an
+ingest pass.]*
 ```
+
+**Verify the date against the workstation clock before stamping it.** Run `date` (or trust the injected current date in Cowork) rather than carrying a date over from the conversation; a capture stamped with yesterday's date mis-sorts the inbox and misleads the ingest.
 
 ### Conventions to enforce
 
@@ -176,7 +193,7 @@ If none returns a path, use **artifact mode**. Never guess, and never invent a p
 
    > *Captured to `raw/capture-YYYY-MM-DD-[slug].md`. It'll be picked up on the next ingest pass into **[[Target Page]]**.*
 
-Do not touch anything under `wiki/`. Do not modify `wiki/Index.md`. The ingest pass owns all promotion from `raw/` into `wiki/`.
+Do not touch anything under `wiki/`. Do not modify `wiki/Index.md`. The ingest pass owns all promotion from `raw/` into `wiki/`. Do not commit: the capture note is committed as part of the ingest pass that consumes it, exactly as a manually dropped `raw/` file or a Web Clipping would be.
 
 ### Housekeeping: moving processed files
 
