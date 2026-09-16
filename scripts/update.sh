@@ -190,12 +190,22 @@ fi
 # ----- 9. version and commit --------------------------------------------------
 echo "8. Version and commit"
 echo "$NEW_VERSION" > "$VAULT/VERSION"
+if [[ ! -f "$VAULT/.gitignore" && -f "$PACKAGE_ROOT/vault-template/.gitignore" ]]; then
+  cp "$PACKAGE_ROOT/vault-template/.gitignore" "$VAULT/.gitignore"
+  echo "   added .gitignore (keeps reports, editor state and caches out of git)"
+fi
 if [[ -d "$VAULT/.git" ]]; then
   (
     cd "$VAULT"
-    git add -A
+    # Only what the update touched is committed; the owner's own uncommitted
+    # work stays uncommitted, for them and their Claude to commit as they see fit.
+    git add -A -- scripts dashboard VERSION CLAUDE.md .gitignore .claude wiki/Identity.md 2>/dev/null || true
     if git diff --cached --quiet; then
-      echo "   nothing new to commit"
+      if [[ "$OLD_VERSION" == "$NEW_VERSION" ]]; then
+        echo "   already at $NEW_VERSION; nothing to change"
+      else
+        echo "   nothing new to commit"
+      fi
     else
       git commit --quiet -m "moblee: updated from $OLD_VERSION to $NEW_VERSION" \
         && echo "   committed: moblee: updated from $OLD_VERSION to $NEW_VERSION" \
