@@ -44,6 +44,7 @@ FILES = [
     "scripts/vault-orient-preflight.sh",
     "scripts/patch-claude-md.py",
     "scripts/seed-memory.py",
+    "scripts/add-identity.py",
     "scripts/vault.sh",
     "scripts/hooks/pre-commit",
     "scripts/hooks/post-commit",

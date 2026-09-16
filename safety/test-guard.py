@@ -92,6 +92,9 @@ def build_fixture():
           '#!/bin/bash\necho "delete file"\n')
     write(os.path.join(vault, "scripts", "noext-rm"),
           '#!/bin/bash\nrm -rf wiki\n')
+    # follow-up 9: a script that truncates a content file (not in the hash list)
+    write(os.path.join(vault, "scripts", "update.sh"),
+          '#!/bin/bash\necho "fresh" > wiki/A.md\n')
     # throwaway deletes (follow-up 5)
     write(os.path.join(vault, "scripts", "tmpclean.py"),
           'import os\nos.unlink("/tmp/guard-throwaway.txt")\n'
@@ -297,6 +300,10 @@ BLOCK = [
     ("python script unlinking a mkstemp name (unresolvable)", "python3 scripts/mkstemp-clean.py"),
     ("known file with one byte changed is scanned", "python3 raw/install-safety-mod.py"),
     ("copy of the guard with one byte changed blocks", "python3 raw/bash-guard-mod.py"),
+    # follow-up 9: noexec forms are reads, but a -c body is still code
+    ("bash scripts/update.sh (stale/absent hash) blocks", "bash scripts/update.sh"),
+    ("bash -n -c body is still scanned", "bash -n -c 'rm -rf wiki'"),
+    ("sh -nc body is still scanned", "sh -nc 'rm -rf wiki'"),
     # follow-up 5: deletes that are NOT throwaway
     ("rm -f unexpanded $TMP", "rm -f \"$TMP/x\""),
     ("rm -rf symlink from tmp into the vault", "rm -rf {TMPDIR}/link"),
@@ -469,6 +476,14 @@ ALLOW = [
     ("no-extension shell script (shebang) with echo 'delete file'", "bash scripts/noext-echo"),
     # follow-up 3: known pack file at its released hash
     ("known pack file at its true hash is skipped", "python3 raw/install-safety.py"),
+    # follow-up 9: syntax checks and compiles never run the file
+    ("bash -n over a script that truncates a content file", "bash -n scripts/update.sh"),
+    ("sh -n over a script with rm", "sh -n scripts/bad.sh"),
+    ("zsh -n over a no-extension script with rm", "zsh -n scripts/noext-rm"),
+    ("bash -nv over a script with rm", "bash -nv scripts/bad.sh"),
+    ("python3 -m py_compile of a destructive script", "python3 -m py_compile scripts/nuke.py"),
+    ("python3 -m py_compile of the test suite", "python3 -m py_compile {TESTS}"),
+    ("python3 -m compileall scripts/", "python3 -m compileall scripts/"),
     # follow-up 6: the guard recognises its own bytes
     ("byte-identical copy of the guard passes", "python3 raw/bash-guard-copy.py"),
     ("the guard invoked on itself with piped JSON passes", "echo '{\"tool_name\":\"Bash\"}' | python3 {GUARD}"),
@@ -590,7 +605,8 @@ def main():
 
     def check(label, cmd, expect, group):
         nonlocal failures, blocked_ok, allowed_ok
-        cmd = cmd.replace("{VAULT}", vault).replace("{TMPDIR}", tmpdir).replace("{GUARD}", GUARD)
+        cmd = (cmd.replace("{VAULT}", vault).replace("{TMPDIR}", tmpdir)
+               .replace("{GUARD}", GUARD).replace("{TESTS}", os.path.abspath(__file__)))
         rc, err = run({"tool_name": "Bash", "tool_input": {"command": cmd}}, vault, env)
         ok = rc == expect
         if ok and expect == 2:

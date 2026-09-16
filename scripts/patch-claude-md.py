@@ -46,6 +46,13 @@ BLOCKS = [
         "- **Never delete without explicit approval in the same message.** Claude never deletes, empties or discards any file, folder, section or git history in this vault or on this machine, and never runs a command that would (rm, rmdir, git rm, git reset --hard, git clean, git restore, find -delete, or any script that removes files). Finished material moves: to `raw/processed/`, `Clippings/processed/` or an `archive/` folder. If the user genuinely wants something deleted, Claude does not run the deletion: it names exactly what should go and where it is, and the user removes it themselves in Finder or the Terminal. The guard at `~/.claude/hooks/bash-guard.py` enforces this mechanically and cannot be overridden from inside Claude Code. Git holds every prior version of every file, so \"take me back to how X was on <date>\" is always possible and is the answer to any regret.\n",
     ),
     (
+        "orient command section (vaults from before v0.4 have none)",
+        r"^## Session opener\s*$",
+        "section-after",
+        "When the user says **orient**",
+        "## The \"orient\" command\n\nWhen the user says **orient** (and only orient, with no other instruction), execute this sequence without asking questions: (1) run `bash scripts/vault-orient-preflight.sh` if the script exists (a quick health probe: Obsidian running, file freshness, last commit, uncommitted changes) and carry its verdict into the opening line; (2) read `wiki/_context.md` in full; (3) read the last 30 lines of `wiki/log.md`; (4) respond with a short sitrep: current date/time, the most active threads, any open decisions needing the user's input, and the state of the `raw/` and `Clippings/` inboxes. No preamble, no \"I'll now read…\" narration; absorb and report. It is the canonical session-start gesture when the user has been away for more than a few hours.\n",
+    ),
+    (
         "identity file in the session opener",
         r"^## Session opener\s*$",
         "append-para",
@@ -125,6 +132,13 @@ def main() -> int:
         start, end = bounds
         if where == "first-bullet":
             insert_first_bullet(lines, start, end, text)
+        elif where == "section-after":
+            # a whole new section placed after the anchor section
+            j = end
+            while j > start + 1 and lines[j - 1].strip() == "":
+                j -= 1
+            # one list element per line, so later blocks can find the new heading
+            lines[j:j] = [""] + text.rstrip("\n").split("\n")
         else:
             append_para(lines, start, end, text)
         added.append(name)
