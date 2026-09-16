@@ -150,24 +150,20 @@ python3 "$SCRIPT_DIR/patch-claude-md.py" --vault "$VAULT" | sed 's/^/   /'
 
 # ----- 7. identity and memories ----------------------------------------------
 echo "6. Identity file and starting memories"
-if [[ ! -f "$VAULT/wiki/Identity.md" ]]; then
-  # The owner's name: from the vault's git identity (set by the v0.4.2+ installer),
-  # else from the sentence the template CLAUDE.md carries, else left for the
-  # first conversation to fill.
-  OWNER="$(cd "$VAULT" && git config user.name 2>/dev/null || true)"
-  if [[ -z "$OWNER" ]]; then
-    OWNER="$(sed -n 's/.*knowledge base for \(.*\) where Claude is the maintainer.*/\1/p' "$VAULT/CLAUDE.md" | head -1)"
-  fi
-  OWNER="${OWNER:-[Your Name]}"
-  TODAY="$(date '+%-d %B %Y')"
-  sed -e "s|\[Your Name\]|$OWNER|g" -e "s|\[Install date\]|$TODAY|g" \
-      "$PACKAGE_ROOT/vault-template/wiki/Identity.md" > "$VAULT/wiki/Identity.md"
-  echo "   added wiki/Identity.md (the owner's own asks are filled in conversation)"
-else
-  echo "   wiki/Identity.md already present; left as it is"
-fi
+# The owner's name comes from the vault's git identity, else from the sentence
+# the template CLAUDE.md carries, else is left for the opening conversation.
+# Written by a script that creates the file only if absent (never overwrites).
+python3 "$SCRIPT_DIR/add-identity.py" --vault "$VAULT" | sed 's/^/   /' \
+  || echo "   (Identity.md not added; ask Claude to create it from the template)"
 python3 "$SCRIPT_DIR/seed-memory.py" --vault "$VAULT" | sed 's/^/   /' \
   || echo "   (starting memories not seeded; harmless)"
+# Vaults from before v0.4 have no Daily Notes layer; the brain skill's daily
+# patterns need the template. Added only when absent; nothing is overwritten.
+if [[ ! -f "$VAULT/Daily Notes/_TEMPLATE.md" && -f "$PACKAGE_ROOT/vault-template/Daily Notes/_TEMPLATE.md" ]]; then
+  mkdir -p "$VAULT/Daily Notes"
+  cp "$PACKAGE_ROOT/vault-template/Daily Notes/_TEMPLATE.md" "$VAULT/Daily Notes/_TEMPLATE.md"
+  echo "   added Daily Notes/_TEMPLATE.md (the brain skill's daily patterns need it)"
+fi
 
 # ----- 8. schedule ------------------------------------------------------------
 echo "7. Weekly health check"

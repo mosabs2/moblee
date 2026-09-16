@@ -82,6 +82,7 @@ KNOWN_SAFE_SHA256 = {
     "09e53a07cc802efbc4e39781bed40c5fdadca619e4e3760fd79c4fa1b05edca1": "dashboard/server.py",
     "c98790741c58336bed68ec4c0c1a40566ac25dacc77331e4c4da591d083980a3": "safety/install-safety.py",
     "240bfbf6d74ce37085d1c20718f82fbeb1cb32e649dc11e0885064320ebf8ab6": "safety/test-guard.py",
+    "3e314ed6bde5799b1f32c190a2a4996eb5f52107b22f9fc7a8c1a626213983dd": "scripts/add-identity.py",
     "749ed9603f05e1a633f9586383e86777289fb0eb78b8b7bd9c7e2e0706c6672d": "scripts/cadence/run-weekly-lint.sh",
     "ccd320d41251a54c6ec367513de80a8ea2dcf2bdc1b0f47943b4adc26a07c7cb": "scripts/hooks/post-commit",
     "42bb3ae68fb171ff5670ac7e1fa8ec3e49bfc1e138c8727ee497158ab1c12c8e": "scripts/hooks/pre-commit",
@@ -90,9 +91,9 @@ KNOWN_SAFE_SHA256 = {
     "3cf98b8394dcfa7a26a2fbf616c0dc9301f115c84ae3cf871a54ae282931036e": "scripts/install.sh",
     "a7f27a9bb6689a2b1da759b59742330f73009cdf634d74b8d2066edcd9ed9622": "scripts/lint-v2.py",
     "3bd00f93bc66ff9b2faa48c98c73eca4189344f591bf0156a6cc724cb8ed85a5": "scripts/log-append.py",
-    "187e21d537483b3209e5e1aabc8d5a512adad413c968ffc316ed90e7d6dd00d9": "scripts/patch-claude-md.py",
+    "6a0e526b3e26bc35ede1c822dd1c3757aab5d68b01a056df6bcea70ec2cd7018": "scripts/patch-claude-md.py",
     "41bd8e860d52babfc79a0d1b023f83f5f109eece055907a848e08a9bce6bbe86": "scripts/seed-memory.py",
-    "bdb16d16009991be345a11684919f438ea95640802fb13abd86440010a6e399f": "scripts/update.sh",
+    "06633feefaa632d1acff20c89b109a9784cf0bce5aac8881fd2329b90c3eba8c": "scripts/update.sh",
     "f04b1d65016edfa8a53d2275871ceeb6c6a68283d11dd2480e670598dd616447": "scripts/vault-gate.py",
     "9bbb913618cbcd856b241df4e2372e89765024cbfdca15f86547d1b9368086d1": "scripts/vault-orient-preflight.sh",
     "364f1d41fe71489eeb4096b7fc9c6132c7212f7ae6c5ee05dad9c59bef09ce57": "scripts/vault.sh",
@@ -935,7 +936,7 @@ def rule_shell(b, rest, seg, depth):
     if b not in SHELLS:
         return None
     i, n = 0, len(rest)
-    c_mode = False
+    c_mode = noexec = False
     while i < n:
         t = rest[i]
         if t == "--":
@@ -947,6 +948,8 @@ def rule_shell(b, rest, seg, depth):
         if t.startswith("-") or t.startswith("+"):
             if "c" in t[1:]:
                 c_mode = True
+            if t.startswith("-") and "n" in t[1:]:
+                noexec = True  # -n: syntax check only, the file never runs
             # -o / -O consume the next word, also at the end of a cluster
             # (`-euo pipefail`).
             i += 2 if t[1:] and t[-1] in "oO" else 1
@@ -955,6 +958,8 @@ def rule_shell(b, rest, seg, depth):
     if c_mode and i < n:
         r = scan_command(rest[i], depth + 1)
         return ("%s -c body: %s" % (b, r)) if r else None
+    if noexec:
+        return None  # `bash -n file` is a read
     if i < n and rest[i] != "-":
         return scan_file(rest[i], "shell", depth)
     return scan_stdin_code(seg, "shell", depth)
@@ -987,6 +992,8 @@ def rule_python(b, rest, seg, depth, assigns):
                 return ("python -c body contains %s" % k) if k else None
             if t.startswith("-m"):
                 mod = t[2:] if len(t) > 2 else (rest[i + 1] if i + 1 < n else "")
+                if mod in ("py_compile", "compileall"):
+                    return None  # compiles the file, never runs it
                 cand = mod.replace(".", "/") + ".py"
                 return scan_file(cand, "python", depth)
             if t in ("-W", "-X", "-Q"):
