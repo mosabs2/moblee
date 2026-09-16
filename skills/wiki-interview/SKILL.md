@@ -30,7 +30,7 @@ The skill walks through six phases. Move through them deliberately. The pace of 
 
 ### 1. Topic selection
 
-Open by asking what the user wants to interview about. If the topic is broad ("my career", "my golf"), help narrow it before starting. A good interview topic is specific enough to have a shape but open enough to surface unstated thinking. "How I think about hiring engineers" is a good topic. "My career" is not (it is too broad, and would produce a thin survey rather than a deep page).
+Open by asking what the user wants to interview about. If the topic is broad ("my career", "my hobbies"), help narrow it before starting. A good interview topic is specific enough to have a shape but open enough to surface unstated thinking. "How I think about hiring engineers" is a good topic. "My career" is not (it is too broad, and would produce a thin survey rather than a deep page).
 
 If the user lands on a topic that is too narrow ("the time in 2019 when we shipped Project X"), check whether they want a single-event memoir page or whether they want to draw a wider lesson out of it. Either is fine, but the framing changes the outline.
 
@@ -47,6 +47,8 @@ Once the topic is fixed, propose a four-to-six question outline based on what th
 
 Present the outline back to the user and confirm. They may want to add a question, drop one, or reorder. Adjust before the interview starts.
 
+**State the register at the confirm step: convergent or divergent.** A convergent interview drives toward a decision or a settled formulation; a divergent one generates and widens a slate of possibilities. Where the purpose could be either, ask rather than assume. A wrong register wastes the interviewee's energy on pressure they did not want (an interview prescribed as "arrive at one chosen direction" when the user wanted "a wider range of subjects" has to be redirected mid-run).
+
 ### 3. The interview
 
 Walk through each outline question in order. After asking a question:
@@ -57,10 +59,13 @@ Walk through each outline question in order. After asking a question:
 - Let pauses sit. If the user types "hmm, give me a second", give them the second.
 - Push back gently when the user contradicts themselves or when the answer doesn't land. The user is the expert on the topic; the interviewer's job is to help them say what they actually think, which sometimes means surfacing tension in what they have said so far.
 
+**Ask numbered plain questions, not framed arguments.** Present each round as short numbered questions the user can answer in a line or two each. Keep the interviewer's framing, hypotheses, pushback and synthesis in the *response to the answers*, not in the asking: a long hypothesis the user has to dissect to find the question inside it slows the interview to a crawl, whereas a list of five to fifteen direct questions gets answered in one pass.
+
 Avoid:
 
 - Leading questions ("Don't you think X?"). Ask open questions and let the user fill them in.
 - Multi-part questions. Ask one thing at a time.
+- Rambling preambles that bury the question. State the question; save the argument for after the answer.
 - Summarising too early. The user's words are the material; don't paraphrase before you have heard the whole answer.
 - Filler agreement ("That makes sense", "Totally"). Listen and ask the next thing.
 
@@ -95,14 +100,27 @@ Structure conventions:
 
 House style applies: British English, no em dashes, no emojis, absolute dates only, third person if the wiki uses third person elsewhere or first person if the user prefers their own pages in first person (check on the first interview, then follow the same convention afterwards).
 
+**Cross-reference check before writing any named entity.** Before a person, organisation, tool or named method goes onto a page, run `grep -ri "<name or term>" wiki/` to confirm it is not already represented. If it is, extend the existing entry rather than create a parallel one, and say so ("matched to [[X]], where this person already appears"). This applies to every named entity in every interview answer; the interview is exactly where a duplicate entity page is most easily created.
+
+**Contradictions with existing content: detect, surface, preserve.** When an answer contradicts what the wiki already says, never overwrite silently. Detection is a pattern check, not deep analysis: flag only when the same named entities, dates or numbers appear with an explicit negation, and always accept an explicit "this is a correction" from the user. Surface it before writing:
+
+> Your answer says [X] about [topic]; the wiki currently says [Y] on [page section]. Treat the new answer as: (i) **supersede** — the new text replaces the old, the old preserved in the log entry; (ii) **revise** — both versions stay on the page, the new one flagged as latest; (iii) **hold** — no change to the page, the contradiction recorded in the log for later resolution.
+
+Whichever the user picks, leave an italicised audit note at the point of change and quote the prior text in the log entry.
+
+**Sensitive content.** Credentials, tokens and passwords never reach a page: strip them, tell the user what was stripped, and let them decide whether it belongs in a credentials archive outside the wiki. Personal medical, financial or identity details, and candid characterisations of living people, get a per-occurrence check ("include as said / soften / leave out") before they are written; a decline-without-detail is a valid answer. These decisions are not remembered across sessions as preferences; each occurrence is asked.
+
 ### 6. Place and log
 
 Once the page is drafted:
 
-- Place it at the right location in the vault. New top-level pages go to `wiki/<Title>.md`. Sections that extend an existing page get appended to that page, with a clear H2 header marking the new material as interview-sourced.
-- Append a log entry to `wiki/log.md` in the form `## [YYYY-MM-DD HH:MM ±TZ] interview | <Title>`, with a short body paragraph describing what was interviewed and what the page covers.
+- Place it at the right location in the vault. New top-level pages go to `wiki/<Title>.md` and need the user's explicit approval before creation (the vault's `CLAUDE.md` page-creation rule). Sections that extend an existing page get appended to that page, with a clear H2 header marking the new material as interview-sourced.
+- Ensure reciprocal backlinks: walk the new content's outbound wikilinks and make sure the linked pages link back.
+- Append a log entry to `wiki/log.md` in the form `## [YYYY-MM-DD HH:MM ±TZ] interview | <Title>`, with a short body paragraph describing what was interviewed and what the page covers. Verify the time with `date` before stamping.
+- Refresh `wiki/_context.md` if the interview moved an active thread, and bump `wiki/Index.md` if a new top-level page was created.
 - Surface the page link for user review. Ask whether they want changes before considering it complete.
 - Confirm the user has no further changes before closing the interview.
+- Commit as its own unit of work, staging only the files this interview touched (the page or pages, `wiki/log.md`, and `_context.md` / `Index.md` if they changed) with `git add <path>` rather than `git add .`, so an unrelated change sitting in the working tree does not ride along.
 
 ## Tone
 
@@ -135,6 +153,6 @@ A good test of topic readiness: if the user can talk about it for ten minutes wi
 ## Notes on running the interview
 
 - The interview can take anywhere from twenty minutes to two hours depending on the topic. Don't try to compress it; the point is depth.
-- If the user wants to pause and resume, save the notes so far and the outline state, and let them pick up later from the synthesis-check step or wherever they left off.
+- If the user wants to pause and resume, save the notes so far and the outline state, and let them pick up later from the synthesis-check step or wherever they left off. Treat interruption as normal, not as failure: a hard stop still produces a page from what was answered; a skipped question is recorded as skipped and not nagged about; a mid-interview pivot to a different subject closes the current outline and starts a fresh one, with the original subject noted for a later session.
 - If the interview surfaces a strong thread that is its own topic, name it and ask whether to schedule a follow-up interview rather than trying to cover it inside the current one.
 - After the page is written, the user may ask for an edit pass. Treat it as a normal wiki edit, not as a re-interview, unless they want to reopen the conversation.

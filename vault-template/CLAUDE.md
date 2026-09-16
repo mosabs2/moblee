@@ -12,9 +12,13 @@ This is **not a code repository**. It is an Obsidian vault implementing the **Ka
 
 At the start of any wiki work, read `wiki/_context.md` for current state and tempo (active threads, open decisions, watch list, and recent significant additions).
 
+Also read `wiki/Identity.md` in full. It holds who Claude is to the owner and how Claude judges (verification over flattery, challenge over agreement, never deleting without a yes), and it binds conversation as much as the page. It is excluded from default skill reads and is never quoted back at the owner.
+
 ## The "orient" command
 
 When the user says **orient** (and only orient, with no other instruction), execute this sequence without asking questions: (1) run `bash scripts/vault-orient-preflight.sh` if the script exists (a quick health probe: Obsidian running, file freshness, last commit, uncommitted changes) and carry its verdict into the opening line; (2) read `wiki/_context.md` in full; (3) read the last 30 lines of `wiki/log.md`; (4) respond with a short sitrep: current date/time, the most active threads, any open decisions needing the user's input, and the state of the `raw/` and `Clippings/` inboxes. No preamble, no "I'll now read…" narration — absorb and report. It is the canonical session-start gesture when the user has been away for more than a few hours.
+
+The programmatic lint runs itself every Saturday morning through the scheduled job Moblee installed and writes its report to `outputs/lint/`. At orient, if that folder holds a report newer than the last one read, read its findings and carry anything that needs the owner's decision into the sitrep, in plain English. Findings are named to the owner, never acted on unasked.
 
 ## Three-layer architecture
 
@@ -40,7 +44,7 @@ When the user says **orient** (and only orient, with no other instruction), exec
 
 **Query**: answer questions by searching the wiki and citing pages with `[[Page Name]]` links. After substantive answers (comparisons, analyses, syntheses), offer to save the answer back as a wiki page so explorations compound.
 
-**Lint**: when asked to "lint" or "health-check" the wiki, scan for contradictions between pages, stale claims superseded by newer sources, orphan pages with no inbound links, important concepts mentioned but lacking their own page, missing reciprocal backlinks, and data gaps. Write the report to `outputs/lint-report-YYYY-MM-DD.md` and log it. A companion **programmatic lint** (`scripts/lint-v2.py`) verifies the structural conventions mechanically — log-header format, dangling wikilinks, broken section anchors, attribution presence, and a **vault-weight guard** that flags always-loaded files over their token caps (`_context.md` ≤ 12k, this file ≤ 10k, `Index.md` ≤ 8k) without ever trimming. A sensible cadence is weekly. When the weight guard flags a file, the **compact skill** acts on it: mechanical rotations run freely, lossy prose trims are proposed for the user's sign-off. A **commit gate** (`scripts/vault-gate.py`, installable as `.git/hooks/pre-commit`) runs the cheap deterministic subset of these checks at write time, so the common error classes are caught before a commit exists rather than at the next lint.
+**Lint**: when asked to "lint" or "health-check" the wiki, scan for contradictions between pages, stale claims superseded by newer sources, orphan pages with no inbound links, important concepts mentioned but lacking their own page, missing reciprocal backlinks, and data gaps. Write the report to `outputs/lint-report-YYYY-MM-DD.md` and log it. A companion **programmatic lint** (`scripts/lint-v2.py`) verifies the structural conventions mechanically — log-header format, dangling wikilinks, broken section anchors, attribution presence, and a **vault-weight guard** that flags always-loaded files over their token caps (`_context.md` ≤ 12k, this file ≤ 10k, `Index.md` ≤ 8k) without ever trimming. A sensible cadence is weekly. When the weight guard flags a file, the **compact skill** acts on it: mechanical rotations run freely, lossy prose trims are proposed for the user's sign-off. A **commit gate** (`scripts/vault-gate.py`, run by the hook in `scripts/hooks/pre-commit`, which git is pointed at through `core.hooksPath`) runs the cheap deterministic subset of these checks at write time, so the common error classes are caught before a commit exists rather than at the next lint. Log entries are written with `python3 scripts/log-append.py`, which reads the clock itself and emits the one correct header form, rather than composed by hand.
 
 ## House style
 
@@ -115,6 +119,8 @@ If your wiki accumulates material in different styles over time, do not retroact
 
 ## Hard rules
 
+- **Never delete without explicit approval in the same message.** Claude never deletes, empties or discards any file, folder, section or git history in this vault or on this machine, and never runs a command that would (rm, rmdir, git rm, git reset --hard, git clean, git restore, find -delete, or any script that removes files). Finished material moves: to `raw/processed/`, `Clippings/processed/` or an `archive/` folder. If the user genuinely wants something deleted, they say so for that specific item in the message that asks for it, and Claude states exactly what will go and waits for a yes before it goes. The guard at `~/.claude/hooks/bash-guard.py` enforces this mechanically. Git holds every prior version of every file, so "take me back to how X was on <date>" is always possible and is the answer to any regret.
+- **Shell commands are composed plainly**: no command substitution (`$(...)` or backticks), no heredocs, no leading variable assignments. Logic goes into a script file under `scripts/` and the file is run. These shapes trigger a permission prompt regardless of the allow list, and a vault that prompts constantly trains its owner to click yes without reading.
 - **Verification rule**: never invent, infer, or speculate. Only include what is explicitly stated in the source. Mark uncertainty `[Unverified]`. Leave gaps blank rather than filling them.
 - **Filename = link target**: wiki page files must be named to exactly match their `[[Link]]` target (e.g. `[Your Domain].md`, not `02-[your-domain].md`) so Obsidian's graph view shows one node per page. Capitalisation matters.
 - **Third person** throughout the wiki.

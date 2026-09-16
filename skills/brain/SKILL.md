@@ -1,15 +1,18 @@
 ---
 name: brain
-description: Run reflective queries against the user's personal Obsidian wiki. Trigger when the user wants substantive analytical output drawing across multiple wiki pages or sources, when the user wants to move items between status tiers on _context.md, when the user wants to channel a wiki-documented persona's voice, or when the user wants a morning brief, an end-of-day close, or forward planning. Eleven patterns. Six read-only originals: trace (how an idea or stated belief has evolved over time; the drift variant handles position shifts), connect (bridges between two domains), emerge (latent themes the vault implies but never states), challenge (pressure-test a belief against the vault's history), ideas (vault-wide ideation against active threads and the watch list), synthesise (place a new source into the existing corpus). Two with narrow writeback — graduate (promote/demote items between Active Threads / Open Decisions / Watch List / Closed on _context.md) and ghost (adopt the voice of a persona the wiki documents deeply, read-only). Three temporal patterns operating on the Daily Notes layer — today (morning brief), close-day (end-of-workday reflection writing closed_at to the current workday's daily note), schedule (planning ahead into future daily notes). Trigger on phrases like "trace X across my wiki", "connect X and Y", "what does my vault imply", "challenge my view that X", "give me ideas from my vault", "synthesise this against my wiki", "promote X to active", "close the Y decision", "what would [persona] say about Z", "today", "morning brief", "close the day", "plan the week", or any clear variant. Do not trigger on simple lookups, factual recall, or capture-only requests (those route to wiki-capture directly).
+description: Run reflective queries against the user's personal Obsidian wiki. Trigger when the user wants substantive analytical output drawing across multiple wiki pages or sources, when the user wants to move items between status tiers on _context.md, when the user wants to channel a wiki-documented persona's voice, or when the user wants a morning brief, an end-of-day close, or forward planning. Eleven patterns. Eight read-only: trace (how an idea or stated belief has evolved over time; the drift variant handles position shifts), connect (bridges between two domains), emerge (latent themes the vault implies but never states), challenge (pressure-test a belief against the vault's history), ideas (vault-wide ideation against active threads and the watch list), synthesise (place a new source into the existing corpus), ghost (adopt the voice of a persona the wiki documents deeply), today (morning brief over today's and yesterday's daily notes plus _context.md and recent log entries). Three with narrow writeback: graduate (status-tier moves between Active Threads / Open Decisions / Watch List / Closed on _context.md, writing only _context.md, log.md and optionally Index.md), close-day (end-of-workday reflection writing closed_at to the current workday's daily-note frontmatter, a workday-close entry to log.md, and the next day's daily note from template with carry-forwards seeded in Plan), schedule (writes future daily notes against active threads and watch-list deadlines). Trigger on phrases like "trace X across my wiki", "how has X evolved", "connect X and Y", "what does my vault imply", "challenge my view that X", "give me ideas from my vault", "what should I work on next", "synthesise this against my wiki", "promote X to active", "close the Y decision", "what would [persona] say about Z", "today", "morning brief", "what's on my plate", "close the day", "wrap up", "plan tomorrow", "plan the week", or any clear variant. Uses obsidian-cli for link-graph queries when it is installed; falls back to file-system reads (Grep, Read) otherwise. Do not trigger on simple lookups, factual recall, or capture-only requests (those route to wiki-capture directly).
 ---
 
 # Brain — reflective queries against the wiki
 
-A skill for asking the wiki questions that draw across multiple pages and sources, rather than retrieving a single fact, and for the temporal patterns that operate on the Daily Notes layer. **Eleven patterns** in three groups:
+A skill for asking the wiki questions that draw across multiple pages and sources, rather than retrieving a single fact, and for the temporal patterns that operate on the Daily Notes layer. **Eleven patterns**, grouped by what they are allowed to write:
 
-- **Six read-only analytical patterns**: **trace** (how an idea or stated belief has evolved over time; `drift` is a triggerable variant focused on position shifts), **connect** (bridges between two domains), **emerge** (latent themes the vault implies but never states), **challenge** (pressure-test a belief against the vault's history), **ideas** (vault-wide ideation against active threads and the watch list), and **synthesise** (place a new source into the existing corpus).
-- **Two governance/persona patterns**: **graduate** (promote/demote items between `_context.md` status tiers — narrow writeback to `_context.md` plus `log.md`), and **ghost** (adopt the voice of a wiki-documented persona to answer a question, read-only).
-- **Three temporal patterns** operating on the `Daily Notes/` layer: **today** (morning brief), **close-day** (end-of-workday reflection with narrow writeback), and **schedule** (planning ahead, narrow writeback to future daily notes).
+- **Eight read-only patterns**: the six analytical originals — **trace** (how an idea or stated belief has evolved over time; `drift` is a triggerable variant focused on position shifts), **connect** (bridges between two domains), **emerge** (latent themes the vault implies but never states), **challenge** (pressure-test a belief against the vault's history), **ideas** (vault-wide ideation against active threads and the watch list), **synthesise** (place a new source into the existing corpus) — plus **ghost** (adopt the voice of a wiki-documented persona to answer a question) and **today** (morning brief; its only write is creating today's daily note from the template if it does not exist yet).
+- **Three narrow-writeback patterns**: **graduate** (promote/demote items between `_context.md` status tiers — writes `_context.md`, `log.md` and optionally `Index.md`), **close-day** (end-of-workday reflection — writes `closed_at` on the workday's daily note, a log entry, and the next day's daily note), and **schedule** (planning ahead — writes only future daily notes).
+
+Each pattern is specified in its own subsection below. The exact write surfaces are stated once, in the Writeback discipline paragraph, and nothing else in this file may be read as widening them.
+
+**Combined-pattern requests** like "trace X then challenge it" are handled as **sequential chains**, not fragmented into separate sessions: run the first pattern to completion, present its output, then feed that output into the second. The user is asking for one continuous piece of analysis.
 
 ## Why this exists
 
@@ -33,7 +36,7 @@ Two locations are deliberately out of scope by default:
 
 The schema layer (`CLAUDE.md`, `wiki/_context.md`, `wiki/How to Use This Wiki.md`, `wiki/Karpathy LLM Wiki Pattern.md`) is read at session start but is not treated as analytical material — it is the rules and the state, not content to reflect on.
 
-**Restricted folders, if the user creates any.** If the vault grows folders the user marks as restricted (private material, or AI voice-reconstructions), exclude them from every pattern's default reads; they are opt-in only when the prompt names the folder or a page in it. A `restricted:` frontmatter field on a page is the marker to respect.
+**Restricted folders, if the user creates any.** If the vault grows folders the user marks as restricted (private material, or AI voice-reconstructions — any folder the vault's `CLAUDE.md` marks restricted), exclude them from every pattern's default reads, including every whole-vault sweep (`trace`, `connect`, `emerge`, `challenge`, `ideas`, `synthesise`, `today`, `close-day`, `schedule`, `graduate`). A `restricted:` frontmatter field on a page is the marker to respect. The only exceptions: (a) the prompt explicitly names the folder or a specific page in it; (b) for a ghost-reconstructions folder only, a `ghost` invocation on the same persona, which may read prior reconstructions of that persona as prior-pass context; (c) a one-time explicit override from the user. The exclusion exists because a ghost reconstruction is AI inference of a real person's voice on topics they have not addressed, and must never surface to other patterns as the subject's documented position.
 
 ## House style
 
@@ -143,7 +146,9 @@ These operate on `<vault>/Daily Notes/` (created from `Daily Notes/_TEMPLATE.md`
 
 **Workflow:** verify the date via `date`; open today's daily note (create from `_TEMPLATE.md` if absent — the single write this pattern makes); check the prior note's `closed_at` (if absent, the prior workday never closed — flag it and offer `close-day` on it); read `_context.md` for date triggers due today and threads with movement; read `log.md` since the last workday-close (cross-reference seeded Plan items against log evidence — tick what is already done); compose the brief: today's plan, scheduled items, threads with movement, watch-list triggers, overnight activity, and a one-sentence shape of the day.
 
-**Output:** structured brief, 200-500 words. No save-back offer — the brief is operational.
+**Output:** structured brief, 200-500 words. No save-back offer — the brief is operational. If the user wants items added to today's Plan on the back of the brief, they say so and the pattern writes them in (the only write beyond the create-from-template).
+
+**Distinction from `orient`:** `orient` (a `CLAUDE.md` convention) reports vault state — threads, decisions, watch list, inbox — and is the right gesture for picking up a session after time away. `today` reports personal state inside that vault. Run them sequentially when both are useful; `today` never doubles as `orient`.
 
 ### close-day — end-of-workday reflection
 
@@ -164,9 +169,13 @@ These operate on `<vault>/Daily Notes/` (created from `Daily Notes/_TEMPLATE.md`
 
 ### schedule — plan ahead
 
-**Triggers:** "plan tomorrow", "plan the week", "plan before [date]", "schedule the week".
+**Triggers:** "plan tomorrow", "plan the week", "plan before [date]", "schedule the week", "what should I do before [date]".
+
+**Note on naming collision.** The Claude Code harness has a built-in `/schedule` command for cron-style remote agents; brain's `schedule` is daily-notes-side planning. Trigger it by natural-language phrasing — the phrases above are unambiguous against the harness command, which requires an explicit slash-command invocation.
 
 **Workflow:** identify the horizon (ask one clarifying question if ambiguous); verify the date; read `_context.md` for deadlines and date-shaped next steps in the horizon; read any existing future daily notes (schedule adds, never overwrites); propose a draft schedule in chat with per-day rationale; **ask for confirmation**; on approval, write Plan entries to the relevant future daily notes, creating missing ones from template; confirm each write.
+
+**Output:** proposed schedule in chat (200-500 words), then post-confirmation a short summary of what was written and where. Schedule does not read or write external calendars; time-bound items go into the daily note's Scheduled section by hand.
 
 ## Reading the corpus
 
@@ -181,9 +190,13 @@ Daily-note writes are deliberately outside git-churn concerns: if the user's vau
 ## What this skill does not do
 
 - It does not write to `wiki/` for any pattern other than `graduate` (and `close-day`'s log entry). Save-back routes through `wiki-capture`.
+- It does not perform `wiki-capture`'s job. "Save this", "capture this", "log this" is `wiki-capture`; brain handles save-back only when it has just produced reflective output.
 - It does not perform ingest or lint; those are the wiki's separate operations.
 - It does not run on raw/unprocessed material by default (exception: `ideas` scans the inbox).
+- It does not read any restricted folder by default for any pattern — see the Restricted folders paragraph under The corpus for the three exceptions.
 - It does not invent — the verification rule applies to every pattern, including `ghost` (never invent a persona's position) and the temporal patterns (never invent a deadline, a completion, or a carry-forward the record does not support).
+- `schedule` does not read or write external calendars.
+- `today` does not double as `orient` — see the distinction under `today`.
 
 ## The proactive offer
 

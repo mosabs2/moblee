@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.5.0 — 16 September 2026
+
+The safety release. It exists because a recipient's vault lost a folder the day after its first housekeeping run, and the review that followed found that the three things protecting the maintainer's own vault (a delete guard, a permission list, and a written identity for Claude) had never shipped: all three lived outside the vault, and the v0.4 port had taken the vault as the boundary of the pattern. The rule from here on: a recipient gets what the maintainer has, or the pack does not ship.
+
+### Added
+
+- **A safety layer, installed with the pack and not optional** (`safety/`). `bash-guard.py` runs before every shell command Claude composes and refuses deletion, history rewriting and force pushes however they are spelled, including the indirect forms; `install-safety.py` installs it, proves it fires with a blocked test command before registering it, backs up and parse-checks every settings file it touches, and merges the **starter permission rules** (`starter-permissions.json`: an allow list for routine work so the vault stops asking permission forty times an hour, and a deny ring for deletion and history rewriting). The allow list is safe only because the guard sits beneath it. If the safety layer fails to install, the installer stops.
+- **`wiki/Identity.md`**, a fifth always-loaded file: who Claude is to the owner (verify rather than guess, challenge rather than flatter, never delete without a yes, the owner works through conversation). One list in it is the owner's own standing asks, filled in during the opening conversation (`START_HERE.md` step 8b). Excluded from skill reads and kept off the Index by design.
+- **The never-delete hard rule and the plain-shell-command rule** in the template `CLAUDE.md`, first under Hard rules; `scripts/patch-claude-md.py` inserts them (and the identity and scheduled-lint lines) into an existing vault's `CLAUDE.md` at named anchors without replacing the file.
+- **`scripts/update.sh`**: brings an existing vault to the current version without touching its content. There was no update path before v0.5; every earlier fix reached only fresh installs. Every replaced file is kept under `~/.config/moblee/backups/<stamp>/`; safe to run twice. `docs/08-updating.md`.
+- **`VERSION`** in the pack and in every vault, so a census or an update can read what a vault runs.
+- **Four starting memories** (`memory-seed/`, written by `scripts/seed-memory.py`): check the record before hedging, no superlatives without a count, plain English on housekeeping, plain shell commands.
+- **The `galaxy` skill**, so "galaxy" rebuilds and opens the 3D graph; the builder had shipped since v0.4 with nothing to trigger it.
+- **A weekly health check on a schedule** (`scripts/install-schedule.sh`, `scripts/cadence/`): the structural lint runs every Saturday at 09:04 through a launch agent, writing to `outputs/lint/`, logs kept under `~/.config/moblee/logs/` and archived rather than deleted after 90 days. The orient command reads the newest report. Offered at install and update.
+- **`scripts/log-append.py`**, the one way a log entry is written: it reads the clock itself and emits the one correct header form, retiring hand-composed timestamps.
+- **The commit gate wired through `scripts/hooks/`** and `git config core.hooksPath`, so the gate is versioned and updates reach it; nothing is written into `.git/hooks/` any more. Gate gains **G6**: a wikilink added to `wiki/` must resolve (folder links advisory).
+- **Five more lint checks**, generalised: frontmatter schema (cluster notes, daily notes), duplicate frontmatter, session-metadata footers, prose boilerplate, skills-layer weight.
+- **`clinic/`**: the maintainer's tools for looking after a vault remotely, by post: a clinic-note template, a checker that runs every command in a note through the guard, and the ten-point standard a note must pass before it is sent.
+- `docs/08-updating.md` and `docs/09-safety.md`.
+
+### Changed
+
+- **`compact`** now lists what it would drop (aged tombstone lines) or move (`outputs/` root sweep) and asks before doing it; only the archive-only rotations run unattended.
+- **The lint's `outputs/` size check** no longer mentions deletion; it suggests moving old renders into an `archive/` folder.
+- **`install-skills.sh`** never deletes: a skill being replaced is moved to the backups folder. New `--update` mode for the updater.
+- **The five shared skills brought level with their live originals**: brain's eight read-only / three narrow-writeback split and restricted-folder rules; wiki-to-pdf's mandatory output verification (exit 3 on a leaked marker), timestamped render log, canonical rotation log, non-Latin slug fallback, interpreter self-heal and `--font-scale`; wiki-capture's template, provenance footer and no-commit rule; wiki-interview's cross-reference, contradiction and sensitive-content rules.
+- **`voice/README.md`** now says plainly that the waiting nudge works in the Terminal but not in the Claude desktop app, which does not send the signal it relies on.
+- `START_HERE.md`, `README.md`, `docs/02-install.md` and `docs/05-skills.md` updated for all of the above.
+
+### Verified
+
+Fresh install in a sandboxed home on a stock path (Python 3.9.6, Apple git), then a real v0.4.1 vault with the owner's own content installed the same way and updated in place: 41 checks, all passing. Among them: the guard refuses `rm -rf` and `find -delete` from the sandbox and passes `mv`; settings files parse after the merge; the never-delete rule sits first under Hard rules; the old `.git/hooks/` gate is moved aside and `core.hooksPath` set; the owner's page survives the update untouched and their name reaches `Identity.md`; the gate blocks a dangling link in both vaults; the lint runs clean of errors in both; running the updater twice changes nothing. Every log read line by line as a recipient would read it.
+
 ## v0.4.2 — 11 September 2026
 
 Three fixes found by installing the pack as a fourteen-year-old would: fresh clone, stock Mac, no Homebrew, no git experience. Every one of them is output that reads as failure at a moment when a beginner is deciding whether the thing works.

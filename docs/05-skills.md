@@ -26,9 +26,23 @@ The analytical and ghost patterns are read-only; save-back routes through `wiki-
 
 ## compact
 
-**What it does.** Keeps the always-loaded files light. The programmatic lint's vault-weight guard flags files over their token caps (`_context.md`, `CLAUDE.md`, `Index.md`) but never trims; compact is the half that acts. Mechanical, reversible rotations (old refresh notes and closed items moved to a Context Archive page behind one-line pointers) run without asking; lossy prose trims are proposed with before/after sizes and executed only on your explicit sign-off, with a reviewable git diff.
+**What it does.** Keeps the always-loaded files light. The programmatic lint's vault-weight guard flags files over their token caps (`_context.md`, `CLAUDE.md`, `Index.md`) but never trims; compact is the half that acts. The archive-only rotations (old refresh notes and closed items moved to a Context Archive page behind one-line pointers) run unattended, since nothing leaves the vault; anything that drops a line or moves a file is listed and confirmed with you first; lossy prose trims are proposed with before/after sizes and executed only on your explicit sign-off, with a reviewable git diff.
 
 **When to use.** When the weekly lint flags a file over cap, or whenever Claude mentions the vault is getting heavy. "Compact the wiki", "trim _context", "the vault's heavy".
+
+## galaxy
+
+**What it does.** Rebuilds the offline 3D view of your knowledge graph (`scripts/wiki-galaxy/build.py`, output in `outputs/galaxy/`) fresh from the wiki, then opens it in your default browser. Pages are nodes, wikilinks are edges, folders become colour groups automatically. Read-only on `wiki/`.
+
+**When to use.** Whenever you want to see the shape of what you have built, or to spot pages nothing links to (the build line counts orphans, which are lint fodder). Worth waiting until there are a few dozen pages; a five-page galaxy is not much to look at.
+
+**Trigger phrases.** "Galaxy." / "Open the galaxy." / "Show me my brain in 3D."
+
+## wiki-interview
+
+**What it does.** Conducts a structured interview with you on a subject only you can speak to (a person you knew, a project's history, a decision and why), then writes the page from your answers with your words preserved, cross-referencing names against the wiki before writing them, surfacing contradictions with what the vault already says rather than silently overwriting, and stripping anything sensitive.
+
+**When to use.** When a page cannot be built from sources because you are the source. "Interview me on X." / "I want to add my own account of Y." / "Fill the gap on [page]."
 
 ## wiki-capture
 
@@ -88,6 +102,4 @@ If you want to inspect a skill, the files are at `~/.claude/skills/<name>/`. Eac
 
 ## Beyond the bundle
 
-Claude Code supports custom skills written by you. As your wiki matures and you find yourself wanting recurring workflows that the four bundled skills don't cover, you can write your own. The skill format is documented at [docs.claude.com](https://docs.claude.com), and the existing skills in `~/.claude/skills/` serve as worked examples.
-
-A future Moblee release may bundle additional skills (a `wiki-interview` for onboarding entire domains by interview, others as needs surface). For now, the four shipped here cover the bulk of what a new wiki author needs.
+Claude Code supports custom skills written by you. As your wiki matures and you find yourself wanting recurring workflows that the seven bundled skills don't cover, you can write your own. The skill format is documented at [docs.claude.com](https://docs.claude.com), and the existing skills in `~/.claude/skills/` serve as worked examples. The seven shipped here cover the bulk of what a new wiki author needs.
