@@ -4,7 +4,7 @@ This document walks through the step-by-step install of the Moblee starter pack 
 
 ## Step 1: get the Moblee package
 
-If Moblee is hosted on a git server, clone it:
+The simplest way is GitHub's green Code button, then Download ZIP; open the ZIP and it unpacks to a folder called `moblee-main` (in your Downloads folder, `cd ~/Downloads/moblee-main`). If you use git, you can clone it instead:
 
 ```
 git clone <repo-url> ~/moblee
@@ -45,19 +45,27 @@ After that, the script will:
 - Initialise a git repository in the new vault, make the first commit, and point git at the commit gate in `scripts/hooks/`.
 - Install the safety layer: the delete guard (proved working before it is registered) and the starter permission rules. This step is not optional; if it fails, the installer stops and says why. `docs/09-safety.md` explains what it does.
 - Seed four starting memories for your Claude.
-- Install the seven core skills into `~/.claude/skills/`. There is no separate skills step to run.
-- Show the checklist (Step 3 below).
+- Install the eight core skills into `~/.claude/skills/`. There is no separate skills step to run.
+- Tell you about the extras (Step 4 below) and ask whether you would rather choose them yourself now. The answer it expects is no: the easier way is to let Claude suggest them.
 - Commit the settings and choices it wrote, so the vault starts clean, and print the next steps.
 
-The part before the checklist takes a few minutes.
+It takes a few minutes. You run the installer yourself, rather than asking Claude to, because it changes Claude's own settings (the guard, the permission rules and the skills); those changes are yours to make, on your own screen.
 
 **Updating later.** You never run the installer twice on the same vault; if you point it at an existing Moblee vault, it hands over to the updater instead of overwriting anything. When a new Moblee version comes out, download it and run the updater; see `docs/08-updating.md`.
 
-## Step 3: the checklist
+## Step 3: open the vault in Obsidian
 
-When the vault is ready, the installer shows a checklist of everything optional: your Mac's Calendar, Reminders, Mail and Notes; Gmail, Google Calendar and Google Drive; GitHub; Chrome with your X, Instagram and YouTube logins and the Obsidian Web Clipper; video watching; PDF, Word, PowerPoint and Excel; film, audio and picture editing; a news brief; trip pages; X capture; a skill maker; Obsidian extras; the paid options; and the habits (the weekly health check, the learning path, spoken replies, and the `vault` shortcut in Terminal).
+Launch Obsidian. On the welcome screen (or File, then Open vault), choose **Open folder as vault**. Navigate to the location you chose in Step 2 and select the vault folder. Obsidian will open it and you'll see `Welcome.md` in the file pane.
 
-Each line says what the item does, about how long it takes, how much space it uses and what it costs. Items already working are marked `working`. Type the numbers of items to tick or untick (for example `3 7 12`), `all` for everything, `free` for everything free, or `none` to clear, then press Return on its own to accept. Before anything starts, the checklist shows the order it will work in, its estimate of time and space, and each moment it will need you at the keyboard, then asks "Start now?".
+Click `Welcome.md` and read it.
+
+## Step 4: choosing the extras
+
+**The usual way: ask Claude.** With the vault open in Obsidian, go into the vault's folder in Terminal, type `claude`, and say **get me started**. Claude asks how you use your Mac, where your mail and calendar live, and what you read, watch and make. It suggests only the extras that fit, each with its reason, time, space and cost, and gives you one command to run from the Moblee folder, for example `python3 scripts/moblee-setup.py --tick videos,documents,google`. That opens the checklist below with those items ticked. Your answers are kept on the wiki's `Habits and Tools` page, and Claude checks back from time to time as your habits change (say **review my setup** whenever you like). It asks before anything is added, and anything you say no to is not suggested again for ninety days.
+
+**The checklist.** Run on its own, or through the command Claude gives you, the checklist covers everything optional: your Mac's Calendar, Reminders, Mail and Notes; Gmail, Google Calendar and Google Drive; GitHub; Chrome with your X, Instagram and YouTube logins and the Obsidian Web Clipper; video watching; PDF, Word, PowerPoint and Excel; film, audio and picture editing; a news brief; trip pages; X capture; a skill maker; Obsidian extras; the paid options; and looking after the wiki (the weekly health check, the learning path, spoken replies, and the `vault` shortcut in Terminal).
+
+Nothing is ticked at first, unless you came through Claude, in which case the items you agreed on are ticked. Each line says what the item does, about how long it takes, how much space it uses and what it costs. Items already working are marked `working`. Type the numbers of items to tick or untick (for example `3 7 12`), `all` for everything, `free` for everything free, or `none` to clear, then press Return on its own to accept. Before anything starts, the checklist shows the order it will work in, its estimate of time and space, and each moment it will need you at the keyboard, then asks "Start now?".
 
 Be ready for the time and space. Ticking everything free takes **about an hour and a half the first time** and **several gigabytes**, most of it downloads of Apple's developer tools, Homebrew and the video renderer. Keep the Mac plugged in and awake. Nothing paid is ticked by default. The one paid option, creating new images, video, voices and music with ElevenLabs, is your own account and your own decision: as of September 2026 it has a free tier with small limits and paid plans from about $6 a month, so check elevenlabs.io/pricing before paying for anything.
 
@@ -65,7 +73,7 @@ The sign-ins are yours: your Mac password once for Homebrew, Allow on the Mac's 
 
 At the end it checks every item it installed, prints `WORKING` or `NOT WORKING` with a reason, and saves the result in your vault under `outputs/setup/`. If you added any connections, quit Claude Code and open it again so it sees them; if you added Chrome, type `/chrome` inside Claude Code and switch it on.
 
-**You can leave it for later.** To install nothing extra now, type `none`, press Return, and press Return again. Run the checklist whenever you like from the Moblee folder:
+**You can leave it for later.** Press Return with nothing ticked to install nothing extra. Run the checklist whenever you like from the Moblee folder:
 
 ```
 python3 scripts/moblee-setup.py
@@ -79,20 +87,14 @@ python3 scripts/moblee-setup.py --check
 
 `docs/10-connections.md` explains every item: what it connects, the exact sign-in steps, the cost, and what Claude will and will never do with it.
 
-## Step 4: open the vault in Obsidian
-
-Launch Obsidian. On the welcome screen (or File, then Open vault), choose **Open folder as vault**. Navigate to the location you chose in Step 2 and select the vault folder. Obsidian will open it and you'll see `Welcome.md` in the file pane.
-
-Click `Welcome.md` and read it.
-
 ## Step 5: verify the install
 
 A quick checklist to confirm everything is in place:
 
 - The vault folder exists at the location you chose.
-- `~/.claude/skills/` contains the seven core skills: `brain/`, `compact/`, `galaxy/`, `wiki-capture/`, `wiki-interview/`, `wiki-to-pdf/`, `design-your-brand/` (plus any extras you ticked).
+- `~/.claude/skills/` contains the eight core skills: `brain/`, `compact/`, `galaxy/`, `get-started/`, `wiki-capture/`, `wiki-interview/`, `wiki-to-pdf/`, `design-your-brand/` (plus any extras you ticked).
 - `~/.claude/hooks/bash-guard.py` exists, and the vault's `.claude/settings.local.json` lists the permission rules (the installer printed the counts).
-- The vault's `VERSION` file reads `0.6.0` for this release.
+- The vault's `VERSION` file reads `0.7.0` for this release.
 - `python3 scripts/moblee-setup.py --check`, run from the Moblee folder, shows `WORKING` for each item you ticked.
 - If you added the `vault` shortcut: typing `vault` in a new Terminal window takes you into the vault and prints the ready signal.
 - Obsidian opens the vault and displays `Welcome.md`.
@@ -104,4 +106,4 @@ If anything is missing, run the installer again with the same answers (it finish
 
 You have a working vault. Move on to [03-first-conversation.md](03-first-conversation.md) to learn how to work with Claude in this system, or jump to [04-first-ingest.md](04-first-ingest.md) to walk through ingesting your first piece of content.
 
-The fastest path is to paste the contents of `../START_HERE.md` into a Claude session and let Claude walk you through the rest interactively.
+The fastest path is to open Claude in your vault and say "get me started"; Claude takes it from there.

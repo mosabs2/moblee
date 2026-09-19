@@ -12,6 +12,8 @@ Last updated: [Date], initial setup.
 
 (One-line entries describing each subfolder under `wiki/` that holds detail pages, e.g. cluster notes. Add entries here when you create a new subfolder pattern.)
 
+- Wiki Operations: [[Habits and Tools]] (how the owner works, and the extras installed to match)
+
 ## Schema
 
 The schema is governed by:

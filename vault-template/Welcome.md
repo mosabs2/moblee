@@ -28,4 +28,4 @@ You'll talk to Claude either through **Cowork** (the desktop app, easiest for ev
 
 ## When you're ready to start
 
-Paste the contents of `START_HERE.md` (in the Moblee repo root) into Claude. It walks Claude through your specific setup: your name, your vault location, the conventions you want enforced. Claude will use it to personalise this `CLAUDE.md` and bring the wiki online.
+Open Claude Code in this folder (in Terminal, `cd` into the vault and type `claude`) and say **get me started**. Claude asks how you use your Mac and what you read, watch and make, suggests the extras that fit with a reason for each, and gives you one command to run that installs them. Then it helps you make your first page. Your answers are kept on [[Habits and Tools]], and Claude checks back from time to time as your habits change, always asking before anything is added.

@@ -13,8 +13,13 @@
 #   4. Copies vault-template/ to the destination.
 #   5. Substitutes [Your Name] and [Your Vault Name] placeholders inside files.
 #   6. Installs the safety layer and the core skills.
-#   7. Shows the checklist (scripts/moblee-setup.py) for everything optional.
-#   8. Prints next-step instructions.
+#   7. Prints the next step: the "get me started" conversation with Claude in
+#      the vault, which asks how the owner works and prepares the checklist
+#      (scripts/moblee-setup.py). The checklist can also be opened here.
+#
+# The owner runs this script, not Claude: it changes Claude's own settings
+# (the delete guard, the permission rules, the skills), and those changes are
+# the owner's to make where they can see them.
 
 set -euo pipefail
 
@@ -134,6 +139,8 @@ fi
 # this file (overridable with the MOBLEE_VAULT environment variable).
 mkdir -p "$HOME/.config/moblee"
 echo "$VAULT_LOCATION" > "$HOME/.config/moblee/vault-path"
+# and the pack's own folder, so the owner's Claude can point back at the checklist
+echo "$PACKAGE_ROOT" > "$HOME/.config/moblee/package-path"
 
 # ----- git init ---------------------------------------------------------------
 echo "Initialising git repository..."
@@ -202,27 +209,31 @@ echo "Installing the core skills (brain, capture, interview, PDF, galaxy and mor
 bash "$SCRIPT_DIR/install-skills.sh" --quiet \
   || echo "  (core skills not fully installed; run  bash scripts/install-skills.sh  later)"
 
-# ----- the checklist (v0.6) -----------------------------------------------------
-# Everything optional is chosen in one place: the Mac's own apps, Google,
-# GitHub, Chrome, video, documents, editing tools, the news brief, the paid
-# extras and the habits (weekly check, learning path, voice, the vault
-# shortcut). Each line says what it does, the time, the space and the cost;
-# nothing paid is ticked by default. It can be run again at any time.
+# ----- the checklist (v0.6; offered, not shown, from v0.7) -------------------
+# Everything optional is chosen from one checklist. From v0.7 nothing on it is
+# ticked in advance: the usual path is the "get me started" conversation with
+# Claude in the new vault, which asks how the owner works and gives them a
+# command that opens the checklist with the fitting items ticked. Owners who
+# would rather choose alone can open it here.
 echo ""
 echo "==================================================================="
-echo "  Your wiki is ready. Now connect it to your life."
+echo "  Your wiki is ready."
 echo "==================================================================="
 echo ""
-echo "Next comes a checklist of everything Moblee can connect and install:"
-echo "your Mac's Calendar, Mail and Reminders, Google, GitHub, Chrome, video,"
-echo "documents, editing tools and more. You tick what you want; it tells you"
-echo "the time, the space and any cost before anything starts. Ticking"
-echo "everything free takes about an hour and a half the first time, mostly downloads."
-echo "You can also skip it now and run it later with:"
-echo "  python3 scripts/moblee-setup.py"
+echo "Moblee can also connect your wiki to your Mac's Calendar, Mail and"
+echo "Reminders, Google, GitHub and Chrome, and add tools for videos, documents"
+echo "and editing. Rather than tick through a long list now, the easier way is"
+echo "to open Claude in your new wiki and say: get me started"
+echo "Claude asks how you use your Mac and what you read, watch and make, then"
+echo "suggests only what fits and gives you one command to install it."
 echo ""
-MOBLEE_VAULT="$VAULT_LOCATION" python3 "$SCRIPT_DIR/moblee-setup.py" \
-  || echo "  (the checklist stopped early; run  python3 scripts/moblee-setup.py  to carry on)"
+if [[ -t 0 ]]; then
+  read -r -p "Would you rather choose from the full checklist yourself now? [y/N]: " OPEN_SETUP || OPEN_SETUP="n"  # no answer: do not open
+  if [[ "$OPEN_SETUP" =~ ^[Yy]$ ]]; then
+    MOBLEE_VAULT="$VAULT_LOCATION" python3 "$SCRIPT_DIR/moblee-setup.py" \
+      || echo "  (the checklist stopped early; run  python3 scripts/moblee-setup.py  to carry on)"
+  fi
+fi
 
 # ----- commit the settings the install wrote (v0.5) ---------------------------
 # The initial commit happened before the safety step; the permission rules and
@@ -251,11 +262,12 @@ echo "Next steps:"
 echo "  1. Open Obsidian, choose \"Open folder as vault\", and point it at:"
 echo "       $VAULT_LOCATION"
 echo ""
-echo "  2. Open the vault's Welcome.md and follow it from there. Or paste"
-echo "     START_HERE.md into Claude and let it walk you through."
+echo "  2. Open Claude in your wiki and say \"get me started\":"
+echo "       cd \"$VAULT_LOCATION\""
+echo "       claude"
 echo ""
-echo "  3. Whenever you like:"
-echo "       Add or repair anything:  python3 scripts/moblee-setup.py"
+echo "  3. Whenever you like, from this Moblee folder:"
+echo "       Choose extras yourself:  python3 scripts/moblee-setup.py"
 echo "       Test that it all works:  python3 scripts/moblee-setup.py --check"
 echo "       Dashboard:  python3 \"$VAULT_LOCATION/dashboard/server.py\"   (then open the printed URL)"
 echo "       Galaxy:     say \"galaxy\" to Claude in your vault"

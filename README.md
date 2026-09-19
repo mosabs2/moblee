@@ -10,6 +10,8 @@ The Karpathy pattern rests on four files, each with one job. `CLAUDE.md` is the 
 
 The templates come with opinionated defaults (British English, paragraph-first prose, no em dashes, dated absolute references, structured ingest workflows), and you can keep, change or strip any of them. `CLAUDE.md` is the source of truth for your conventions; once it is installed in your vault, you own it.
 
+**New in v0.7.0.** **You install, Claude gets to know you.** The pack no longer asks you to paste a setup prompt into Claude. That prompt told Claude to change its own settings, and a careful Claude treats a downloaded file that does that as an attempt to take it over, and refuses. You now run the installer yourself in Terminal, then open Claude in your new wiki and say "get me started". The new **`get-started` skill** asks how you use your Mac and what you read, watch and make, suggests only the extras that fit (each with its reason, time, space and cost), and gives you one command, `python3 scripts/moblee-setup.py --tick <items>`, that opens the checklist with those items ticked; **nothing on the checklist is ticked in advance** any more. Your answers are kept on a new **`Habits and Tools`** page, the **weekly health check** notices when your habits change (video or X links arriving with nothing installed to handle them, a setup review falling due), and Claude asks before anything is added, never re-raising something you turned down for ninety days. See `START_HERE.md`.
+
 **New in v0.6.0.** Everything optional is now chosen from **one checklist** (`scripts/moblee-setup.py`), which the installer shows at the end of a new install and the updater offers. It connects the wiki to **your Mac's Calendar, Reminders, Mail and Notes** (through Orchard, with its delete tools blocked), **Gmail, Google Calendar and Google Drive**, **GitHub**, and **Chrome** with your own X, Instagram and YouTube logins and the Obsidian Web Clipper; it adds **video watching**, **PDF, Word, PowerPoint and Excel**, **film, audio and picture editing**, a **news brief** in which every item is confirmed by a second source, **trip planning**, **X capture**, a **skill maker** and **Obsidian extras**; and it holds the habits that used to be separate installer questions (weekly health check, learning path, voice, the `vault` shortcut). Each line says what the item does, the time, the space and the cost; nothing paid is ticked by default, and the one paid option (generating images, video and voices with ElevenLabs) is your own account and decision. `python3 scripts/moblee-setup.py --check` tests every connection at any time. The vault's `CLAUDE.md` gains a section on **connected accounts and live facts** (read on request; never send, post, delete or spend without a yes; current facts fetched live and cited), which the updater adds to existing vaults. The installer now installs the core skills itself. Moblee is now Mac only. See `docs/10-connections.md`.
 
 **New in v0.4.** The pack now carries a proven operational layer, generalised for any vault: the **brain skill grown to eleven patterns** (reflective queries, `_context` tier management, persona ghost-voices, and a daily rhythm of morning brief / close-day / week planning over a new Daily Notes layer); a **structural health layer** (`scripts/lint-v2.py` weekly checks, a `compact` skill that keeps the always-loaded files light, and a git **commit gate** that catches format drift before a commit exists); a **local dashboard** (orientation state, an Ask box that runs Claude against your vault, and a Visuals tab whose charts you add by asking Claude); the **3D galaxy** view of your knowledge graph; and an optional **voice stack** (replies read aloud and audible nudges when Claude needs you, free with the built-in macOS voice and upgradable to ElevenLabs). All of it is optional, and the same one-command installer sets it up.
@@ -31,24 +33,24 @@ Moblee runs on a Mac only (Apple Silicon recommended; tested on macOS 14 and lat
 
 ## The checklist, and what the full package gives you
 
-The installer lays down the vault, the safety layer and the core skills, then shows a checklist of everything optional. You tick what you want; each line says what the item does, roughly how long it takes, how much space it uses and what it costs, and a summary before anything starts says when you will be needed at the keyboard. Sign-ins (Google, GitHub, the Chrome extensions, the Mac's own permission pop-ups) are yours to do, and the checklist prints plain step-by-step instructions for each and waits while you do them.
+The installer lays down the vault, the safety layer and the core skills. Everything optional is then chosen from one checklist, and the easy way to fill it in is to open Claude in your new wiki and say "get me started": Claude asks how you use your Mac and what you read, watch and make, and gives you one command that opens the checklist with only the fitting items ticked. Nothing is ticked otherwise. You confirm what you want; each line says what the item does, roughly how long it takes, how much space it uses and what it costs, and a summary before anything starts says when you will be needed at the keyboard. Sign-ins (Google, GitHub, the Chrome extensions, the Mac's own permission pop-ups) are yours to do, and the checklist prints plain step-by-step instructions for each and waits while you do them.
 
 With everything free ticked, Claude can read your Mac's Calendar, Reminders, Mail and Notes, your Gmail, Google Calendar and Google Drive, your GitHub projects, and web pages behind your own logins in Chrome (including X, Instagram and YouTube); watch and summarise videos; turn pages into PDFs and make or read Word, PowerPoint and Excel files; edit film, audio and pictures on copies of your files; give you a news brief with every item checked against a second source; keep trip pages; save X posts into your inbox; and learn your own routines as one-word commands. Claude reads these accounts only when you ask, and never sends, posts, deletes or spends without your yes for that one action.
 
-A full free install takes about an hour and a half the first time, mostly waiting for downloads, and several gigabytes of space (Apple's developer tools, Homebrew and the video renderer are the large parts). Nothing paid is ticked by default. The only paid option, generating new images, video, voices and music, uses your own ElevenLabs account: as of September 2026 it has a free tier with small limits and paid plans from about $6 a month (check elevenlabs.io/pricing). Run the checklist again at any time to add something, or run `python3 scripts/moblee-setup.py --check` to test that everything still works. `docs/10-connections.md` explains every item.
+Ticking everything free takes about an hour and a half the first time, mostly waiting for downloads, and several gigabytes of space (Apple's developer tools, Homebrew and the video renderer are the large parts), which is why Claude suggests only what you will use. The only paid option, generating new images, video, voices and music, uses your own ElevenLabs account: as of September 2026 it has a free tier with small limits and paid plans from about $6 a month (check elevenlabs.io/pricing). Run the checklist again at any time to add something, or run `python3 scripts/moblee-setup.py --check` to test that everything still works. `docs/10-connections.md` explains every item.
 
-## Getting started, the one-paste route
+## Getting started
 
-The fastest path is to paste the contents of [`START_HERE.md`](START_HERE.md) into Claude (Claude Code in a Terminal, Cowork on the desktop, or Claude.ai web chat) and let Claude walk you through everything. You do not need to read these files first; the prompt tells Claude how the system works and what order to set it up in.
+Read [`START_HERE.md`](START_HERE.md): one page, three steps. You run the installer yourself in Terminal (`bash scripts/install.sh`), open the new wiki in Obsidian, then open Claude in the wiki and say "get me started". The installer is yours to run because it changes Claude's own settings; a careful Claude will not make those changes on the strength of a downloaded file, so the pack no longer asks you to paste anything into Claude.
 
-If you prefer to read first, start at [`docs/00-overview.md`](docs/00-overview.md).
+If you prefer to read more first, start at [`docs/00-overview.md`](docs/00-overview.md).
 
 ## What's in the box
 
 ```
 moblee/
 ├── README.md                  ← this file
-├── START_HERE.md              ← paste into Claude to begin the guided setup
+├── START_HERE.md              ← read this first: install, open, "get me started"
 ├── LICENSE                    ← MIT
 ├── VERSION                    ← the pack version (copied into every vault)
 ├── vault-template/            ← the Obsidian vault scaffolding
@@ -58,10 +60,11 @@ moblee/
 │   ├── raw/                   ← drop zone for PDFs, text, images
 │   ├── Clippings/             ← Obsidian Web Clipper deposits land here
 │   └── outputs/               ← generated reports (lint passes, PDFs, setup checks)
-├── skills/                    ← the seven core skills, installed by the installer
+├── skills/                    ← the eight core skills, installed by the installer
 │   ├── brain/                 ← reflective queries against the wiki, and the daily rhythm
 │   ├── compact/               ← keeps the always-loaded files light (asks before dropping anything)
 │   ├── galaxy/                ← rebuilds and opens the 3D graph of the wiki
+│   ├── get-started/           ← the first conversation: your habits, then the extras that fit
 │   ├── wiki-capture/          ← funnels chat content into the vault
 │   ├── wiki-interview/        ← builds a page from your own testimony
 │   ├── wiki-to-pdf/           ← renders any wiki page as a branded PDF
@@ -105,7 +108,7 @@ moblee/
 │   └── 10-connections.md      ← the checklist item by item, and what Claude may do with each (v0.6.0)
 ├── archive/
 │   └── windows/               ← retired files, kept but not maintained
-└── CHANGELOG.md               ← release notes, v0.1 to v0.6.0
+└── CHANGELOG.md               ← release notes, v0.1 to v0.7.0
 ```
 
 ## License

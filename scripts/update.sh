@@ -17,7 +17,8 @@
 #   4. Replaces the bundled skills in ~/.claude/skills/ (old copies kept).
 #   5. Installs the safety layer: delete guard, hook registration, permission rules.
 #   6. Adds the new rules and sections to CLAUDE.md without replacing the file.
-#   7. Adds wiki/Identity.md if the vault has none, and the starting memories.
+#   7. Adds wiki/Identity.md if the vault has none, the starting memories, and
+#      (v0.7) the Habits and Tools page the get-started conversation fills in.
 #   8. Offers the weekly health-check schedule (Mac).
 #   9. Offers the optional learning path (refreshes it if already added).
 #  10. Writes the new VERSION and commits the update in the vault.
@@ -174,6 +175,11 @@ python3 "$SCRIPT_DIR/add-identity.py" --vault "$VAULT" | sed 's/^/   /' \
   || echo "   (Identity.md not added; ask Claude to create it from the template)"
 python3 "$SCRIPT_DIR/seed-memory.py" --vault "$VAULT" | sed 's/^/   /' \
   || echo "   (starting memories not seeded; harmless)"
+python3 "$SCRIPT_DIR/add-habits-page.py" --vault "$VAULT" | sed 's/^/   /' \
+  || echo "   (Habits and Tools page not added; ask Claude to create it from the template)"
+# so the owner's Claude can point back at the checklist in this folder
+mkdir -p "$HOME/.config/moblee"
+echo "$PACKAGE_ROOT" > "$HOME/.config/moblee/package-path"
 # Vaults from before v0.4 have no Daily Notes layer; the brain skill's daily
 # patterns need the template. Added only when absent; nothing is overwritten.
 if [[ ! -f "$VAULT/Daily Notes/_TEMPLATE.md" && -f "$PACKAGE_ROOT/vault-template/Daily Notes/_TEMPLATE.md" ]]; then
@@ -244,7 +250,7 @@ if [[ -d "$VAULT/.git" ]]; then
     # One path per git add: a single missing path makes git stage nothing at all.
     # wiki/Index.md is left out on purpose, since it may hold the owner's own
     # uncommitted edits; a learning-path line added there is committed with them.
-    for p in scripts dashboard VERSION CLAUDE.md .gitignore .claude wiki/Identity.md "wiki/Wiki Operations/Moblee Learning Path.md"; do
+    for p in scripts dashboard VERSION CLAUDE.md .gitignore .claude wiki/Identity.md "wiki/Wiki Operations/Moblee Learning Path.md" "wiki/Wiki Operations/Habits and Tools.md"; do
       if [[ -e "$p" ]]; then git add -A -- "$p" 2>/dev/null || true; fi
     done
     if git diff --cached --quiet; then
@@ -269,18 +275,19 @@ echo ""
 echo "Your wiki's content was not touched. Replaced files were kept at:"
 echo "  $BACKUP"
 echo ""
-# ----- the checklist (v0.6) -----------------------------------------------------
-# Existing vaults get the same checklist a new install shows: the Mac's own
-# apps, Google, GitHub, Chrome, video, documents, editing tools, the news brief
-# and the paid extras. Items already working are marked and left alone.
+# ----- the checklist (v0.6; from v0.7 nothing is ticked in advance) ----------
+# The usual way to choose extras is now the "get me started" conversation with
+# Claude in the vault, which asks how the owner works and gives them a command
+# that opens the checklist with the fitting items ticked. It can still be
+# opened here by owners who would rather choose alone.
 if [[ -f "$SCRIPT_DIR/moblee-setup.py" ]]; then
-  echo "New in this version: a checklist that connects your wiki to your Mac's"
-  echo "Calendar, Mail and Reminders, Google, GitHub, Chrome, videos, documents"
-  echo "and editing tools. It says the time, space and any cost before anything"
-  echo "starts, and it can be run any time with: python3 scripts/moblee-setup.py"
+  echo "New in this version: Claude can suggest which extras suit you. Open Claude"
+  echo "in your wiki and say: review my setup (or, if you have never done it,"
+  echo "get me started). It asks how you use your Mac, suggests only what fits"
+  echo "and gives you one command to install it."
   if [[ -t 0 ]]; then
-    read -r -p "Open the checklist now? [Y/n]: " OPEN_SETUP || OPEN_SETUP="n"  # no answer: do not open
-    if [[ ! "$OPEN_SETUP" =~ ^[Nn]$ ]]; then
+    read -r -p "Would you rather choose from the full checklist yourself now? [y/N]: " OPEN_SETUP || OPEN_SETUP="n"  # no answer: do not open
+    if [[ "$OPEN_SETUP" =~ ^[Yy]$ ]]; then
       MOBLEE_VAULT="$VAULT" python3 "$SCRIPT_DIR/moblee-setup.py" \
         || echo "  (the checklist stopped early; run it again to carry on)"
     fi

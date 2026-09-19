@@ -1,6 +1,6 @@
 # 01. Prerequisites
 
-Moblee runs on a Mac only. It has been tested on Apple Silicon (M-series) machines running macOS 14 and later; it should work on earlier hardware as well, though connecting the Mac's own Calendar, Reminders, Mail and Notes needs macOS 14 (Sonoma) or later. Before running the installer, get the four pieces of software described here in place. Everything else (Homebrew, the PDF renderer, the video tools, the Chrome extensions) comes later, from the checklist the installer shows at the end; see [10-connections.md](10-connections.md).
+Moblee runs on a Mac only. It has been tested on Apple Silicon (M-series) machines running macOS 14 and later; it should work on earlier hardware as well, though connecting the Mac's own Calendar, Reminders, Mail and Notes needs macOS 14 (Sonoma) or later. Before running the installer, get the four pieces of software described here in place. Everything else (Homebrew, the PDF renderer, the video tools, the Chrome extensions) comes later, from the checklist, and only if you want it; see [10-connections.md](10-connections.md).
 
 ## Obsidian
 

@@ -2,6 +2,16 @@
 
 Moblee ships with its Claude skills installed by `scripts/install-skills.sh` into `~/.claude/skills/`. Each skill is a folder containing a `SKILL.md` (the instructions Claude reads) plus any companion files. Claude auto-triggers the relevant skill from your natural-language phrasing; you never need to remember tool names.
 
+## get-started
+
+**What it does.** Your first conversation in a new wiki, and the check-ins after it. Claude asks how you use your Mac (where your mail, calendar and notes live), what you read and watch, and what you make, then suggests only the extras that fit, each with its reason, time, space and cost. It gives you one command that opens the checklist with those items ticked; you run it yourself in Terminal and confirm. Then it helps you make your first page. Your answers go on the `Habits and Tools` page. Later, when you ask or when the weekly health check says your habits have moved on (video links arriving with nothing to watch them, say), it holds a short setup review and asks before anything is added. Anything you turn down is not suggested again for ninety days.
+
+**Trigger phrases.**
+
+- "Get me started."
+- "What should I install?"
+- "Review my setup."
+
 ## brain
 
 **What it does.** Reflective queries against the wiki, plus your daily rhythm. Eleven patterns in three groups. Six analytical patterns ask your vault questions that draw across multiple pages: trace (follow a thread of thought or a position shift through the wiki), connect (find non-obvious links between two domains), emerge (surface what's been quietly accumulating), challenge (pressure-test a belief against the vault's own history), ideas (what should I work on next, judged against your active threads and inbox), synthesise (place a brand-new source into your existing corpus as a structured postscript). Two governance patterns: graduate (promote, demote or close items between the Active Threads / Open Decisions / Watch List tiers on `_context.md`, with every move logged) and ghost (answer a question in the reconstructed voice of a person your wiki documents deeply; it is always labelled as reconstruction, never invention). Three temporal patterns run your day against a `Daily Notes/` layer: today (a morning brief of your plan, due triggers and overnight activity), close-day (an end-of-workday reflection that writes the day's roll-up to the log and seeds tomorrow's plan with carry-forwards), and schedule (plan tomorrow, the week, or the run-up to a deadline into future daily notes, always proposed before written).
@@ -100,4 +110,4 @@ If you want to inspect a skill, the files are at `~/.claude/skills/<name>/`. Eac
 
 ## Beyond the bundle
 
-Claude Code supports custom skills written by you. As your wiki matures and you find yourself wanting recurring workflows that the seven bundled skills don't cover, you can write your own. The skill format is documented at [docs.claude.com](https://docs.claude.com), and the existing skills in `~/.claude/skills/` serve as worked examples.
+Claude Code supports custom skills written by you. As your wiki matures and you find yourself wanting recurring workflows that the eight bundled skills don't cover, you can write your own. The skill format is documented at [docs.claude.com](https://docs.claude.com), and the existing skills in `~/.claude/skills/` serve as worked examples.

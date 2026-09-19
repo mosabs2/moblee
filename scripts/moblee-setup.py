@@ -7,9 +7,14 @@ Run from the Moblee package folder, in Terminal:
     python3 scripts/moblee-setup.py            # show the checklist, install what is ticked
     python3 scripts/moblee-setup.py --check    # test everything, change nothing
     python3 scripts/moblee-setup.py --only google,github   # just these items
+    python3 scripts/moblee-setup.py --tick videos,google   # the checklist, with these ticked
+    python3 scripts/moblee-setup.py --list     # every item with its time, space and cost
 
-The installer runs it after laying down the vault; the updater offers it; it
-can be run again at any time to add something that was left out. Nothing it
+Nothing is ticked by default. The usual way in is the "get me started"
+conversation with Claude in the vault, which asks how the owner works and
+gives them a --tick command for the items that fit.
+
+The installer and the updater offer it; it can be run again at any time to add something that was left out. Nothing it
 does deletes anything. Every settings file it changes is copied to
 ~/.config/moblee/backups/ first. Items already working are shown as such and
 are not installed twice.
@@ -460,10 +465,10 @@ def deny_rules_present(rules: list, kind: str = "deny") -> bool:
 # ----------------------------------------------------------------------------
 
 class Item:
-    def __init__(self, key, group, title, what, minutes, space_mb, cost, default,
+    def __init__(self, key, group, title, what, minutes, space_mb, cost,
                  needs=(), signin=None, install=None, check=None):
         self.key, self.group, self.title, self.what = key, group, title, what
-        self.minutes, self.space_mb, self.cost, self.default = minutes, space_mb, cost, default
+        self.minutes, self.space_mb, self.cost = minutes, space_mb, cost
         self.needs, self.signin = list(needs), signin
         self._install, self._check = install, check
 
@@ -940,72 +945,72 @@ def install_vault_fn():
 def build_items() -> list:
     news_check, news_install = skill_item("news-brief", "say 'news brief'; every item is checked against a second source")
     trips_check, trips_install = skill_item("trips", "say 'start a trip to ...'")
-    connect, make, paid, habits = ("Connect your life", "Read and make things", "Paid, or with a paid option", "Habits")
+    connect, make, paid, habits = ("Connect your life", "Read and make things", "Paid, or with a paid option", "Looking after the wiki")
     return [
         Item("mac-apps", connect, "Your Mac's Calendar, Reminders, Mail and Notes",
              "Claude reads your Mac's own apps when you ask, so you never upload a calendar file again.",
-             8, 60, "free", True, needs=("devtools", "homebrew", "node"), signin="click Allow on your Mac's pop-ups",
+             8, 60, "free", needs=("devtools", "homebrew", "node"), signin="click Allow on your Mac's pop-ups",
              install=install_mac_apps, check=check_mac_apps),
         Item("google", connect, "Gmail, Google Calendar and Google Drive",
              "Claude reads your Google mail, calendar and files when you ask. It drafts; you send.",
-             3, 0, "free", True, signin="sign in to Google in your browser",
+             3, 0, "free", signin="sign in to Google in your browser",
              install=install_google, check=check_google),
         Item("github", connect, "GitHub",
              "Claude can read and work with your GitHub projects.",
-             4, 40, "free (needs a free GitHub account)", True, needs=("homebrew",), signin="sign in to GitHub in your browser",
+             4, 40, "free (needs a free GitHub account)", needs=("homebrew",), signin="sign in to GitHub in your browser",
              install=install_github, check=check_github),
         Item("chrome", connect, "Chrome, with your X, Instagram and YouTube",
              "Claude uses Chrome to read pages behind your own logins. It never posts without your yes.",
-             5, 0, "free (installs Chrome if you do not have it)", True, needs=("homebrew",),
+             5, 0, "free (installs Chrome if you do not have it)", needs=("homebrew",),
              signin="add two Chrome extensions and sign in",
              install=install_chrome, check=check_chrome),
         Item("videos", make, "Watch and summarise videos",
              "Send a YouTube, Instagram, TikTok or X link and Claude watches it for you.",
-             4, 200, "free", True, needs=("homebrew",), install=install_videos, check=check_videos),
+             4, 200, "free", needs=("homebrew",), install=install_videos, check=check_videos),
         Item("documents", make, "PDF, Word, PowerPoint and Excel",
              "Turn wiki pages into polished PDFs, and make or read Office documents.",
-             10, 300, "free", True, needs=("homebrew",), install=install_documents, check=check_documents),
+             10, 300, "free", needs=("homebrew",), install=install_documents, check=check_documents),
         Item("film", make, "Video editing",
              "Cut clips together, add titles, captions and music, from a plain description.",
-             12, 1500, "free for individuals (Remotion's licence; larger companies need one)", True,
+             12, 1500, "free for individuals (Remotion's licence; larger companies need one)",
              needs=("devtools", "homebrew", "node"), install=install_film, check=check_film),
         Item("audio", make, "Audio editing and read-aloud",
              "Trim, join, clean up and convert audio, and turn any page into a spoken recording.",
-             4, 150, "free", True, needs=("homebrew",), install=install_audio, check=check_audio),
+             4, 150, "free", needs=("homebrew",), install=install_audio, check=check_audio),
         Item("pictures", make, "Picture editing",
              "Crop, resize, convert, compress and caption photos and images.",
-             5, 120, "free", True, needs=("homebrew",), install=install_pictures, check=check_pictures),
+             5, 120, "free", needs=("homebrew",), install=install_pictures, check=check_pictures),
         Item("news-brief", make, "A daily news brief, every item checked twice",
              "News on what you follow, each item confirmed by a second source and linked.",
-             1, 1, "free", True, install=news_install, check=news_check),
+             1, 1, "free", install=news_install, check=news_check),
         Item("trips", make, "Trip planning",
              "A page per trip with flights, stays and day plans, built from your booking emails.",
-             1, 1, "free", True, install=trips_install, check=trips_check),
+             1, 1, "free", install=trips_install, check=trips_check),
         Item("x-capture", make, "Save X posts into the wiki",
              "Paste an x.com link and Claude keeps the post, properly sourced. Needs the Chrome item.",
-             1, 1, "free", True, install=lambda: install_skill("x-capture"), check=check_x_capture),
+             1, 1, "free (needs the Chrome item)", install=lambda: install_skill("x-capture"), check=check_x_capture),
         Item("skill-maker", make, "Teach Claude your own routines",
              "Describe something you do often and Claude turns it into a one-word command.",
-             2, 5, "free", True, install=install_skill_maker, check=check_skill_maker),
+             2, 5, "free", install=install_skill_maker, check=check_skill_maker),
         Item("obsidian-extras", make, "Obsidian extras",
              "Claude can build Obsidian canvases, databases and diagrams.",
-             2, 5, "free", True, install=install_obsidian_extras, check=check_obsidian_extras),
+             2, 5, "free", install=install_obsidian_extras, check=check_obsidian_extras),
         Item("generation", paid, "Create new images, video, voices and music (ElevenLabs)",
              "Generate things that do not exist yet. Needs your own ElevenLabs account; see the prices first.",
-             5, 0, "PAID: free tier with small limits; plans from about $6 a month (Sept 2026)", False,
+             5, 0, "PAID: free tier with small limits; plans from about $6 a month (Sept 2026)",
              signin="make an ElevenLabs account and connect it", install=install_generation, check=check_generation),
         Item("voice", paid, "Claude reads its replies aloud",
              "Spoken replies and a nudge when Claude is waiting on you. Mac voice free; ElevenLabs voice optional and paid.",
-             3, 5, "free (paid voice optional)", False, install=install_voice, check=check_voice),
+             3, 5, "free (paid voice optional)", install=install_voice, check=check_voice),
         Item("weekly", habits, "Weekly health check",
              "The wiki checks itself every Saturday morning and tells you what needs attention.",
-             1, 0, "free", True, install=install_weekly, check=check_weekly),
+             1, 0, "free", install=install_weekly, check=check_weekly),
         Item("lessons", habits, "The learning path",
              "Thirty-two short lessons, one an evening, with a 9 pm reminder.",
-             1, 1, "free", False, install=install_lessons, check=check_lessons),
+             1, 1, "free", install=install_lessons, check=check_lessons),
         Item("vault-fn", habits, "The 'vault' shortcut in Terminal",
              "Type vault in Terminal to open Claude in your wiki.",
-             1, 0, "free", False, install=install_vault_fn, check=check_vault_fn),
+             1, 0, "free", install=install_vault_fn, check=check_vault_fn),
     ]
 
 
@@ -1032,12 +1037,17 @@ def foundations_needed(chosen: list) -> list:
 # the checklist
 # ----------------------------------------------------------------------------
 
-def show_checklist(items: list, ticked: dict, status: dict) -> None:
+def show_checklist(items: list, ticked: dict, status: dict, from_claude: bool = False) -> None:
     say("")
-    say("Tick what you want. Items already working are marked 'working' and are")
-    say("left alone. Type the numbers to tick or untick (for example: 3 7 12),")
-    say("'all' for everything, 'free' for everything free, 'none' to clear, and")
-    say("press Return on its own when the list is right.")
+    if from_claude:
+        say("The items you agreed with Claude are ticked. Change anything you like.")
+    else:
+        say("Nothing is ticked yet. Not sure what you need? Open Claude in your wiki")
+        say("and say 'get me started': it asks how you work and suggests what fits.")
+    say("Items already working are marked 'working' and are left alone. Type the")
+    say("numbers to tick or untick (for example: 3 7 12), 'all' for everything,")
+    say("'free' for everything free, 'none' to clear, and press Return on its own")
+    say("when the list is right.")
     group = None
     for n, it in enumerate(items, 1):
         if it.group != group:
@@ -1052,12 +1062,13 @@ def show_checklist(items: list, ticked: dict, status: dict) -> None:
         say(f"               about {it.minutes} min, {size}, {it.cost}{extra}")
 
 
-def choose(items: list, status: dict, preset: set | None) -> list:
-    ticked = {it.key: (it.key in preset) if preset is not None else (it.default and not status.get(it.key)) for it in items}
+def choose(items: list, status: dict, preset: set | None, tick: set | None = None) -> list:
     if preset is not None:
-        return [it for it in items if ticked[it.key] and not status.get(it.key)]
+        return [it for it in items if it.key in preset and not status.get(it.key)]
+    tick = tick or set()
+    ticked = {it.key: it.key in tick and not status.get(it.key) for it in items}
     while True:
-        show_checklist(items, ticked, status)
+        show_checklist(items, ticked, status, from_claude=bool(tick))
         ans = ask("\nYour choice (Return to accept): ")
         if ans is None:
             say("No answer received, so nothing extra will be installed.")
@@ -1144,7 +1155,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Connect a Moblee wiki to this Mac, its accounts and its tools.")
     ap.add_argument("--check", action="store_true", help="test everything and change nothing")
     ap.add_argument("--only", help="comma-separated item keys to install, skipping the checklist")
-    ap.add_argument("--list", action="store_true", help="print the item keys and stop")
+    ap.add_argument("--tick", help="comma-separated item keys to show ticked in the checklist (the owner still confirms)")
+    ap.add_argument("--list", action="store_true", help="print every item with its key, time, space and cost, and stop")
     args = ap.parse_args()
 
     if platform.system() != "Darwin":
@@ -1154,7 +1166,14 @@ def main() -> int:
     items = build_items()
     if args.list:
         for it in items:
-            say(f"{it.key:<16} {it.title}")
+            size = f"{it.space_mb / 1000:.1f} GB" if it.space_mb >= 1000 else f"{it.space_mb} MB"
+            needs = f"; stands on {', '.join(it.needs)}" if it.needs else ""
+            say(f"{it.key:<16} {it.title}: about {it.minutes} min, {size}, {it.cost}{needs}")
+        say("")
+        names = {"devtools": "Apple's developer tools", "homebrew": "Homebrew", "node": "Node"}
+        say("Installed once, the first time an item stands on them:")
+        for k, (m, mb) in FOUNDATION_COST.items():
+            say(f"{k:<16} {names[k]}: about {m} min, {mb / 1000:.1f} GB")
         return 0
 
     rule("Moblee setup: connect your wiki to your life")
@@ -1165,6 +1184,15 @@ def main() -> int:
     if args.check:
         results = final_check(items)
         path = write_report(results, vault_path())
+        # keep the saved state current, so the weekly check reads what is true now
+        try:
+            state = json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else {}
+            state["status"] = {it.key: ok for it, ok, _ in results}
+            state["last_check"] = STAMP
+            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+            STATE_FILE.write_text(json.dumps(state, indent=2) + "\n")
+        except (OSError, ValueError):
+            pass  # a state file that cannot be written never fails the check
         say(f"\nThe result is saved at {path}")
         return 0 if all(ok for _, ok, _ in results) else 1
 
@@ -1176,12 +1204,13 @@ def main() -> int:
     status = {it.key: it.check()[0] for it in items}
 
     preset = {k.strip() for k in args.only.split(",") if k.strip()} if args.only else None
-    if preset:
-        unknown = preset - {it.key for it in items}
+    tick = {k.strip() for k in args.tick.split(",") if k.strip()} if args.tick else None
+    for asked in (preset, tick):
+        unknown = (asked or set()) - {it.key for it in items}
         if unknown:
             say("Not on the list: " + ", ".join(sorted(unknown)) + ". Use --list to see the keys.")
             return 1
-    chosen = choose(items, status, preset)
+    chosen = choose(items, status, preset, tick)
     if not chosen:
         say("Nothing to install. Everything you ticked is already working, or nothing was ticked.")
         return 0
@@ -1216,8 +1245,11 @@ def main() -> int:
 
     results = final_check(items, only={it.key for it in chosen})
     path = write_report(results, vault_path())
+    for it, ok, _ in results:
+        status[it.key] = ok
     state = {"last_run": STAMP, "chosen": [it.key for it in chosen],
-             "working": [it.key for it, ok, _ in results if ok]}
+             "working": [it.key for it, ok, _ in results if ok],
+             "status": status}
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     STATE_FILE.write_text(json.dumps(state, indent=2) + "\n")
 

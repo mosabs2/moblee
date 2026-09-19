@@ -48,6 +48,7 @@ FILES = [
     "scripts/moblee-setup.py",
     "scripts/seed-memory.py",
     "scripts/add-identity.py",
+    "scripts/add-habits-page.py",
     "scripts/vault.sh",
     "scripts/hooks/pre-commit",
     "scripts/hooks/post-commit",
