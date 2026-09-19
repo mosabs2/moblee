@@ -1,16 +1,34 @@
 # 05. The bundled skills
 
-Moblee ships with its Claude skills installed by `scripts/install-skills.sh` into `~/.claude/skills/`. Each skill is a folder containing a `SKILL.md` (the instructions Claude reads) plus any companion files. Claude auto-triggers the relevant skill from your natural-language phrasing; you never need to remember tool names.
+Moblee ships with its Claude skills installed by `scripts/install-skills.sh` into `~/.claude/skills/`. Each skill is a folder containing a `SKILL.md` (the instructions Claude reads) plus any supporting files. Claude auto-triggers the relevant skill from your natural-language phrasing; you never need to remember tool names.
 
-## get-started
+## companion
 
-**What it does.** Your first conversation in a new wiki, and the check-ins after it. Claude asks how you use your Mac (where your mail, calendar and notes live), what you read and watch, and what you make, then suggests only the extras that fit, each with its reason, time, space and cost. It gives you one command that opens the checklist with those items ticked; you run it yourself in Terminal and confirm. Then it helps you make your first page. Your answers go on the `Habits and Tools` page. Later, when you ask or when the weekly health check says your habits have moved on (video links arriving with nothing to watch them, say), it holds a short setup review and asks before anything is added. Anything you turn down is not suggested again for ninety days.
+**What it does.** Your standing guide to the wiki. From v0.8.0 it replaces the `get-started` skill, and the old phrases still work.
+
+In a new wiki it holds the first conversation, one question at a time. It asks what you imagine putting in the wiki first, whether there is anything you want Claude to hold you to, and how you work: where your mail, calendar, notes and reminders live, what you read, watch and make, what you do over and over, and whether you would rather listen than read. It writes your answers on the `Habits and Tools` page, then helps you make your first page, which comes before any talk of extras. Only then does it propose one or two checklist items that clearly fit, each with its reason, time, space and cost. "Nothing extra for now" is a good answer and is recorded like any other.
+
+On any later day, say "guide me" and it offers one next step, with the reason: something you agreed that is still waiting to be added, something you have now done by hand three times that an item would do for you, something you asked to be held to that is slipping, a part of the wiki you have not tried, or a small tool built for you. It offers one thing in a session unless you ask for more. A no is written down with the date and is not raised again for ninety days.
+
+**Adding something.** What you agree is written on the `Habits and Tools` page under "Waiting in Moblee" and in a small file in your wiki, `.moblee/requests.json`, which the Moblee app reads. The item then waits as a tile in the app, and you press Add. If you installed from Terminal and have no app, Claude gives you one command to run in a Terminal window of your own. When you come back, Claude tests the item and records whether it is working.
+
+**Made to measure.** When you need something no checklist item provides, the companion builds it small, inside your wiki, by the method in its own folder (`method.md` and `builders-rules.md`): notice the need, propose the smallest useful version, build it, prove it works in front of you, record it under "Made for the owner", and look at it again in a month. A page, a template or a script in the wiki's `scripts/` folder is made directly. A new skill is drafted under `made-for-you/skills/` in the wiki and reaches Claude through the app, like everything else that changes what Claude can do.
+
+**How it talks.** Replies are two or three short lines, one question at a time, unless you ask for more or the `Habits and Tools` page says otherwise. Every correction you make to how Claude works ("shorter", "stop asking me that", "show me first") is written under "Working with the owner" on that page the moment you make it, in your words, and followed from then on.
+
+**When something seems wrong.** It does not guess and does not start repairing. It runs the read-only check-up (`scripts/moblee-doctor.py`), matches what it shows to a numbered entry in its field guide (`field-guide.md`), and tells you in plain words what it is, what fixes it and who does the fix. If no entry fits, it offers to write a report you can send to whoever helps you with Moblee. `docs/11-the-app-and-the-companion.md` says more.
+
+**Setup review.** When you ask, or when the weekly health check says one is due (more than ninety days since the last), it tells you in two or three sentences what your use looks like and asks, item by item, whether you want a change. Nothing is removed by Moblee.
+
+**What it never does.** It never runs the installer, the updater or the checklist (the read-only `--check` and `--list` excepted), never copies anything into `~/.claude/`, and never edits Claude's settings. If you ask it to, it explains that these are yours to do in the Moblee app or in a Terminal window of your own. It never starts a conversation unasked, and it leaves any password, recovery phrase, card number or code it finds in your material out of the wiki and tells you.
 
 **Trigger phrases.**
 
-- "Get me started."
-- "What should I install?"
+- "Get me started." / "Guide me."
+- "What next?" / "What should I add?"
 - "Review my setup."
+- "Something is wrong." / "Run a check-up."
+- "Can it do X every week?" / "I keep doing Y by hand."
 
 ## brain
 

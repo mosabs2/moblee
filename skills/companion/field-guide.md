@@ -6,7 +6,7 @@ What goes wrong with a Moblee wiki, how to confirm it, what fixes it and who doe
 
 ## F01. Claude asks permission for almost everything
 
-**Confirms it:** the check-up reports no permission rules. **Why:** the starter rules were never installed (an old version, or an install that stopped early). **Fix, owner:** in Moblee, press Repair; or in Terminal, `python3 "<moblee folder>/safety/install-safety.py" --vault "<vault>"`. It adds the rules for routine, safe actions with the delete guard beneath them, and keeps a copy of the old settings.
+**Confirms it:** the check-up reports no permission rules. **Why:** the starter rules were never installed (an old version, or an install that stopped early). **Fix, owner:** open Moblee, which shows a Repair button when it finds the guard or the rules missing; or in Terminal, `python3 "<moblee folder>/safety/install-safety.py" --vault "<vault>"`. It adds the rules for routine, safe actions with the delete guard beneath them, and keeps a copy of the old settings.
 
 ## F02. The delete guard is missing, not switched on, or not the pack's copy
 
@@ -14,11 +14,11 @@ What goes wrong with a Moblee wiki, how to confirm it, what fixes it and who doe
 
 ## F03. Claude's settings file does not load
 
-**Confirms it:** the check-up reports `~/.claude/settings.json` is not valid. **Why:** edited by hand, or written by another tool. **Fix, owner:** Moblee keeps dated copies under `~/.config/moblee/backups/`. Claude lists them (reading is allowed) and gives the owner the one Terminal line that copies the newest good one back. Claude does not edit the file.
+**Confirms it:** the check-up reports `~/.claude/settings.json` is not valid. **Why:** edited by hand, or written by another tool. **Fix, owner:** Moblee keeps dated copies under `~/.config/moblee/backups/`. Claude lists them (reading is allowed) and gives the owner two Terminal lines: the first moves the broken file aside under a new name (`mv ~/.claude/settings.json ~/.claude/settings.json.broken`), the second copies the newest good one into its place. Nothing is overwritten. Claude does not edit the file.
 
 ## F04. Something has gone missing: a page, a folder, a section, some data
 
-**Do not repair yet. Ask first:** is it a page, a section of a page, or data that should have arrived by itself? **Then search every place:** `git log --diff-filter=D --name-only` for deletions and `git log -p -- "<path>"` for a page's earlier versions; the vault's `.trash/`; the Mac's Trash (Obsidian's default for deleted files); Obsidian's File recovery (Settings, Core plugins); any sync folder; `archive/` and the Context Archive page; `raw/processed/` and `Clippings/processed/`. **Most often** nothing was deleted: a feed stopped (F05), a page was split or renamed (git shows it), or a housekeeping pass moved a section to an archive page. **Fix, Claude:** restore from git by copying the old version into place, tell the owner what happened, record it in the log.
+**Do not repair yet. Ask first:** is it a page, a section of a page, or data that should have arrived by itself? **Then search every place, renames first:** `git log --diff-filter=R --name-status` for pages renamed or moved, `git log --diff-filter=D --name-only` for deletions, and `git log -p -- "<path>"` for a page's earlier versions; the vault's `.trash/`; the Mac's Trash (Obsidian's default for deleted files); any sync folder; `archive/` and the Context Archive page; `raw/processed/` and `Clippings/processed/`. Obsidian's File recovery (Settings, Core plugins) is one more place, and only the owner can look there. **Most often** nothing was deleted: a page was renamed or split (tell the owner its new name and offer to rename it back; do not restore a second copy), a feed stopped (F05), or a housekeeping pass moved a section to an archive page. **Fix, Claude:** if it truly went, restore from git by copying the old version into place, tell the owner what happened, record it in the log. The check-up adds little to this one; go straight to the search.
 
 ## F05. Something that used to arrive by itself has stopped
 

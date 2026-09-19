@@ -108,18 +108,29 @@ final class InstallRun: ObservableObject {
         let base = home.appendingPathComponent("Library/Application Support/Moblee", isDirectory: true)
         try fm.createDirectory(at: base, withIntermediateDirectories: true)
 
-        let wanted = try Data(contentsOf: bundled.appendingPathComponent("scripts/install.sh"))
+        // "The same pack" is judged by the scripts that do the work, and a copy
+        // only counts once its last file, the marker, is there: a copy that was
+        // interrupted part-way is never used.
+        let judged = ["scripts/install.sh", "scripts/update.sh", "scripts/moblee-setup.py",
+                      "scripts/add-made-skill.py", "safety/bash-guard.py"]
+        func fingerprint(_ root: URL) -> [Data?] { judged.map { try? Data(contentsOf: root.appendingPathComponent($0)) } }
+        let wanted = fingerprint(bundled)
+        let marker = ".settled"
+
         var n = 0
         while true {
             let name = n == 0 ? "pack-\(version)" : "pack-\(version)-\(n)"
             let candidate = base.appendingPathComponent(name, isDirectory: true)
             if !fm.fileExists(atPath: candidate.path) {
-                try fm.copyItem(at: bundled, to: candidate)
+                let incoming = base.appendingPathComponent(".incoming-\(UUID().uuidString)", isDirectory: true)
+                try fm.copyItem(at: bundled, to: incoming)
+                try Data().write(to: incoming.appendingPathComponent(marker))
+                try fm.moveItem(at: incoming, to: candidate)
                 return candidate
             }
             // An earlier run left the same pack here: use it, never overwrite it.
-            if let have = try? Data(contentsOf: candidate.appendingPathComponent("scripts/install.sh")),
-               have == wanted {
+            if fm.fileExists(atPath: candidate.appendingPathComponent(marker).path),
+               fingerprint(candidate) == wanted {
                 return candidate
             }
             n += 1

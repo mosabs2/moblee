@@ -120,8 +120,10 @@ def check_settings(f: Findings, vault: Path | None) -> dict | None:
     v_allow, v_deny = vault_rules(vault)
     allow = data.get("permissions", {}).get("allow", []) + v_allow
     deny = data.get("permissions", {}).get("deny", []) + v_deny
-    if not allow:
-        f.add(PROBLEM, "There are no permission rules, so Claude will ask before almost everything.", "F01")
+    # Moblee's starter rules number about fifty; a handful of the owner's own
+    # rules does not mean the starter set is there.
+    if len(v_allow) < 10:
+        f.add(PROBLEM, "Moblee's permission rules are not in the wiki's settings, so Claude will ask before almost everything.", "F01")
     else:
         f.add(OK, f"Permission rules are in place ({len(allow)} allowed, {len(deny)} refused).")
     return data
@@ -151,7 +153,7 @@ def check_guard(f: Findings, settings: dict | None, pack: Path | None) -> None:
 
 def check_vault(f: Findings, vault: Path | None, pack: Path | None) -> None:
     if vault is None:
-        f.add(PROBLEM, "No wiki could be found (no vault-path record, and none above this folder).", "F16")
+        f.add(PROBLEM, "No wiki could be found (no vault-path record, and none above this folder). If the wiki's folder was moved, the record at ~/.config/moblee/vault-path still names the old place; the owner corrects it.")
         return
     f.add(OK, f"The wiki is at {vault}.")
     if not (vault / ".git").exists():
@@ -207,6 +209,9 @@ def check_jobs(f: Findings) -> None:
         f.add(OK, "No Moblee scheduled jobs are set up (the weekly check and the lesson reminder are optional).")
         return
     code, listing = run(["launchctl", "list"])
+    if code != 0:
+        f.add(LOOK, f"{len(plists)} Moblee scheduled job(s) are set up, but the Mac would not say whether they are loaded.", "F05")
+        return
     for p in plists:
         try:
             label = plistlib.loads(p.read_bytes()).get("Label", p.stem)
@@ -235,11 +240,12 @@ def check_mac(f: Findings) -> None:
         f.add(PROBLEM, "Apple's developer tools are not installed (no git).", "F17")
     code, out = run(["sw_vers", "-productVersion"])
     f.add(OK, f"macOS {out.strip()}, Python {sys.version.split()[0]}, chip {os.uname().machine}.")
-    for bundle, name in (("/Applications/Claude.app", "Claude's app"), ("/Applications/Obsidian.app", "Obsidian")):
-        if Path(bundle).exists():
+    for app, name, note in (("Claude.app", "Claude's app", "fine if Claude Code is used from Terminal"),
+                            ("Obsidian.app", "Obsidian", "the wiki works without it; it is the reading window")):
+        if (Path("/Applications") / app).exists() or (HOME / "Applications" / app).exists():
             f.add(OK, f"{name} is installed.")
         else:
-            f.add(LOOK, f"{name} was not found in Applications.", "F15" if "Claude" in name else "F16")
+            f.add(LOOK, f"{name} was not found in Applications ({note}).", None if "Claude" in name else "F16")
 
 
 def check_skills(f: Findings, pack: Path | None) -> None:
@@ -260,15 +266,17 @@ def check_diary(f: Findings) -> None:
     if not diary.exists():
         return
     lines = diary.read_text(errors="replace").splitlines()
-    last_begin = max((i for i, l in enumerate(lines) if "install begins" in l), default=None)
+    last_begin = max((i for i, l in enumerate(lines) if "begins ===" in l), default=None)
     if last_begin is None:
         return
+    what = "update" if "update begins" in lines[last_begin] else "install"
     tail = lines[last_begin:]
-    if any("install finished" in l for l in tail):
-        f.add(OK, "The last install ran to the end.")
+    if any("finished ===" in l for l in tail):
+        f.add(OK, f"The last {what} ran to the end.")
     else:
         stopped = next((l for l in tail if "stopped during" in l or "FAILED" in l), "it did not reach the end")
-        f.add(LOOK, "The last install did not finish: " + stopped.split("  ", 1)[-1], "F02")
+        f.add(LOOK, f"The last {what} did not finish: " + tidy(stopped.split("  ", 1)[-1]),
+              "F11" if what == "update" else "F02")
 
 
 def main() -> int:
@@ -315,9 +323,14 @@ def main() -> int:
         body = ["---", "do_not_ingest: true", "type: moblee-report", "---", "",
                 f"# Moblee check-up report, {today.strftime('%-d %B %Y')}", "",
                 "The state of the setup. Nothing here comes from the wiki's pages.", ""]
-        body += [f"- **{r['level']}** {r['text']}" + (f" (field guide {r['guide']})" if r["guide"] and r["level"] != OK else "")
+        def anon(text: str) -> str:
+            # the wiki's folder is usually named after its owner, so it is not sent on
+            return text.replace(tidy(vault), "<wiki>").replace(vault.name, "<wiki>")
+
+        body += [f"- **{r['level']}** {anon(r['text'])}" + (f" (field guide {r['guide']})" if r["guide"] and r["level"] != OK else "")
                  for r in f.rows]
-        body += ["", "## What the owner noticed", "", "*(Claude writes here, in the owner's words, what seemed wrong, and nothing else.)*", ""]
+        body += ["", "## What the owner noticed", "",
+                 "*(Claude writes here, in the owner's words, what seemed wrong, leaving out names and page titles, and nothing else.)*", ""]
         path.write_text("\n".join(body))
         print(f"\nReport written to {tidy(path)}")
     return 0

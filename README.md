@@ -10,7 +10,7 @@ The Karpathy pattern rests on four files, each with one job. `CLAUDE.md` is the 
 
 The templates come with opinionated defaults (British English, paragraph-first prose, no em dashes, dated absolute references, structured ingest workflows), and you can keep, change or strip any of them. `CLAUDE.md` is the source of truth for your conventions; once it is installed in your vault, you own it.
 
-**New in v0.7.0.** **You install, Claude gets to know you.** The pack no longer asks you to paste a setup prompt into Claude. That prompt told Claude to change its own settings, and a careful Claude treats a downloaded file that does that as an attempt to take it over, and refuses. You now run the installer yourself in Terminal, then open Claude in your new wiki and say "get me started". The new **`get-started` skill** asks how you use your Mac and what you read, watch and make, suggests only the extras that fit (each with its reason, time, space and cost), and gives you one command, `python3 scripts/moblee-setup.py --tick <items>`, that opens the checklist with those items ticked; **nothing on the checklist is ticked in advance** any more. Your answers are kept on a new **`Habits and Tools`** page, the **weekly health check** notices when your habits change (video or X links arriving with nothing installed to handle them, a setup review falling due), and Claude asks before anything is added, never re-raising something you turned down for ninety days. See `START_HERE.md`.
+**New in v0.8.0.** **An app to install with, and a companion to grow the wiki with.** The **Moblee app** (source in `app/`) is a small Mac app that installs the wiki without Terminal: one picture, one sentence and one button on each screen, and one typed question. It runs the pack's own `scripts/install.sh` underneath, so an app install and a Terminal install are the same install. On a Mac that already has a wiki it opens a home screen: a tile for each thing you and Claude agreed to add, an Update screen when it carries a newer Moblee than your wiki, and a Repair button if the delete guard is missing. The app is offered on the Releases page of the GitHub repository when a signed build is available; the Terminal install in `docs/02-install.md` always works. The **`companion` skill** replaces `get-started`. It holds the first conversation ("get me started" still works, and so does "guide me"), offers at most one next step in a session, keeps replies short unless you ask for more, writes down every correction you make, builds small tools made to measure, and runs a check-up when something seems wrong. **`scripts/moblee-doctor.py`** is that check-up: it changes nothing, marks each finding OK, LOOK or PROBLEM, and can write a report that holds nothing from your pages. Every install now keeps a plain diary at `~/.config/moblee/install-diary.txt`. See `docs/11-the-app-and-the-companion.md`. What v0.7.0 brought (you run the installer, and Claude asks how you work before suggesting anything) is in `CHANGELOG.md`, with every earlier version.
 
 **New in v0.6.0.** Everything optional is now chosen from **one checklist** (`scripts/moblee-setup.py`), which the installer shows at the end of a new install and the updater offers. It connects the wiki to **your Mac's Calendar, Reminders, Mail and Notes** (through Orchard, with its delete tools blocked), **Gmail, Google Calendar and Google Drive**, **GitHub**, and **Chrome** with your own X, Instagram and YouTube logins and the Obsidian Web Clipper; it adds **video watching**, **PDF, Word, PowerPoint and Excel**, **film, audio and picture editing**, a **news brief** in which every item is confirmed by a second source, **trip planning**, **X capture**, a **skill maker** and **Obsidian extras**; and it holds the habits that used to be separate installer questions (weekly health check, learning path, voice, the `vault` shortcut). Each line says what the item does, the time, the space and the cost; nothing paid is ticked by default, and the one paid option (generating images, video and voices with ElevenLabs) is your own account and decision. `python3 scripts/moblee-setup.py --check` tests every connection at any time. The vault's `CLAUDE.md` gains a section on **connected accounts and live facts** (read on request; never send, post, delete or spend without a yes; current facts fetched live and cited), which the updater adds to existing vaults. The installer now installs the core skills itself. Moblee is now Mac only. See `docs/10-connections.md`.
 
@@ -33,7 +33,7 @@ Moblee runs on a Mac only (Apple Silicon recommended; tested on macOS 14 and lat
 
 ## The checklist, and what the full package gives you
 
-The installer lays down the vault, the safety layer and the core skills. Everything optional is then chosen from one checklist, and the easy way to fill it in is to open Claude in your new wiki and say "get me started": Claude asks how you use your Mac and what you read, watch and make, and gives you one command that opens the checklist with only the fitting items ticked. Nothing is ticked otherwise. You confirm what you want; each line says what the item does, roughly how long it takes, how much space it uses and what it costs, and a summary before anything starts says when you will be needed at the keyboard. Sign-ins (Google, GitHub, the Chrome extensions, the Mac's own permission pop-ups) are yours to do, and the checklist prints plain step-by-step instructions for each and waits while you do them.
+The installer lays down the vault, the safety layer and the core skills. Everything optional is then chosen from one checklist, and the easy way to choose is to open Claude in your new wiki and say "get me started" (or "guide me" at any later time). The `companion` skill asks how you use your Mac and what you read, watch and make, helps you make your first page, and then proposes one or two items that clearly fit. What you agree to waits as a tile in the Moblee app, where you press Add; if you installed from Terminal, Claude gives you one command that opens the checklist with those items ticked. Nothing is ticked otherwise. You confirm what you want; each line says what the item does, roughly how long it takes, how much space it uses and what it costs, and a summary before anything starts says when you will be needed at the keyboard. Sign-ins (Google, GitHub, the Chrome extensions, the Mac's own permission pop-ups) are yours to do, and the checklist prints plain step-by-step instructions for each and waits while you do them.
 
 With everything free ticked, Claude can read your Mac's Calendar, Reminders, Mail and Notes, your Gmail, Google Calendar and Google Drive, your GitHub projects, and web pages behind your own logins in Chrome (including X, Instagram and YouTube); watch and summarise videos; turn pages into PDFs and make or read Word, PowerPoint and Excel files; edit film, audio and pictures on copies of your files; give you a news brief with every item checked against a second source; keep trip pages; save X posts into your inbox; and learn your own routines as one-word commands. Claude reads these accounts only when you ask, and never sends, posts, deletes or spends without your yes for that one action.
 
@@ -41,7 +41,7 @@ Ticking everything free takes about an hour and a half the first time, mostly wa
 
 ## Getting started
 
-Read [`START_HERE.md`](START_HERE.md): one page, three steps. You run the installer yourself in Terminal (`bash scripts/install.sh`), open the new wiki in Obsidian, then open Claude in the wiki and say "get me started". The installer is yours to run because it changes Claude's own settings; a careful Claude will not make those changes on the strength of a downloaded file, so the pack no longer asks you to paste anything into Claude.
+Read [`START_HERE.md`](START_HERE.md): one page, three steps. You run the installer yourself, with the Moblee app when a signed build is on the Releases page or in Terminal (`bash scripts/install.sh`), open the new wiki in Obsidian, then open Claude in the wiki and say "get me started". The installer is yours to run because it changes Claude's own settings; a careful Claude will not make those changes on the strength of a downloaded file, so the pack never asks you to paste anything into Claude. A paid Claude plan is needed for the Code tab in Claude's app.
 
 If you prefer to read more first, start at [`docs/00-overview.md`](docs/00-overview.md).
 
@@ -53,6 +53,7 @@ moblee/
 ├── START_HERE.md              ← read this first: install, open, "get me started"
 ├── LICENSE                    ← MIT
 ├── VERSION                    ← the pack version (copied into every vault)
+├── app/                       ← source of the Moblee app: installs, updates and adds what you agreed with Claude (v0.8.0)
 ├── vault-template/            ← the Obsidian vault scaffolding
 │   ├── CLAUDE.md              ← the schema (rules Claude follows in your vault)
 │   ├── Welcome.md             ← first page you'll see in Obsidian
@@ -63,8 +64,8 @@ moblee/
 ├── skills/                    ← the eight core skills, installed by the installer
 │   ├── brain/                 ← reflective queries against the wiki, and the daily rhythm
 │   ├── compact/               ← keeps the always-loaded files light (asks before dropping anything)
+│   ├── companion/             ← your standing guide: the first conversation, one next step, made-to-measure tools, the check-up (v0.8.0)
 │   ├── galaxy/                ← rebuilds and opens the 3D graph of the wiki
-│   ├── get-started/           ← the first conversation: your habits, then the extras that fit
 │   ├── wiki-capture/          ← funnels chat content into the vault
 │   ├── wiki-interview/        ← builds a page from your own testimony
 │   ├── wiki-to-pdf/           ← renders any wiki page as a branded PDF
@@ -86,6 +87,7 @@ moblee/
 ├── scripts/                   ← installers and the vault tooling
 │   ├── install.sh             ← lays down the vault, tooling, safety layer and core skills, then the checklist
 │   ├── moblee-setup.py        ← the checklist: connections and optional tools; --check tests them (v0.6.0)
+│   ├── moblee-doctor.py       ← the read-only check-up of the wiki and the Mac; --report writes a report to pass on (v0.8.0)
 │   ├── update.sh              ← brings an existing vault to this version, then offers the checklist (v0.5)
 │   ├── install-skills.sh      ← copies the core skills to ~/.claude/skills/ (run by the installer)
 │   ├── install-schedule.sh    ← puts the weekly health check on a schedule (v0.5)
@@ -105,10 +107,11 @@ moblee/
 │   ├── 06-karpathy-method.md  ← the methodology explained for a beginner
 │   ├── 08-updating.md         ← how to update a vault without touching its content (v0.5)
 │   ├── 09-safety.md           ← why Claude cannot delete your files (v0.5)
-│   └── 10-connections.md      ← the checklist item by item, and what Claude may do with each (v0.6.0)
+│   ├── 10-connections.md      ← the checklist item by item, and what Claude may do with each (v0.6.0)
+│   └── 11-the-app-and-the-companion.md  ← the Moblee app and the companion skill, explained together (v0.8.0)
 ├── archive/
 │   └── windows/               ← retired files, kept but not maintained
-└── CHANGELOG.md               ← release notes, v0.1 to v0.7.0
+└── CHANGELOG.md               ← release notes, v0.1 to v0.8.0
 ```
 
 ## License

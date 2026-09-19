@@ -65,8 +65,14 @@ STEP_N=0
 CURRENT_STEP="starting"
 
 diary() {
-  # the home folder is written as "~" so the diary carries no account name
+  # the home folder is written as "~" so the diary carries no account name, and
+  # the wiki's folder as "<wiki>", since a wiki is often named after its owner
   local line="$*"
+  if [[ -n "${VAULT_LOCATION:-}" ]]; then
+    line="${line//\/private$VAULT_LOCATION/<wiki>}"
+    line="${line//$VAULT_LOCATION/<wiki>}"
+  fi
+  if [[ -n "${VAULT_NAME:-}" ]]; then line="${line//$VAULT_NAME/<wiki>}"; fi
   line="${line//\/private$HOME/~}"
   line="${line//$HOME/~}"
   printf '%s  %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$line" >> "$DIARY" 2>/dev/null || true
@@ -255,13 +261,6 @@ if [[ -d "$PACKAGE_ROOT/dashboard" ]]; then
   cp -R "$PACKAGE_ROOT/dashboard" "$VAULT_LOCATION/dashboard"
 fi
 
-# ----- record the vault path for the tooling ----------------------------------
-# lint-v2, the gate, the galaxy and the dashboard all find the vault through
-# this file (overridable with the MOBLEE_VAULT environment variable).
-mkdir -p "$HOME/.config/moblee"
-echo "$VAULT_LOCATION" > "$HOME/.config/moblee/vault-path"
-# and the pack's own folder, so the owner's Claude can point back at the checklist
-echo "$PACKAGE_ROOT" > "$HOME/.config/moblee/package-path"
 step_ok tools
 
 # ----- git init ---------------------------------------------------------------
@@ -390,6 +389,16 @@ step_start finish
     git commit --quiet -m "moblee: safety layer, settings and chosen options" 2>/dev/null || true
   fi
 )
+
+# ----- record the vault path for the tooling ----------------------------------
+# lint-v2, the gate, the galaxy and the dashboard all find the vault through
+# this file (overridable with the MOBLEE_VAULT environment variable). It is
+# written last, so an install that stopped part-way is never mistaken for a
+# finished wiki; running the installer again with the same answers finishes it.
+mkdir -p "$HOME/.config/moblee"
+echo "$VAULT_LOCATION" > "$HOME/.config/moblee/vault-path"
+# and the pack's own folder, so the owner's Claude can point back at the checklist
+echo "$PACKAGE_ROOT" > "$HOME/.config/moblee/package-path"
 step_ok finish
 CURRENT_STEP="finished"
 diary "=== Moblee install finished ==="

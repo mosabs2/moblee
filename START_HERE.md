@@ -1,12 +1,18 @@
 # Start here
 
-Moblee gives you a personal wiki that Claude keeps for you: plain notes in a folder on your Mac, read in Obsidian and written by Claude, built on Andrej Karpathy's LLM Wiki Pattern. Setting it up takes three steps: you run the installer yourself in Terminal, open the new wiki in Obsidian, and then talk to Claude inside it.
+Moblee gives you a personal wiki that Claude keeps for you: plain notes in a folder on your Mac, read in Obsidian and written by Claude, built on Andrej Karpathy's LLM Wiki Pattern. Setting it up takes three steps: you run the installer yourself, open the new wiki in Obsidian, and then talk to Claude inside it.
 
 Moblee runs on a Mac only.
 
+## Two ways to install
+
+**With the Moblee app.** If a signed Moblee app is offered on the Releases page of the GitHub repository, download it and double-click it. It does step 1 for you: it checks what your Mac needs, asks one question, and makes the wiki. Carry on from step 2.
+
+**In Terminal.** Otherwise, follow the three steps below. They always work, and both ways run the same installer.
+
 ## Before you start
 
-You need Obsidian, Claude Code, Apple's free developer tools (which bring git) and Python 3. `docs/01-prerequisites.md` explains each one and how to check it is there. Nothing else is needed up front; anything extra is installed later, and only if you want it.
+You need Obsidian, Claude Code, Apple's free developer tools (which bring git) and Python 3. `docs/01-prerequisites.md` explains each one and how to check it is there. Nothing else is needed up front; anything extra is added later, and only if you want it.
 
 ## 1. Run the installer yourself
 
@@ -22,7 +28,7 @@ If it is somewhere else, type `cd ` (with the space), drag the folder from Finde
 bash scripts/install.sh
 ```
 
-It asks for your name, a name for your wiki and where to put it (the suggested place is fine). It then builds the wiki, turns on the safety layer (Claude cannot delete anything in your wiki without your yes) and installs Claude's core skills. It ends with "Done" and your next steps. `docs/02-install.md` walks through every question and message.
+It asks for your name, a name for your wiki and where to put it (the suggested place is fine). It then builds the wiki, turns on the safety layer (Claude cannot delete anything in your wiki; if something should go, Claude tells you what and where, and you remove it yourself) and installs Claude's core skills. It ends with "Done" and your next steps. `docs/02-install.md` walks through every question and message.
 
 **Why you run it, and not Claude.** The installer changes Claude's own settings: it adds the guard that checks every command Claude runs, a list of routine actions Claude no longer has to ask about, and the skills. Changes like that belong to you, made on your own screen. A careful Claude will not make them on the strength of instructions in a downloaded file, and it is right not to.
 
@@ -32,11 +38,11 @@ In Obsidian, choose Open folder as vault and pick the folder the installer made.
 
 ## 3. Talk to Claude in your wiki
 
-Back in Terminal, go into your wiki's folder and start Claude (the installer prints both lines for you), then say:
+Back in Terminal, go into your wiki's folder and start Claude (the installer prints both lines for you). If you used the app, its last screen shows three clicks in Claude's own app instead: click Code (which needs a paid Claude plan) and pick your wiki's folder. Then say:
 
 > get me started
 
-Claude asks how you use your Mac and what you read, watch and make, suggests the extras that fit, with a reason, the time and the space for each, and gives you one command that installs them. Then it helps you make your first page. Your answers are kept in the wiki, so Claude can check back from time to time as your habits change, and it always asks before anything is added.
+Claude asks what you want to put in the wiki and how you use your Mac, helps you make your first page, and then proposes one or two extras that fit, each with a reason. What you agree to waits for you in the Moblee app, or Claude gives you one Terminal command that adds it. On any later day, say "guide me" and Claude offers one next step. It always asks before anything is added.
 
 ## If you would like help with the install itself
 
@@ -44,4 +50,4 @@ Ask Claude in your own words, for example: "I've downloaded Moblee to my Downloa
 
 ## Later
 
-To bring your wiki up to a newer Moblee, download the new version and run `bash scripts/update.sh` from its folder (`docs/08-updating.md`). The safety layer is explained in `docs/09-safety.md`, and every extra you can add is in `docs/10-connections.md`.
+To bring your wiki up to a newer Moblee, open the newer Moblee app, or download the new version and run `bash scripts/update.sh` from its folder (`docs/08-updating.md`). The app and the companion are explained together in `docs/11-the-app-and-the-companion.md`, the safety layer in `docs/09-safety.md`, and every extra you can add in `docs/10-connections.md`.
