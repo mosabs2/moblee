@@ -1,6 +1,6 @@
 # The clinic: looking after a vault you cannot see
 
-This folder is for whoever maintains Moblee for other people, not for the vault owner. It carries the tools for a remote diagnose-and-fix loop that works by post.
+This folder is for whoever maintains Moblee for other people, not for the vault owner. It carries the tools for a remote diagnose-and-fix loop that works by exchanging files.
 
 ## How the loop works
 
@@ -10,7 +10,7 @@ Three rules hold across every round. Nothing a note contains deletes anything, o
 
 ## Before a note is sent
 
-A note is not sent until it has passed all ten of these. The cost of a lapse is a round trip by post at best and a second loss at worst, paid by the owner, not the author.
+A note is not sent until it has passed all ten of these. A lapse costs an extra round trip of notes at best and lost work at worst, and the owner pays it, not the author.
 
 1. Every command in the note is run through the delete guard it installs or assumes: `python3 clinic/check-note-against-guard.py <note> safety/bash-guard.py` must report zero blocked.
 2. Every command is executed end to end in a sandboxed home on a fresh install of the pack version the owner is believed to run, and the output read line by line as the owner would read it. A command that cannot be run is marked untested in the note.

@@ -19,7 +19,8 @@
 #   6. Adds the new rules and sections to CLAUDE.md without replacing the file.
 #   7. Adds wiki/Identity.md if the vault has none, and the starting memories.
 #   8. Offers the weekly health-check schedule (Mac).
-#   9. Writes the new VERSION and commits the update in the vault.
+#   9. Offers the optional learning path (refreshes it if already added).
+#  10. Writes the new VERSION and commits the update in the vault.
 #
 # Safe to run twice: every step checks what is already there.
 
@@ -139,8 +140,12 @@ bash "$SCRIPT_DIR/install-skills.sh" --update | sed 's/^/   /'
 echo "4. Safety layer"
 if ! python3 "$PACKAGE_ROOT/safety/install-safety.py" --vault "$VAULT" | sed 's/^/   /'; then
   echo ""
-  echo "The safety layer did not install; stopping so nothing else changes."
-  echo "The message above says why. Fix it and run the updater again."
+  echo "The safety layer did not install, so the updater stopped here."
+  echo "Steps 1 to 3 have already run: the vault tooling, the commit gate and the"
+  echo "skills are updated, with the old copies in $BACKUP."
+  echo "CLAUDE.md, the identity file, the schedules and VERSION are unchanged."
+  echo "The message above says why. Fix it and run the updater again; it is safe"
+  echo "to repeat and carries on from here."
   exit 1
 fi
 
@@ -170,6 +175,10 @@ echo "7. Weekly health check"
 if [[ "$(uname)" == "Darwin" && -f "$SCRIPT_DIR/install-schedule.sh" ]]; then
   if [[ -f "$HOME/Library/LaunchAgents/com.moblee.weekly-lint.plist" ]]; then
     bash "$SCRIPT_DIR/install-schedule.sh" | sed 's/^/   /' || true
+  elif [[ ! -t 0 ]]; then
+    # no Terminal to ask in (for example, run by Claude for a clinic note): never
+    # schedule unasked, and never stop the updater on an unanswerable question
+    echo "   not scheduled (no Terminal to ask in); run bash \"$SCRIPT_DIR/install-schedule.sh\" to add it"
   else
     read -r -p "   Schedule the weekly health check to run every Saturday? [Y/n]: " INSTALL_SCHED
     if [[ ! "$INSTALL_SCHED" =~ ^[Nn]$ ]]; then
@@ -183,8 +192,33 @@ else
   echo "   not available on this system; skipped"
 fi
 
-# ----- 9. version and commit --------------------------------------------------
-echo "8. Version and commit"
+# ----- 9. learning path (optional, v0.5.1) ------------------------------------
+echo "8. Learning path"
+if [[ -f "$VAULT/wiki/Wiki Operations/Moblee Learning Path.md" ]]; then
+  # already chosen: refresh the reminder script and make sure the rule is present;
+  # the lessons page and its Progress list are never replaced
+  if [[ -f "$HOME/Library/LaunchAgents/com.moblee.nightly-tip.plist" ]]; then
+    python3 "$SCRIPT_DIR/install-learning-path.py" --vault "$VAULT" | sed 's/^/   /' || true
+  else
+    python3 "$SCRIPT_DIR/install-learning-path.py" --vault "$VAULT" --no-reminder | sed 's/^/   /' || true
+  fi
+elif [[ -t 0 ]]; then
+  echo "   Thirty-two short lessons on getting the most from this wiki, one an evening,"
+  echo "   with a reminder at 9 pm on a Mac."
+  read -r -p "   Add the learning path? [y/N]: " INSTALL_LESSONS
+  if [[ "$INSTALL_LESSONS" =~ ^[Yy]$ ]]; then
+    python3 "$SCRIPT_DIR/install-learning-path.py" --vault "$VAULT" | sed 's/^/   /' \
+      || echo "   (not fully added; run the updater again later)"
+  else
+    echo "   skipped; add it any time with: python3 \"$SCRIPT_DIR/install-learning-path.py\" --vault \"$VAULT\""
+  fi
+else
+  echo "   not added (the updater was not run in a Terminal window that can ask);"
+  echo "   add it any time with: python3 \"$SCRIPT_DIR/install-learning-path.py\" --vault \"$VAULT\""
+fi
+
+# ----- 10. version and commit -------------------------------------------------
+echo "9. Version and commit"
 echo "$NEW_VERSION" > "$VAULT/VERSION"
 if [[ ! -f "$VAULT/.gitignore" && -f "$PACKAGE_ROOT/vault-template/.gitignore" ]]; then
   cp "$PACKAGE_ROOT/vault-template/.gitignore" "$VAULT/.gitignore"
@@ -195,7 +229,12 @@ if [[ -d "$VAULT/.git" ]]; then
     cd "$VAULT"
     # Only what the update touched is committed; the owner's own uncommitted
     # work stays uncommitted, for them and their Claude to commit as they see fit.
-    git add -A -- scripts dashboard VERSION CLAUDE.md .gitignore .claude wiki/Identity.md 2>/dev/null || true
+    # One path per git add: a single missing path makes git stage nothing at all.
+    # wiki/Index.md is left out on purpose, since it may hold the owner's own
+    # uncommitted edits; a learning-path line added there is committed with them.
+    for p in scripts dashboard VERSION CLAUDE.md .gitignore .claude wiki/Identity.md "wiki/Wiki Operations/Moblee Learning Path.md"; do
+      if [[ -e "$p" ]]; then git add -A -- "$p" 2>/dev/null || true; fi
+    done
     if git diff --cached --quiet; then
       if [[ "$OLD_VERSION" == "$NEW_VERSION" ]]; then
         echo "   already at $NEW_VERSION; nothing to change"

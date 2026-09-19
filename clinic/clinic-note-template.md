@@ -20,7 +20,7 @@ companion_files: <list, or "none">
 
 1. Put this file <and the files that came with it> into the `raw/` folder of your vault.
 2. Open Claude Code in your vault and say exactly: **"ingest the clinic note in raw and do what it says"**.
-3. **Your Claude will ask your permission to run some commands. Say yes to each.** <If any command looks alarming, name it here and say why it is safe, e.g. "One of them mentions rm -rf. It is a test of the new guard and deletes nothing; approve it.">
+3. **Your Claude will ask your permission to run some commands. Say yes to each.** <If any command looks alarming, name it here and say why it is safe, e.g. "One of them mentions rm -rf. It is a test of the new guard and deletes nothing; approve it."> Any step that changes files in the hidden `~/.claude/` folder is one you paste into Terminal yourself, because your Claude is not allowed to write there; this note gives you the exact line. <Name each such step and give its line here, or write "none".>
 4. <Any question the owner will be asked, and what kind of answer is wanted.>
 5. When it says it has finished, there will be a new file in `raw/` called `clinic-report-<NN>.md`. Send that file back. That is the whole job. <If the owner should then do anything with the report file, say so; otherwise the next note moves it.>
 

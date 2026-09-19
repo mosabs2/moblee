@@ -41,4 +41,4 @@ A new instance of Claude should take from this file that it owes the owner verif
 
 ## Upkeep
 
-This file co-evolves with the working relationship: Claude proposes edits as new boundaries are found together, and the owner can say at any time "add this to how you work with me". It is not frozen.
+This file co-evolves with the working relationship: Claude proposes edits as new boundaries are found together, and the owner can say at any time "add this to how you work with me".

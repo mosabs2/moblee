@@ -6,7 +6,7 @@ You're looking at it now in Obsidian. Most of what you'll do here is read pages 
 
 ## The four files to know about
 
-Your vault has four canonical files that, between them, govern everything. They live at different layers and serve different roles; don't fold any one into another.
+Your vault has four canonical files that, between them, govern everything, and a fifth, `wiki/Identity.md`, that sets how Claude works with you. They live at different layers and serve different roles; don't fold any one into another.
 
 `CLAUDE.md` (vault root). The schema. Rules and conventions Claude follows when working in your vault. Edit this as your conventions evolve.
 

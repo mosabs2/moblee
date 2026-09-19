@@ -25,7 +25,7 @@ You almost never need to tell Claude where to put things, what to name files, or
 
 ## Common requests
 
-Here are some examples of the kinds of things you might say, and what Claude will do. These are not commands; they are natural-language descriptions. Claude triggers the relevant skill from the phrasing.
+Here are some examples of the kinds of things you might say, and what Claude will do. You do not need exact wording; Claude triggers the relevant skill from the phrasing.
 
 **"Ingest the new clipping."** Claude looks in `Clippings/` for the most recent file, reads it, updates every relevant wiki page, appends a log entry, moves the source to `Clippings/processed/`, and commits.
 
@@ -50,16 +50,16 @@ A few things require explicit permission. Claude will pause and ask before:
 - Making changes to `CLAUDE.md` itself. (The schema is yours; Claude proposes edits, you accept them.)
 - Pushing to a remote git server. (Local commits happen automatically; pushes do not.)
 
-If you ever feel Claude is being too cautious or too aggressive, the fix is to edit `CLAUDE.md` and adjust the rule. The schema is the source of truth for behaviour; change it and Claude changes.
+If Claude is being too cautious or too aggressive, edit `CLAUDE.md` and adjust the rule. The schema is the source of truth for behaviour; change it and Claude changes.
 
 ## When Claude is wrong
 
 Claude will sometimes get something wrong: it'll mis-attribute a quote, conflate two people with similar names, or misread a date. The verification rule in `CLAUDE.md` (don't invent, don't speculate, mark uncertainty `[Unverified]`) reduces the rate, but does not eliminate it.
 
-When you spot an error, tell Claude. ("That date is wrong. The article is from 14 April, not 15." or "That's MbAr, not me; please re-check.") Claude will correct the wiki page and add a `correction:` entry to the log explaining what changed and why. The log is append-only, so the audit trail of the error and its fix stays visible forever.
+When you spot an error, tell Claude. ("That date is wrong. The article is from 14 April, not 15." or "That quote is from a different person with the same name; please re-check.") Claude will correct the wiki page and add a `correction:` entry to the log explaining what changed and why. The log is append-only, so the error and its fix both stay visible.
 
-This is a feature, not a bug. Corrections are first-class citizens in the log; they make the system more trustworthy over time, not less.
+Corrections are full entries in the log, and over time they make the system more trustworthy.
 
 ## When you're ready
 
-Move on to [04-first-ingest.md](04-first-ingest.md) for a worked example of your first ingest, or jump to [05-skills.md](05-skills.md) for a reference on the four bundled skills.
+Move on to [04-first-ingest.md](04-first-ingest.md) for a worked example of your first ingest, or jump to [05-skills.md](05-skills.md) for a reference on the bundled skills.

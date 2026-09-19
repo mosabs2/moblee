@@ -1768,6 +1768,83 @@ def check_prose_boilerplate(vault: Path, findings: list[str]) -> tuple[int, int]
     return (1, 1)
 
 
+# The two habits The Economist's corpus study (30 July 2026) found Claude uses
+# more than people do: stock contrast constructions, and long Latinate words.
+# Counted per file and scaled per 1,000 words, because one "not X but Y" is
+# ordinary English and the tell is the density.
+CONTRAST_RE = re.compile(
+    r"\bnot only\b[^.]{0,120}?\bbut (?:also )?\b"          # not only ... but also
+    r"|\bnot (?:a |an |the )?[\w'-]+(?: [\w'-]+){0,5},? but\b"  # not X but Y
+    r"|\w, not (?:a |an |the |its |his |their )?[a-z][\w'-]+",   # X, not Y
+    re.IGNORECASE,
+)
+# The study's own examples, then a few long-standing model favourites.
+FANCY_WORD_RE = re.compile(
+    r"\b(significant(?:ly)?|increasingly|consequences|methodolog(?:y|ies)|parameters?|"
+    r"interdependence|reindustriali[sz]ation|robust|pivotal|underscores?|multifaceted|"
+    r"utili[sz]e[sd]?|facilitat(?:e|es|ed|ing))\b",
+    re.IGNORECASE,
+)
+AI_TELL_CONTRAST_PER_K = 4.0   # contrast constructions per 1,000 words before a file is listed
+AI_TELL_FANCY_PER_K = 3.0      # listed words per 1,000 words before a file is listed
+
+
+def check_ai_writing_tells(vault: Path, findings: list[str]) -> tuple[int, int]:
+    """Density sweep (informational, v0.5.1), from The Economist's study "How to
+    spot AI writing" (30 July 2026): lists wiki and outputs/ markdown modified in
+    the last 7 days whose rate of contrast constructions ("not X but Y", "not
+    only... but also", "X, not Y") or listed Latinate words runs above the
+    thresholds, with counts and one example each. Quoted passages are prose of
+    their own and are skipped. Never rewrites."""
+    cutoff = datetime.datetime.now().timestamp() - 7 * 86400
+    listed: list = []
+    scanned = 0
+    for root in (vault / "wiki", vault / "outputs"):
+        if not root.is_dir():
+            continue
+        for path in sorted(root.rglob("*.md")):
+            rel = path.relative_to(vault).as_posix()
+            if rel in PROSE_GUARD_SKIP or any(d in f"/{rel}" for d in PROSE_GUARD_SKIP_DIRS):
+                continue
+            if rel in ("wiki/Identity.md", "wiki/log.md"):
+                continue  # Identity.md is never quoted back at the owner; the log is fixed-format record
+            try:
+                if path.stat().st_mtime < cutoff:
+                    continue
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            prose = "\n".join(
+                l for l in text.splitlines()
+                if l.strip() and not l.strip().startswith((">", "|", "#", "```", "---", "Source:"))
+            )
+            prose = re.sub(r'"[^"\n]{0,300}"|“[^”\n]{0,300}”', " ", prose)  # quoted words are the source's
+            words = len(prose.split())
+            if words < 150:
+                continue
+            scanned += 1
+            contrasts = list(CONTRAST_RE.finditer(prose))
+            fancy = list(FANCY_WORD_RE.finditer(prose))
+            c_rate, f_rate = 1000 * len(contrasts) / words, 1000 * len(fancy) / words
+            if c_rate >= AI_TELL_CONTRAST_PER_K or f_rate >= AI_TELL_FANCY_PER_K:
+                ex = contrasts[0] if contrasts else fancy[0]
+                snippet = prose[max(ex.start() - 30, 0):ex.end() + 30].replace("\n", " ")
+                listed.append((max(c_rate, f_rate), f"`{rel}`: {len(contrasts)} contrast ({c_rate:.1f}/1k), "
+                               f"{len(fancy)} listed words ({f_rate:.1f}/1k), {words} words; e.g. …{snippet}…"))
+    if listed:
+        listed.sort(reverse=True)
+        findings.append(
+            f"- **AI-writing tells (last 7 days, informational)**: {len(listed)} of {scanned} recently-modified file(s) "
+            f"over {AI_TELL_CONTRAST_PER_K:g} contrast constructions or {AI_TELL_FANCY_PER_K:g} listed Latinate words per 1,000 words; "
+            "read and rewrite where the habit is doing the work instead of the argument (top 15):"
+        )
+        for _, line in listed[:15]:
+            findings.append(f"  - {line}")
+    else:
+        findings.append(f"- **AI-writing tells (last 7 days)**: no file over the thresholds across {scanned} recently-modified file(s). ✓")
+    return (1, 1)
+
+
 # ---------------------------------------------------------------------------
 # Duplicate frontmatter blocks (advisory)
 # ---------------------------------------------------------------------------
@@ -1962,6 +2039,9 @@ def main() -> int:
 
     pass_, tot = check_prose_boilerplate(vault, findings)
     scorecard.append(("Prose boilerplate sweep (informational)", pass_, tot))
+
+    pass_, tot = check_ai_writing_tells(vault, findings)
+    scorecard.append(("AI-writing tells sweep (informational)", pass_, tot))
 
     pass_, tot = check_correction_rate(vault, findings)
     scorecard.append(("Correction rate (informational)", pass_, tot))

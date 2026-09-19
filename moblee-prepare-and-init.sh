@@ -191,7 +191,7 @@ ${BOLD}Option A: push to GitHub${RESET}
     git branch -M main
     git push -u origin main
 
-  Then send Mubarak the repo URL and tell him:
+  Then send the person you are giving it to the repository URL and these steps:
 
     1. git clone <repo-url> ~/moblee
     2. cd ~/moblee
@@ -203,16 +203,16 @@ ${BOLD}Option B: zip and AirDrop${RESET}
   cd "$(dirname "$PACKAGE_ROOT")"
   zip -r moblee-v0.1.zip "$(basename "$PACKAGE_ROOT")" -x "*.discarded/*" -x "*.DS_Store"
 
-  Then AirDrop ${BOLD}moblee-v0.1.zip${RESET} to Mubarak and tell him:
+  Then AirDrop ${BOLD}moblee-v0.1.zip${RESET} to the person you are giving it to, with these steps:
 
     1. Double-click the zip to unpack (it produces a 'moblee' folder)
-    2. cd ~/Downloads/moblee   (or wherever he unpacks it)
+    2. cd ~/Downloads/moblee   (or wherever it was unpacked)
     3. bash scripts/install.sh
     4. (optionally) bash scripts/install-skills.sh
 
-${BOLD}Either way${RESET}, the install.sh script asks Mubarak for his name and a vault
+${BOLD}Either way${RESET}, the install.sh script asks for a name and a vault
 name, lays down the vault, and substitutes the placeholders. install-skills.sh
-copies the bundled skills into ~/.claude/skills/ on his machine.
+copies the bundled skills into ~/.claude/skills/ on their machine.
 
 ${DIM}Repo location: $PACKAGE_ROOT${RESET}
 ${DIM}Latest commit: $COMMIT_HASH${RESET}

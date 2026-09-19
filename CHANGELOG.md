@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.5.1 — 19 September 2026
+
+A refinement release: fixes from the first remote support sessions, an optional learning path, and a documentation pass for new readers.
+
+### Added
+
+- **The learning path** (`learning-path/`, optional). Thirty-two short lessons, one an evening, on getting the most from the wiki: the daily habits first, then housekeeping, the thinking tools, the things that produce something to show, and the habits that hold it together. Say "lesson" and Claude gives the next one in its own words, tied to what the log shows you have been doing, and records it. `scripts/install-learning-path.py` adds the lessons page, the coaching rule in `CLAUDE.md` and, on a Mac, a reminder at nine each evening (`com.moblee.nightly-tip`); the installer and the updater ask first, and it can be added later by hand (`docs/08-updating.md`). Mac with Claude Code only; the Windows track does not include it. The page, with its record of lessons given, is never replaced.
+- **A clinic-files rule** in `CLAUDE.md`: a file in `raw/` marked `do_not_ingest: true` is never ingested, and any clinic step that writes into `~/.claude/` is handed to the owner as a Terminal paste. The updater adds it to existing vaults.
+- **A plain-prose rule** in `CLAUDE.md`'s house style: prefer the plain word to the Latinate one, use "not X but Y" and its relatives only to correct a likely misreading, break long "and"-chained sentences. These are the habits a 2026 corpus study (The Economist, "How to spot AI writing", 30 July 2026) measured as more frequent in Claude's prose than in people's. The updater adds it to existing vaults.
+- **An AI-writing sweep** in the weekly lint: files edited that week with a high rate of those constructions or words are listed for a read. Informational; it never rewrites.
+
+### Changed
+
+- **The updating guide** no longer says a clinic note removes the Terminal entirely: the safety step, which writes into `~/.claude/`, is always a paste by the owner. The clinic-note template says the same at its step 3.
+- **The updater no longer stops when there is no Terminal to answer its questions** (for example when Claude runs it for a clinic note): the weekly-check and learning-path questions are skipped with a note saying how to add them, instead of the whole update halting at the first unanswered prompt.
+- **The updater's message when the safety layer fails** now says what has already changed by that point (tooling, commit gate and skills, with backups) and what has not.
+- **Documentation**: every page a new user reads was revised for plain, professional English with no personal references; the stale "four skills" count corrected to seven; the Windows guide's inbox path corrected to `raw/`.
+
 ## v0.5.0 — 16 September 2026
 
 The safety release. It exists because a recipient's vault lost a folder the day after its first housekeeping run, and the review that followed found that the three things protecting the maintainer's own vault (a delete guard, a permission list, and a written identity for Claude) had never shipped: all three lived outside the vault, and the v0.4 port had taken the vault as the boundary of the pattern. The rule from here on: a recipient gets what the maintainer has, or the pack does not ship.
@@ -17,7 +35,7 @@ The safety release. It exists because a recipient's vault lost a folder the day 
 - **`scripts/log-append.py`**, the one way a log entry is written: it reads the clock itself and emits the one correct header form, retiring hand-composed timestamps.
 - **The commit gate wired through `scripts/hooks/`** and `git config core.hooksPath`, so the gate is versioned and updates reach it; nothing is written into `.git/hooks/` any more. Gate gains **G6**: a wikilink added to `wiki/` must resolve (folder links advisory).
 - **Five more lint checks**, generalised: frontmatter schema (cluster notes, daily notes), duplicate frontmatter, session-metadata footers, prose boilerplate, skills-layer weight.
-- **`clinic/`**: the maintainer's tools for looking after a vault remotely, by post: a clinic-note template, a checker that runs every command in a note through the guard, and the ten-point standard a note must pass before it is sent.
+- **`clinic/`**: the maintainer's tools for looking after a vault remotely by exchanging files: a clinic-note template, a checker that runs every command in a note through the guard, and the ten-point standard a note must pass before it is sent.
 - `docs/08-updating.md` and `docs/09-safety.md`.
 
 ### Changed
@@ -152,4 +170,4 @@ Initial public release.
 - `START_HERE.md` for one-paste Claude-guided setup.
 - MIT license.
 
-Shipped to Mubarak as the first user on 15 May 2026.
+First shipped on 15 May 2026.

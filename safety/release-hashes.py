@@ -38,6 +38,8 @@ FILES = [
     "scripts/update.sh",
     "scripts/install-skills.sh",
     "scripts/install-schedule.sh",
+    "scripts/install-learning-path.py",
+    "learning-path/moblee-tip.sh",
     "scripts/lint-v2.py",
     "scripts/vault-gate.py",
     "scripts/log-append.py",
