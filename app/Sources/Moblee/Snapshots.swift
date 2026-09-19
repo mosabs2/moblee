@@ -35,15 +35,25 @@ enum Snapshots {
         }
     }
 
+    /// `--dark` draws the screens as they look in dark mode.
+    private static let dark = CommandLine.arguments.contains("--dark")
+
     private static func draw(_ flow: Flow, _ name: String, to folder: URL) {
         let view = RootView()
             .environmentObject(flow)
             .environmentObject(flow.install)
             .environment(\.stillPicture, true)
+            .environment(\.colorScheme, dark ? .dark : .light)
             .frame(width: 720, height: 520)
         let renderer = ImageRenderer(content: view)
         renderer.scale = 2
-        guard let image = renderer.nsImage,
+        var drawn: NSImage?
+        if let look = NSAppearance(named: dark ? .darkAqua : .aqua) {
+            look.performAsCurrentDrawingAppearance { drawn = renderer.nsImage }
+        } else {
+            drawn = renderer.nsImage
+        }
+        guard let image = drawn,
               let tiff = image.tiffRepresentation,
               let rep = NSBitmapImageRep(data: tiff),
               let png = rep.representation(using: .png, properties: [:]) else {
