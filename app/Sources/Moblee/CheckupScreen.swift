@@ -34,8 +34,25 @@ final class Checkup: ObservableObject {
     }()
 
     private var timer: Timer?
+    private var looking = false
 
-    init() { look() }
+    /// Whether Apple's tools are there, as last found out. Finding out means
+    /// running a small program and waiting for it, and waiting on the main
+    /// thread while SwiftUI is drawing a screen aborts the app (the crash of
+    /// 19 September 2026). So the question is only ever asked in the
+    /// background, and the answer is kept here.
+    private var toolsInstalled = false
+
+    /// Picture-file drawing has no time to wait for a background answer, so it
+    /// finds out once, before any drawing starts, and leaves the answer here.
+    static var knownBeforeDrawing: Bool?
+
+    init() {
+        if let known = Self.knownBeforeDrawing {
+            toolsInstalled = known
+            apply()
+        }
+    }
 
     var readyToGoOn: Bool {
         needs.filter { !$0.optional }.allSatisfy { present[$0.name] == true }
@@ -51,11 +68,27 @@ final class Checkup: ObservableObject {
     func stop() { timer?.invalidate(); timer = nil }
 
     func look() {
+        guard !looking else { return }
+        looking = true
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let tools = Checkup.developerToolsInstalled()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.looking = false
+                    self.toolsInstalled = tools
+                    self.apply()
+                }
+            }
+        }
+    }
+
+    private func apply() {
         for need in needs {
             let found: Bool
             switch need.kind {
             case .developerTools:
-                found = !pretendMissing.contains("tools") && Self.developerToolsInstalled()
+                found = !pretendMissing.contains("tools") && toolsInstalled
             case .claude:
                 found = !pretendMissing.contains("claude")
                     && Self.appInstalled("com.anthropic.claudefordesktop")
@@ -86,7 +119,8 @@ final class Checkup: ObservableObject {
         }
     }
 
-    static func developerToolsInstalled() -> Bool {
+    /// Never call this on the main thread: it waits for a program to finish.
+    nonisolated static func developerToolsInstalled() -> Bool {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/xcode-select")
         p.arguments = ["-p"]
