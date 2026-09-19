@@ -1,15 +1,15 @@
 ---
 name: compact
-description: On-demand compaction pass that trims and stratifies the user's wiki vault to hold the per-session token budget down (detect the vault at runtime — the MOBLEE_VAULT environment variable, then ~/.config/moblee/vault-path, then walking up from the working directory for a folder containing wiki/Index.md). It is the executor half of the compaction system; the detector half is the lint-v2 "Vault weight" guard (scripts/lint-v2.py), which flags files over their token caps but never trims. Trigger when the user says "compact the wiki", "trim the wiki", "run a compaction pass", "compact", "the vault's heavy", "compact _context", "slim the Index", "trim [page]", "stratify [page]", or when the user tells you to act on a vault-weight flag a lint run raised. Two halves with different autonomy: (1) the deterministic, reversible MECHANICAL rotations — rotating _context.md refresh notes past the latest three into the Context Archive and archiving closed Active-thread / Open-decision / Watch-list entries to a one-line strikethrough index run unattended, because they only move text into the archive page; the two mechanical moves that take something off a page or out of a folder (dropping aged strikethrough lines from _context.md, sweeping stray files from the outputs/ root into category subfolders) are LISTED first and run only after the owner says yes; (2) the lossy PROSE trims (condensing a verbose section, lifting detail to a wiki/Wiki Operations/ file behind a stub-plus-wikilink, re-slimming Index.md to one line per page) are proposed with before/after token weights and executed only on the user's explicit sign-off, in-session, with a reviewable git diff and a commit. Triages by token weight against the caps (_context.md ≤ 12k, Index.md ≤ 8k, CLAUDE.md ≤ 10k, wiki pages flagged > 25k); goes after the worst offenders, not every page. Hard guardrails: additive-to-archive never deletive (no sourced fact, figure, date, attribution or wikilink is dropped — it moves to the archive, a Wiki Operations file, or stays); the append-only log.md is never touched; any restricted folders are excluded; nothing lossy is autonomous. Do not trigger on lint health-checks (that is lint), on raw/ ingests (ingest), on reflective analysis (brain), on PDF renders (wiki-to-pdf), or on capture-to-raw (wiki-capture).
+description: On-demand compaction pass that trims and stratifies the user's wiki vault to hold the per-session token budget down (detect the vault at runtime; the MOBLEE_VAULT environment variable, then ~/.config/moblee/vault-path, then walking up from the working directory for a folder containing wiki/Index.md). It is the executor half of the compaction system; the detector half is the lint-v2 "Vault weight" guard (scripts/lint-v2.py), which flags files over their token caps but never trims. Trigger when the user says "compact the wiki", "trim the wiki", "run a compaction pass", "compact", "the vault's heavy", "compact _context", "slim the Index", "trim [page]", "stratify [page]", or when the user tells you to act on a vault-weight flag a lint run raised. Two halves with different autonomy: (1) the deterministic, reversible MECHANICAL rotations (rotating _context.md refresh notes past the latest three into the Context Archive and archiving closed Active-thread / Open-decision / Watch-list entries to a one-line strikethrough index) run unattended, because they only move text into the archive page; the two mechanical moves that take something off a page or out of a folder (dropping aged strikethrough lines from _context.md, sweeping stray files from the outputs/ root into category subfolders) are LISTED first and run only after the owner says yes; (2) the lossy PROSE trims (condensing a verbose section, lifting detail to a wiki/Wiki Operations/ file behind a stub-plus-wikilink, re-slimming Index.md to one line per page) are proposed with before/after token weights and executed only on the user's explicit sign-off, in-session, with a reviewable git diff and a commit. Triages by token weight against the caps (_context.md ≤ 12k, Index.md ≤ 8k, CLAUDE.md ≤ 10k, wiki pages flagged > 25k); goes after the worst offenders, not every page. Hard guardrails: additive-to-archive never deletive (no sourced fact, figure, date, attribution or wikilink is dropped; it moves to the archive, a Wiki Operations file, or stays); the append-only log.md is never touched; any restricted folders are excluded; nothing lossy is autonomous. Do not trigger on lint health-checks (that is lint), on raw/ ingests (ingest), on reflective analysis (brain), on PDF renders (wiki-to-pdf), or on capture-to-raw (wiki-capture).
 ---
 
-# compact — holding the wiki's token budget down
+# compact: holding the wiki's token budget down
 
 The compaction executor. Its job is to keep the vault light so every session starts cheap and every page is cheap to touch, without losing anything from the record. It is the deliberate, on-demand counterpart to the **detector**: the `lint-v2.py` "Vault weight" guard reports which files are over their caps; `compact` is what acts on that report, when the user asks.
 
 ## Finding the vault
 
-Detect the vault root at runtime, in this order: the `MOBLEE_VAULT` environment variable; the path recorded in `~/.config/moblee/vault-path` (the Moblee installer writes it); otherwise walk up from the current working directory looking for a folder containing `wiki/Index.md`. If none of those finds a vault, say so plainly and stop — do not guess a path.
+Detect the vault root at runtime, in this order: the `MOBLEE_VAULT` environment variable; the path recorded in `~/.config/moblee/vault-path` (the Moblee installer writes it); otherwise walk up from the current working directory looking for a folder containing `wiki/Index.md`. If none of those finds a vault, say so plainly and stop; do not guess a path.
 
 ## Why this exists
 
@@ -17,31 +17,31 @@ The session-start read (`CLAUDE.md` + `wiki/_context.md`) is paid in tokens at t
 
 ## The Context Archive
 
-The cold-storage companion for `_context.md` lives at `wiki/Wiki Operations/Context Archive.md`. **If it does not exist yet** (a fresh vault has no `Wiki Operations/` folder), create it on the first rotation: make the folder, create the page with a one-paragraph header explaining that it holds rotated `_context.md` refresh notes and the full text of closed threads and decisions, and give it two sections — `## Refresh-note history` and `## Closed threads and decisions`. Add a one-line entry for the new subfolder to `Index.md`'s Subfolder pages section, and link the archive from `_context.md` so it is reachable from the live file.
+The cold-storage companion for `_context.md` lives at `wiki/Wiki Operations/Context Archive.md`. **If it does not exist yet** (a fresh vault has no `Wiki Operations/` folder), create it on the first rotation: make the folder, create the page with a one-paragraph header explaining that it holds rotated `_context.md` refresh notes and the full text of closed threads and decisions, and give it two sections: `## Refresh-note history` and `## Closed threads and decisions`. Add a one-line entry for the new subfolder to `Index.md`'s Subfolder pages section, and link the archive from `_context.md` so it is reachable from the live file.
 
 ## The two halves, by autonomy
 
 Compaction is split by risk. The two archive-only moves run on their own; anything that removes a line from a page or relocates a file is listed and confirmed first; the lossy moves never run without sign-off.
 
-### Half one — MECHANICAL rotations (deterministic, reversible)
+### Half one: MECHANICAL rotations (deterministic, reversible)
 
 These follow existing rules exactly and drop no information. Two of them only move text into the archive page and run unattended (beyond the commit at the end); the other two take something off a page or out of a folder, so the skill **lists exactly what it would do and waits for the owner's yes** before doing it:
 
 1. **`_context.md` refresh-note rotation** (unattended). Keep the **latest three** *Last refreshed / Previous refresh* notes inline (only the most recent at full length, the two prior compressed to one-sentence headlines); lift the rest to the Context Archive under *Refresh-note history* (newest at the top of that list).
 2. **Closed-entry archiving** (unattended). When an Active-thread / Open-decision / Watch-list entry has closed, move its **full text** to the Context Archive (under the matching closed section) and leave a **one-line strikethrough index entry** inline on `_context.md` (title, close date, archive link). Open entries stay inline in full.
 3. **Tombstone aging** (list, then ask). Strikethrough index lines whose close date is more than ~30 days old are candidates for dropping from `_context.md` entirely, the archive staying the sole record. Before proposing any line, verify its full text exists in the Context Archive (grep the title); a line with no archive copy gets copied there verbatim first. Then present the candidate lines as a short list (title and close date for each) and ask for a yes; drop only the lines the owner confirms. If the drop empties a section, leave "None currently open" plus the archive link in its place.
-4. **`outputs/` root sweep** (list, then ask). Stray render artefacts at the `outputs/` root are candidates for moving into category subfolders (create sensible ones — `reports/`, `lint/`, and so on — if the vault has none yet), leaving genuinely recent one-offs at root as the "what's new" view. Present the proposed moves as a list (each file and its destination folder) and ask for a yes; move only what the owner confirms. Never delete anything from `outputs/`.
+4. **`outputs/` root sweep** (list, then ask). Stray render artefacts at the `outputs/` root are candidates for moving into category subfolders (create sensible ones, `reports/`, `lint/`, and so on, if the vault has none yet), leaving genuinely recent one-offs at root as the "what's new" view. Present the proposed moves as a list (each file and its destination folder) and ask for a yes; move only what the owner confirms. Never delete anything from `outputs/`.
 
-### Half two — PROSE trims (lossy, judgement-gated, sign-off required)
+### Half two: PROSE trims (lossy, judgement-gated, sign-off required)
 
 These condense or relocate real prose, so they are **proposed, not done**: name the specific cut, show the before/after token weight, wait for the user's yes, then execute in-session with a `git diff` they can read:
 
-1. **Section condensing.** Tighten a verbose section that has accreted repetition, while preserving every sourced fact, figure, date, attribution and wikilink in it. If a condense would risk dropping a fact, don't do it — lift instead.
+1. **Section condensing.** Tighten a verbose section that has accreted repetition, while preserving every sourced fact, figure, date, attribution and wikilink in it. If a condense would risk dropping a fact, don't do it; lift instead.
 2. **Stratify to a `Wiki Operations/` file.** When a section is long but load-bearing, move the detail to a dedicated `wiki/Wiki Operations/<Topic>.md` file and leave a **three-to-four-sentence summary plus a wikilink** in place.
 3. **Cluster-note / subfolder extraction.** For an over-threshold synthesis page, move dated per-source material into the page's cluster-note subfolder (the `wiki/<Topic> Cluster Notes/` pattern from the vault's `CLAUDE.md`), leaving the synthesis plus a thematically grouped index.
 4. **`Index.md` re-slimming.** Strip `Index.md` back toward one short line per page; lift any multi-paragraph "Sources Ingested"-style accretion off it (chronology belongs to `log.md`, not the Index).
 
-## Triage — by weight, not by breadth
+## Triage: by weight, not by breadth
 
 Run `python3 scripts/lint-v2.py` (or read the latest `outputs/lint/lint-v2-*.md`) for the current weight numbers, and go after the worst offenders only. The caps:
 
@@ -51,7 +51,7 @@ Run `python3 scripts/lint-v2.py` (or read the latest `outputs/lint/lint-v2-*.md`
 | `wiki/Index.md` | ≤ 8k tok | re-slim to one line per page (gated) |
 | `CLAUDE.md` | ≤ 10k tok | stratify a section to a `Wiki Operations/` file (gated) |
 | top-level `wiki/*.md` | flag > 25k tok | cluster-note / subfolder / stub-plus-link extraction (gated) |
-| `wiki/log.md` | annual rollover | leave it — append-only, tailed not loaded; an annual rollover to `wiki/log-archive/` bounds it |
+| `wiki/log.md` | annual rollover | leave it: append-only, tailed not loaded; an annual rollover to `wiki/log-archive/` bounds it |
 
 Token counts are estimated as characters divided by four, matching how the lint's guard estimates them. Most pages are fine and should not be touched. A compaction pass is surgical: name the few files over cap, act on those.
 

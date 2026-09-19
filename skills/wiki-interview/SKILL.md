@@ -104,7 +104,7 @@ House style applies: British English, no em dashes, no emojis, absolute dates on
 
 **Contradictions with existing content: detect, surface, preserve.** When an answer contradicts what the wiki already says, never overwrite silently. Detection is a pattern check, not deep analysis: flag only when the same named entities, dates or numbers appear with an explicit negation, and always accept an explicit "this is a correction" from the user. Surface it before writing:
 
-> Your answer says [X] about [topic]; the wiki currently says [Y] on [page section]. Treat the new answer as: (i) **supersede** — the new text replaces the old, the old preserved in the log entry; (ii) **revise** — both versions stay on the page, the new one flagged as latest; (iii) **hold** — no change to the page, the contradiction recorded in the log for later resolution.
+> Your answer says [X] about [topic]; the wiki currently says [Y] on [page section]. Treat the new answer as: (i) **supersede**: the new text replaces the old, the old preserved in the log entry; (ii) **revise**: both versions stay on the page, the new one flagged as latest; (iii) **hold**: no change to the page, the contradiction recorded in the log for later resolution.
 
 Whichever the user picks, leave an italicised audit note at the point of change and quote the prior text in the log entry.
 
