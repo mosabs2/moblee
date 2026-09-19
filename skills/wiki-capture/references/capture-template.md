@@ -1,8 +1,8 @@
 # <Short title: noun phrase, not a sentence; matches the filename slug>
 
 **Captured**: <YYYY-MM-DD HH:MM ±TZ> (<runtime: Claude Code / Cowork / claude.ai>; <one line on how the content was produced, e.g. "brain `synthesise` pattern run read-only against the wiki", "query answer", "chat exchange">)
-**Target page**: [[Page Name]] — <one line on why this is the primary target>. <Secondary targets, if any, in priority order: [[Other Page]] — <one line>.> These are best-guess pointers, not binding instructions; the ingest pass makes the final call. If genuinely unsure, say so rather than guessing.
-**Source context**: <What prompted the capture. What the user asked. Any facts or decisions the user supplied in conversation that the content below depends on — record these explicitly so the ingest pass has them. Note here if sensitive details were excluded.>
+**Target page**: [[Page Name]] (<one line on why this is the primary target>). <Secondary targets, if any, in priority order: [[Other Page]] (<one line>).> These are best-guess pointers, not binding instructions; the ingest pass makes the final call. If genuinely unsure, say so rather than guessing.
+**Source context**: <What prompted the capture. What the user asked. Any facts or decisions the user supplied in conversation that the content below depends on; record these explicitly so the ingest pass has them. Note here if sensitive details were excluded.>
 
 ## Content
 
@@ -17,4 +17,4 @@
 
 <Optional: any open questions for the user to resolve at ingest time; any corpus-integrity notes noticed in passing.>
 
-*<Provenance footer: one italic line recording what the capture was composed from — the pages, sources, or conversation it draws on — and that it awaits an ingest pass.>*
+*<Provenance footer: one italic line recording what the capture was composed from (the pages, sources, or conversation it draws on) and that it awaits an ingest pass.>*

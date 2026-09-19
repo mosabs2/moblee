@@ -1,6 +1,6 @@
 ---
 name: galaxy
-description: Rebuild and open the Wiki Galaxy, the offline 3D knowledge-graph view of the user's wiki vault (detect the vault at runtime — the MOBLEE_VAULT environment variable, then ~/.config/moblee/vault-path, then walking up from the working directory for a folder containing wiki/Index.md). Trigger when the user says "galaxy", "/galaxy", "open the galaxy", "show me the galaxy", "wiki galaxy", "show me my brain in 3D", or any clear variant. Rebuilds the graph data fresh from the wiki with scripts/wiki-galaxy/build.py so the view always reflects current state, then opens the viewer in the user's default browser. Read-only on wiki/; writes only outputs/galaxy/. Do not trigger on lint requests, vault-stats requests, or brain-pattern reflective queries.
+description: Rebuild and open the Wiki Galaxy, the offline 3D knowledge-graph view of the user's wiki vault (detect the vault at runtime; the MOBLEE_VAULT environment variable, then ~/.config/moblee/vault-path, then walking up from the working directory for a folder containing wiki/Index.md). Trigger when the user says "galaxy", "/galaxy", "open the galaxy", "show me the galaxy", "wiki galaxy", "show me my brain in 3D", or any clear variant. Rebuilds the graph data fresh from the wiki with scripts/wiki-galaxy/build.py so the view always reflects current state, then opens the viewer in the user's default browser. Read-only on wiki/; writes only outputs/galaxy/. Do not trigger on lint requests, vault-stats requests, or brain-pattern reflective queries.
 ---
 
 # Wiki Galaxy launcher (/galaxy)
@@ -9,7 +9,7 @@ Open the 3D knowledge-graph view of the wiki, always freshly built. Every wiki p
 
 ## Finding the vault
 
-Detect the vault root at runtime, in this order: the `MOBLEE_VAULT` environment variable; the path recorded in `~/.config/moblee/vault-path` (the Moblee installer writes it); otherwise walk up from the current working directory looking for a folder containing `wiki/Index.md`. If none of those finds a vault, say so plainly and stop — do not guess a path. The build script performs the same detection itself and exits with a plain-English message if it cannot find the vault, so the two agree.
+Detect the vault root at runtime, in this order: the `MOBLEE_VAULT` environment variable; the path recorded in `~/.config/moblee/vault-path` (the Moblee installer writes it); otherwise walk up from the current working directory looking for a folder containing `wiki/Index.md`. If none of those finds a vault, say so plainly and stop; do not guess a path. The build script performs the same detection itself and exits with a plain-English message if it cannot find the vault, so the two agree.
 
 ## Steps
 
