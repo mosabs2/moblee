@@ -134,7 +134,13 @@ fi
 
 # ----- 4. skills --------------------------------------------------------------
 echo "3. Skills"
-bash "$SCRIPT_DIR/install-skills.sh" --update | sed 's/^/   /'
+if ! bash "$SCRIPT_DIR/install-skills.sh" --update | sed 's/^/   /'; then
+  echo ""
+  echo "The skills did not update, so the updater stopped here. The vault tooling"
+  echo "and the commit gate are already updated (old copies in $BACKUP)."
+  echo "The message above says why. Fix it and run the updater again; it is safe to repeat."
+  exit 1
+fi
 
 # ----- 5. safety --------------------------------------------------------------
 echo "4. Safety layer"
@@ -151,7 +157,13 @@ fi
 
 # ----- 6. CLAUDE.md -----------------------------------------------------------
 echo "5. CLAUDE.md"
-python3 "$SCRIPT_DIR/patch-claude-md.py" --vault "$VAULT" | sed 's/^/   /'
+if ! python3 "$SCRIPT_DIR/patch-claude-md.py" --vault "$VAULT" | sed 's/^/   /'; then
+  echo ""
+  echo "CLAUDE.md could not be brought up to date, so the updater stopped here."
+  echo "The tooling, commit gate, skills and safety layer are already updated."
+  echo "The message above says why. Fix it and run the updater again; it is safe to repeat."
+  exit 1
+fi
 
 # ----- 7. identity and memories ----------------------------------------------
 echo "6. Identity file and starting memories"
@@ -180,7 +192,7 @@ if [[ "$(uname)" == "Darwin" && -f "$SCRIPT_DIR/install-schedule.sh" ]]; then
     # schedule unasked, and never stop the updater on an unanswerable question
     echo "   not scheduled (no Terminal to ask in); run bash \"$SCRIPT_DIR/install-schedule.sh\" to add it"
   else
-    read -r -p "   Schedule the weekly health check to run every Saturday? [Y/n]: " INSTALL_SCHED
+    read -r -p "   Schedule the weekly health check to run every Saturday? [Y/n]: " INSTALL_SCHED || INSTALL_SCHED="n"  # no answer (end of input): never schedule unasked, never stop
     if [[ ! "$INSTALL_SCHED" =~ ^[Nn]$ ]]; then
       bash "$SCRIPT_DIR/install-schedule.sh" | sed 's/^/   /' \
         || echo "   (schedule not installed; ask Claude to set it up later)"
@@ -205,7 +217,7 @@ if [[ -f "$VAULT/wiki/Wiki Operations/Moblee Learning Path.md" ]]; then
 elif [[ -t 0 ]]; then
   echo "   Thirty-two short lessons on getting the most from this wiki, one an evening,"
   echo "   with a reminder at 9 pm on a Mac."
-  read -r -p "   Add the learning path? [y/N]: " INSTALL_LESSONS
+  read -r -p "   Add the learning path? [y/N]: " INSTALL_LESSONS || INSTALL_LESSONS=""  # no answer: skip, and carry on
   if [[ "$INSTALL_LESSONS" =~ ^[Yy]$ ]]; then
     python3 "$SCRIPT_DIR/install-learning-path.py" --vault "$VAULT" | sed 's/^/   /' \
       || echo "   (not fully added; run the updater again later)"

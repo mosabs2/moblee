@@ -120,6 +120,9 @@ HEADER_ANY = re.compile(r"^## \[(\d{4}-\d{2}-\d{2})([^\]]*)\] ")
 SUPERLATIVE = re.compile(
     r"\b(first|largest|biggest|densest|smallest|longest|highest ever|lowest ever|on record|never before|the only)\b",
     re.IGNORECASE)
+# Pages the pack itself installs. Their wording is the pack's, so a style advisory on
+# them is noise the owner can do nothing about (an update printed ten at once in v0.5.1).
+PACK_PAGES = {"wiki/Identity.md", "wiki/Wiki Operations/Moblee Learning Path.md"}  # exempt from W1 only in the commit that adds them
 WIKILINK = re.compile(r"\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]")
 # G6 link-resolution exemptions, kept in step with scripts/lint-v2.py.
 ATTACHMENT_SUFFIXES = {
@@ -295,6 +298,7 @@ def main() -> int:
                         continue
                     hard.append(f"G6 {f} adds a link to a page that does not exist: [[{target[:60]}]]")
 
+    newly_added = set(git("diff", "--cached", "--name-only", "--diff-filter=A").splitlines())
     # W1 — superlatives in added prose (advisory)
     # Scope: wiki/ only. raw/ and Clippings/ hold source material the user
     # dropped in and Claude must not rewrite, so flagging its wording is noise;
@@ -305,6 +309,8 @@ def main() -> int:
             continue
         if not f.startswith("wiki/"):
             continue
+        if f in PACK_PAGES and f in newly_added:
+            continue  # the pack's own first copy of the page (v0.5.2); later edits are checked as usual
         for line in added_lines(f):
             if line.lstrip().startswith(("#", "|")):
                 continue

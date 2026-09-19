@@ -100,7 +100,7 @@ moblee/
 │   ├── 07-windows-workflow.md ← Windows-track day-to-day workflow (v0.2)
 │   ├── 08-updating.md         ← how to update a vault without touching its content (v0.5)
 │   └── 09-safety.md           ← why Claude cannot delete your files (v0.5)
-└── CHANGELOG.md               ← release notes, v0.1 to v0.5.1
+└── CHANGELOG.md               ← release notes, v0.1 to v0.5.2
 ```
 
 ## License
