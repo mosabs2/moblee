@@ -78,18 +78,3 @@ struct TalkDiagram: View {
     }
 }
 
-struct ComingNextScreen: View {
-    @EnvironmentObject var flow: Flow
-
-    var body: some View {
-        ScreenFrame(
-            sentence: "The next screens are being built.",
-            buttonTitle: "Close",
-            action: { NSApplication.shared.terminate(nil) }
-        ) {
-            Image(systemName: "hammer.fill")
-                .font(.system(size: 90))
-                .foregroundStyle(Theme.accent.opacity(0.8))
-        }
-    }
-}
