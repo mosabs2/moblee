@@ -200,7 +200,7 @@ if [[ "$(uname)" == "Darwin" && -f "$SCRIPT_DIR/install-schedule.sh" ]]; then
   echo ""
   echo "The weekly health check can run by itself every Saturday morning, so"
   echo "the vault is checked without anyone having to remember."
-  read -r -p "Schedule the weekly health check? [Y/n]: " INSTALL_SCHED
+  read -r -p "Schedule the weekly health check? [Y/n]: " INSTALL_SCHED || INSTALL_SCHED="n"  # no answer: never schedule unasked, never stop half-way
   if [[ ! "$INSTALL_SCHED" =~ ^[Nn]$ ]]; then
     bash "$SCRIPT_DIR/install-schedule.sh" \
       || echo "  (schedule not installed; ask Claude to set it up later)"
@@ -226,7 +226,7 @@ if [[ "$(uname)" == "Darwin" && -f "$PACKAGE_ROOT/voice/install-voice.py" ]]; th
   echo "The voice stack reads Claude's replies aloud and nudges you audibly"
   echo "when Claude is waiting on you. Free (built-in macOS voice), upgradable"
   echo "to ElevenLabs later. See voice/README.md."
-  read -r -p "Install the voice stack? [y/N]: " INSTALL_VOICE
+  read -r -p "Install the voice stack? [y/N]: " INSTALL_VOICE || INSTALL_VOICE=""
   if [[ "$INSTALL_VOICE" =~ ^[Yy]$ ]]; then
     python3 "$PACKAGE_ROOT/voice/install-voice.py" || echo "  (voice install failed; see voice/README.md)"
   fi
@@ -234,7 +234,7 @@ fi
 
 # ----- optional: install the vault shell function -----------------------------
 echo ""
-read -r -p "Append the \`vault\` shell function to ~/.zshrc? [y/N]: " INSTALL_VAULT_FN
+read -r -p "Append the \`vault\` shell function to ~/.zshrc? [y/N]: " INSTALL_VAULT_FN || INSTALL_VAULT_FN=""
 if [[ "$INSTALL_VAULT_FN" =~ ^[Yy]$ ]]; then
   # write the configured vault path to ~/.config/moblee/vault-path so vault.sh
   # picks it up

@@ -4,7 +4,7 @@ You never reinstall Moblee, and you never rebuild your wiki. Your pages, your lo
 
 ## What an update changes, and what it never touches
 
-An update replaces the scripts in `scripts/` and `dashboard/`, the skills in your Claude skills folder, the safety guard, and adds any new rules to `CLAUDE.md` by inserting them at named places rather than replacing the file. The only thing it ever adds inside `wiki/` is `wiki/Identity.md`, and only if you do not have one; it never touches your pages, `raw/`, `Clippings/`, `Daily Notes/` or the log, and it commits only the files it changed, leaving any work of yours that was not yet committed exactly as it was. Every file it replaces is first copied to `~/.config/moblee/backups/<date and time>/`, so nothing is lost even if you change your mind.
+An update replaces the scripts in `scripts/` and `dashboard/`, the skills in your Claude skills folder, the safety guard, and adds any new rules to `CLAUDE.md` by inserting them at named places rather than replacing the file. Inside `wiki/` it adds only `wiki/Identity.md` if you do not have one and, if you choose the learning path, its lessons page and one line for it in `wiki/Index.md`; it never touches your pages, `raw/`, `Clippings/`, your daily notes or the log (it only adds the `Daily Notes/_TEMPLATE.md` template if you have none). It commits the files it changed and leaves any work of yours that was not yet committed exactly as it was; the one exception is the learning-path line in `wiki/Index.md`, which it leaves uncommitted so that it goes in with your own next edits. Every file it replaces is first copied to `~/.config/moblee/backups/<date and time>/`, so nothing is lost even if you change your mind.
 
 ## How to update
 
@@ -16,7 +16,7 @@ bash scripts/update.sh
 ```
 
 3. It finds your vault by itself (it remembers where the installer put it). If it cannot, run `bash scripts/update.sh` followed by the path to your vault.
-4. Answer the one question it may ask (whether to schedule the weekly health check). Everything else is automatic.
+4. Answer the questions it may ask: whether to schedule the weekly health check, and whether to add the learning path. Wait for each question to appear before typing. Everything else is automatic.
 5. When it says "Updated to", open Claude Code in your vault and say `orient`.
 
 Running it twice is safe. Each step checks what is already there and skips it.

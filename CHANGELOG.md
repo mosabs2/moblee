@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.5.2 — 19 September 2026
+
+A small fix release, from rehearsing an update on a v0.2 vault exactly as a new user would run it.
+
+### Changed
+
+- **The updater and the installer carry on when a question gets no answer at all.** If input ended at one of their questions (Ctrl-D, or a scripted run with its input closed), v0.5.1 stopped at that point without saying so, leaving an update unfinished and uncommitted, or a new vault half set up. End of input now counts as "no" and the run finishes. (A key pressed early is not lost: it becomes the answer to the next question, so wait for each question before typing.)
+- **Two updater steps no longer fail silently.** If the skills or the `CLAUDE.md` step fails, the updater now says what has already been updated and how to carry on, as the safety step already did.
+- **The commit gate no longer flags the pack's own pages when they arrive.** Its advisory on words such as "first" and "only" is meant for what you and your Claude write; on an update that added the learning path it printed ten warnings about the lessons page's own wording. `wiki/Identity.md` and the lessons page are exempt in the commit that adds them; later edits to them are checked as usual.
+- **The updating guide** now says everything an update may add (the learning path's page and Index line, the daily-notes template) and which change it leaves for you to commit, and that the updater asks two questions, each to be answered once it appears.
+
 ## v0.5.1 — 19 September 2026
 
 A refinement release: fixes from the first remote support sessions, an optional learning path, and a documentation pass for new readers.
