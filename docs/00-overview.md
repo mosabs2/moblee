@@ -1,8 +1,10 @@
 # 00. Overview: what Moblee is and why it works
 
-Moblee is a starter pack for building your own LLM-managed personal knowledge wiki, following the pattern Andrej Karpathy described in April 2026. It bundles an opinionated vault template, seven ready-to-use Claude skills, a small set of install scripts, and the documentation you're reading now. You install it once, ask Claude to walk you through the first day, and from then on the wiki grows as you use it.
+Moblee is a starter pack for building your own LLM-managed personal knowledge wiki, following the pattern Andrej Karpathy described in April 2026. It bundles an opinionated vault template, seven core Claude skills, a checklist that connects the wiki to your Mac and your accounts, a small set of install scripts, and the documentation you're reading now. You install it once, ask Claude to walk you through the first day, and from then on the wiki grows as you use it.
 
-**Mac or Windows.** As of v0.2 (25 May 2026), Moblee supports both platforms. The Mac path is the default and ships with full automation via Claude Code and the bundled skills. The Windows path was added in v0.2 to support users without a Mac; it runs the same vault pattern through Claude.ai web chat with a manual workflow in place of the Mac-side skills. The trade-offs are documented in `docs/07-windows-workflow.md`. If you have any access to a Mac, the Mac path is much smoother and remains the recommended route; the Windows path lets you begin without a Mac and move across cleanly if you ever get one.
+**Mac only.** Moblee runs on a Mac, with Claude Code, and nothing else. The older files for another platform are kept, unmaintained, in `archive/windows/`.
+
+**How long it takes, and what it costs.** The wiki itself installs in a few minutes. Everything beyond it (the connections to your Mac's apps, Google, GitHub and Chrome, and the tools for video, documents and editing) is chosen from one checklist that says the time, space and cost of each item before anything starts. Ticking everything free takes about an hour and a half the first time and several gigabytes, mostly downloads of Apple's developer tools, Homebrew and the video renderer. Nothing paid is ticked by default; the only paid option is generating new images, video and voices with your own ElevenLabs account.
 
 ## The core idea
 
@@ -54,7 +56,7 @@ Beyond that, you read and drop things into `raw/`.
 
 ## What this starter pack gives you
 
-The `vault-template/` is a clean Karpathy-pattern vault with the schema in place, ready for your first content. The `skills/` folder contains seven Claude skills that auto-trigger when you talk to Claude in natural language. The `scripts/` folder has installers that lay it all down on your Mac in one or two commands. The `docs/` folder (which you are inside now) has the longer explanations.
+The `vault-template/` is a clean Karpathy-pattern vault with the schema in place, ready for your first content. The `skills/` folder contains seven core Claude skills that auto-trigger when you talk to Claude in natural language; the installer puts them in place. The `scripts/` folder has the installer, the updater and the checklist (`scripts/moblee-setup.py`), which the installer shows at the end. The checklist connects Claude to your Mac's Calendar, Reminders, Mail and Notes, to Gmail, Google Calendar and Google Drive, to GitHub, and to Chrome with your own logins, and adds tools for watching videos, making PDF and Office documents, and editing film, audio and pictures, plus a news brief, trip pages and more (the extra skills live in `extras/skills/`). Claude reads a connected account only when you ask, and never sends, posts, deletes or spends without your yes. `docs/10-connections.md` covers every item. The `docs/` folder (which you are inside now) has the longer explanations.
 
 When you're ready, move on to [01-prerequisites.md](01-prerequisites.md) for the install checklist, or skip ahead to [02-install.md](02-install.md) if you already have the prerequisites and want to run the installer.
 

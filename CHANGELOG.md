@@ -1,6 +1,33 @@
 # Changelog
 
-## v0.5.2 — 19 September 2026
+## v0.6.0 (19 September 2026)
+
+The connections release. Up to v0.5.2 the wiki stood on its own: anything from the owner's calendar, mail or accounts reached it only as a file handed over by hand, and the optional parts of the pack were offered through yes/no questions scattered across the installer and the updater. This release puts everything optional on one checklist, connects the wiki to the owner's Mac and accounts, and makes Moblee a Mac-only pack.
+
+### Added
+
+- **The checklist** (`scripts/moblee-setup.py`). One list of everything optional, grouped as connections, tools, paid options and habits. Each line says what the item does, about how long it takes, how much space it uses and what it costs; items already working are marked and left alone; nothing paid is ticked by default. Before anything starts it shows the order of work, its estimate of time and space, and every moment the owner is needed at the keyboard. Sign-ins are the owner's, and for each one the checklist prints plain numbered steps, opens the right page and waits. It deletes nothing, copies every settings file it changes to `~/.config/moblee/backups/` first, keeps the output of long installs in a log under `~/.config/moblee/`, and installs Apple's developer tools, Homebrew and Node only when a ticked item needs them. `--check` tests every item without changing anything and saves the result to the vault's `outputs/setup/`; `--only <keys>` installs named items; `--list` prints the keys. Standard library only, so the Python that ships with macOS runs it. A full free install takes about an hour and a half the first time and several gigabytes. `docs/10-connections.md` explains every item.
+- **Mac apps** (`mac-apps`): Calendar, Reminders, Mail and Notes through Orchard, with the owner clicking Allow on the Mac's permission pop-ups. Orchard's tools that move, bin or delete (files, reminders, reminder lists, slides, sheets) are blocked outright in Claude's settings, because the delete guard watches shell commands only. Needs macOS 14 or later.
+- **Google** (`google`): Gmail, Google Calendar and Google Drive, connected by the owner on claude.ai's Connectors page.
+- **GitHub** (`github`): GitHub's command-line tool, signed in by the owner with a code in the browser.
+- **Chrome** (`chrome`): installs Chrome if absent and opens the Claude extension and the Obsidian Web Clipper for the owner to add, so Claude can read X, Instagram and YouTube through the owner's own logins.
+- **Watch** (`videos`): the `watch` tool with the video downloader and converter, so a YouTube, Instagram, TikTok or X link can be watched and summarised.
+- **Documents** (`documents`): the PDF renderer behind `wiki-to-pdf`, installed with its system libraries, plus Word, PowerPoint and Excel tools.
+- **Editing skills** in the new `extras/skills/` folder: `film` (video editing, with the Remotion plugin and Node), `audio` (editing and read-aloud) and `pictures` (with ImageMagick). All three work on copies, never originals.
+- **More skills**: `news-brief` (a brief on what the owner follows, every item confirmed by a second source and linked), `trips` (a page per trip with legs and day plans, reading booking mail only when asked) and `x-capture` (saves an X post into `raw/` through Chrome).
+- **Skill maker** (`skill-maker`), which turns a routine the owner describes into a one-word command, and **Obsidian extras** (`obsidian-extras`) for canvases, databases and diagrams.
+- **Generation with ElevenLabs** (`generation`), the one paid option: images, video, voices, music and sound effects through the owner's own ElevenLabs account. As of September 2026 there is a free tier with small limits and paid plans from about $6 a month; the checklist says to check elevenlabs.io/pricing and never buys anything. Claude asks before anything that uses credits.
+- **A "Connected accounts and live facts" section** in the template `CLAUDE.md`: connected accounts are read only when a request needs them; Claude never sends, posts, deletes or spends without the owner's yes for that one action, and drafts by default; a hand-made export is replaced by the live connection where one exists; facts that change are fetched live and cited, and a news claim needs a second independent source. `scripts/patch-claude-md.py` adds the section to existing vaults, so the updater brings it in.
+- `docs/10-connections.md`: each checklist item in plain English (what it connects, the exact sign-in steps, the cost, how to check it and add it later, what Claude will and will never do with it), and what each message from `--check` means.
+
+### Changed
+
+- **The installer installs the core skills itself.** Running `install-skills.sh` is no longer a separate step (it is still there, and the installer calls it).
+- **The installer's scattered yes/no questions are replaced by the checklist.** The weekly health check, the learning path, the voice stack and the `vault` shortcut are now checklist items (`weekly`, `lessons`, `voice`, `vault-fn`), alongside the new connections. The installer shows the checklist at the end of a new install; the updater offers it after an update, when run in a Terminal.
+- **Mac only.** The Windows installer, its `vault` function and its three guides were moved to `archive/windows/` (kept, not deleted) and are no longer maintained. `README.md`, `START_HERE.md` and the docs describe the Mac path only.
+- `README.md`, `START_HERE.md` (the walkthrough now ends with the checklist and the `--check` command), `docs/00-overview.md`, `docs/01-prerequisites.md` (Homebrew and the PDF renderer now come from the checklist), `docs/02-install.md` and `docs/08-updating.md` updated for all of the above.
+
+## v0.5.2 (19 September 2026)
 
 A small fix release, from rehearsing an update on a v0.2 vault exactly as a new user would run it.
 
@@ -11,7 +38,7 @@ A small fix release, from rehearsing an update on a v0.2 vault exactly as a new 
 - **The commit gate no longer flags the pack's own pages when they arrive.** Its advisory on words such as "first" and "only" is meant for what you and your Claude write; on an update that added the learning path it printed ten warnings about the lessons page's own wording. `wiki/Identity.md` and the lessons page are exempt in the commit that adds them; later edits to them are checked as usual.
 - **The updating guide** now says everything an update may add (the learning path's page and Index line, the daily-notes template) and which change it leaves for you to commit, and that the updater asks two questions, each to be answered once it appears.
 
-## v0.5.1 — 19 September 2026
+## v0.5.1 (19 September 2026)
 
 A refinement release: fixes from the first remote support sessions, an optional learning path, and a documentation pass for new readers.
 
@@ -29,7 +56,7 @@ A refinement release: fixes from the first remote support sessions, an optional 
 - **The updater's message when the safety layer fails** now says what has already changed by that point (tooling, commit gate and skills, with backups) and what has not.
 - **Documentation**: every page a new user reads was revised for plain, professional English with no personal references; the stale "four skills" count corrected to seven; the Windows guide's inbox path corrected to `raw/`.
 
-## v0.5.0 — 16 September 2026
+## v0.5.0 (16 September 2026)
 
 The safety release. It exists because a recipient's vault lost a folder the day after its first housekeeping run, and the review that followed found that the three things protecting the maintainer's own vault (a delete guard, a permission list, and a written identity for Claude) had never shipped: all three lived outside the vault, and the v0.4 port had taken the vault as the boundary of the pattern. The rule from here on: a recipient gets what the maintainer has, or the pack does not ship.
 
@@ -66,7 +93,7 @@ A reviewer given the pack and none of the reasoning behind it was asked what a C
 
 Fresh install in a sandboxed home on a stock path (Python 3.9.6, Apple git), then a real v0.4.1 vault and a real v0.2 vault, each with the owner's own content, installed the same way and updated in place: 59 checks, all passing, including that re-running the installer on an existing vault finishes through the updater, that a fresh vault is git-clean when the installer ends, and that a v0.2 vault (no tooling, no orient section, no Daily Notes) comes out with all of them and its own pages untouched. Among them: the guard refuses `rm -rf` and `find -delete` from the sandbox and passes `mv`; settings files parse after the merge; the never-delete rule sits first under Hard rules; the old `.git/hooks/` gate is moved aside and `core.hooksPath` set; the owner's page survives the update untouched and their name reaches `Identity.md`; the gate blocks a dangling link in both vaults; the lint runs clean of errors in both; running the updater twice changes nothing. Every log read line by line as a recipient would read it.
 
-## v0.4.2 — 11 September 2026
+## v0.4.2 (11 September 2026)
 
 Three fixes found by installing the pack as a fourteen-year-old would: fresh clone, stock Mac, no Homebrew, no git experience. Every one of them is output that reads as failure at a moment when a beginner is deciding whether the thing works.
 
@@ -80,27 +107,27 @@ Three fixes found by installing the pack as a fourteen-year-old would: fresh clo
 
 Installed end to end three times in a sandboxed `HOME` on a stock `PATH`, with Homebrew and the user's dotfiles deliberately absent. Confirmed working from that environment: the installer, the skills installer, the six bundled skills, placeholder substitution, the orient preflight, `lint-v2.py`, the commit gate (both that it stays silent on `raw/` and that it still fires on `wiki/`), the galaxy build, and the dashboard serving on `127.0.0.1:7373`. The dashboard and galaxy need only the Python that macOS already ships.
 
-## v0.4.1 — 4 September 2026
+## v0.4.1 (4 September 2026)
 
 First-install fixes, found by running the installer as a fresh user on a stock Mac rather than on the maintainer's machine.
 
 ### Fixed
 
-- **`install-skills.sh` called `pip`, which does not exist on a stock Mac.** macOS ships `pip3` at `/usr/bin/pip3` and no bare `pip`, so accepting the optional PDF-dependencies step ended a successful install with `pip: command not found` followed by a Homebrew warning — alarming output at the end of a run that had in fact worked. The script now resolves `pip3`, then `pip`, then falls back to `python3 -m pip --user`, and reports a calm, accurate message if none succeeds.
+- **`install-skills.sh` called `pip`, which does not exist on a stock Mac.** macOS ships `pip3` at `/usr/bin/pip3` and no bare `pip`, so accepting the optional PDF-dependencies step ended a successful install with `pip: command not found` followed by a Homebrew warning: alarming output at the end of a run that had in fact worked. The script now resolves `pip3`, then `pip`, then falls back to `python3 -m pip --user`, and reports a calm, accurate message if none succeeds.
 - **The optional PDF step now reads as optional.** It says plainly that skipping is safe, that nothing else depends on it, and that Claude can set it up on request the first time a PDF is wanted. The Homebrew-absent branch no longer reads as an error.
 
-## v0.4 — 1 September 2026
+## v0.4 (1 September 2026)
 
 The maintainer's operational layer, generalised. Everything below was built and battle-tested on the maintainer's live vault June-August 2026, then ported with all personal content stripped and vault-path detection generalised (`~/.config/moblee/vault-path`, written by the installer; `MOBLEE_VAULT` env override; walk-up fallback).
 
 ### Added
 
-- **Brain skill v3** — from six patterns to eleven. New: `graduate` (promote/demote/close items between `_context.md` status tiers, every move logged), `ghost` (answer in the reconstructed voice of a persona the wiki documents deeply, always labelled), and the temporal trio `today` / `close-day` / `schedule` operating on a new **Daily Notes layer** (`Daily Notes/_TEMPLATE.md` added to the vault template; planning-only notes, workday-keyed closes, carry-forwards seeded into the next day's plan). `trace` gains the drift register (position shifts, not just coverage history).
-- **Structural health layer.** `scripts/lint-v2.py` (mechanical convention checks: log-header timestamps, dangling wikilinks, broken section anchors including aliased links, attribution presence, a vault-weight guard with token caps on the always-loaded files); `skills/compact` (the guard's executor: mechanical rotations free, lossy trims on sign-off); `scripts/vault-gate.py` (a pre-commit gate running the cheap deterministic subset at write time — the installer wires it into `.git/hooks/pre-commit`). Checks referencing optional folders skip silently when the folder is absent.
+- **Brain skill v3**, from six patterns to eleven. New: `graduate` (promote/demote/close items between `_context.md` status tiers, every move logged), `ghost` (answer in the reconstructed voice of a persona the wiki documents deeply, always labelled), and the temporal trio `today` / `close-day` / `schedule` operating on a new **Daily Notes layer** (`Daily Notes/_TEMPLATE.md` added to the vault template; planning-only notes, workday-keyed closes, carry-forwards seeded into the next day's plan). `trace` gains the drift register (position shifts, not just coverage history).
+- **Structural health layer.** `scripts/lint-v2.py` (mechanical convention checks: log-header timestamps, dangling wikilinks, broken section anchors including aliased links, attribution presence, a vault-weight guard with token caps on the always-loaded files); `skills/compact` (the guard's executor: mechanical rotations free, lossy trims on sign-off); `scripts/vault-gate.py` (a pre-commit gate running the cheap deterministic subset at write time; the installer wires it into `.git/hooks/pre-commit`). Checks referencing optional folders skip silently when the folder is absent.
 - **Orient.** The `orient` session-start convention added to the template `CLAUDE.md`, with `scripts/vault-orient-preflight.sh` (Obsidian alive, file freshness, last commit, uncommitted count).
-- **Dashboard** (`dashboard/`). A local web view of the vault: orientation state, inbox counts, an Ask box that runs Claude against the vault, a galaxy rebuild button, and a **config-driven Visuals tab** — charts are defined in `dashboard/dashboard-charts.json` (CSV-backed or built-in series), so "add a chart of X to my dashboard" is a one-line config edit Claude makes for you. Ships with a working wiki-growth example.
+- **Dashboard** (`dashboard/`). A local web view of the vault: orientation state, inbox counts, an Ask box that runs Claude against the vault, a galaxy rebuild button, and a **config-driven Visuals tab**: charts are defined in `dashboard/dashboard-charts.json` (CSV-backed or built-in series), so "add a chart of X to my dashboard" is a one-line config edit Claude makes for you. Ships with a working wiki-growth example.
 - **Wiki Galaxy** (`scripts/wiki-galaxy/`). The offline 3D knowledge-graph view, rebuilt fresh from the vault on demand into `outputs/galaxy/`.
-- **Voice stack** (`voice/`, optional, macOS). Replies read aloud via a Stop hook; audible rotating nudges when Claude is waiting on input or a permission click. Free with the built-in macOS voice; add an ElevenLabs API key to the Keychain and the same stack upgrades itself. Control helper: `voice on | off | stop | last | full | say | paste | status` — `voice full` reads the latest reply in full. Installed by `voice/install-voice.py` (settings backed up, hooks never duplicated), offered by the main installer.
+- **Voice stack** (`voice/`, optional, macOS). Replies read aloud via a Stop hook; audible rotating nudges when Claude is waiting on input or a permission click. Free with the built-in macOS voice; add an ElevenLabs API key to the Keychain and the same stack upgrades itself. Control helper: `voice on | off | stop | last | full | say | paste | status`; `voice full` reads the latest reply in full. Installed by `voice/install-voice.py` (settings backed up, hooks never duplicated), offered by the main installer.
 - Template `CLAUDE.md` gains sections carried from the live vault's evolution: the orient command, data-freshness convention for volatile figures, Daily Notes conventions, compaction discipline (fold-don't-append on `_context`, stratify reference detail out of CLAUDE.md), and the health-layer wiring.
 
 ### Changed
@@ -116,7 +143,7 @@ The maintainer's personal automations (scheduled news briefs, domain dashboards,
 
 Existing installs keep working. To adopt v0.4 pieces on an existing vault: re-run `scripts/install-skills.sh` (updates brain, adds compact), copy `scripts/lint-v2.py`, `scripts/vault-gate.py`, `scripts/vault-orient-preflight.sh`, `scripts/wiki-galaxy/` and `dashboard/` into your vault, write your vault's path to `~/.config/moblee/vault-path`, create `Daily Notes/_TEMPLATE.md` from the template, and optionally run `voice/install-voice.py`.
 
-## v0.3 — 5 June 2026
+## v0.3 (5 June 2026)
 
 `wiki-to-pdf` rendering upgrades, ported from the maintainer's live skill and brand-abstracted so they are driven by your own `design-your-brand` settings.
 
@@ -136,24 +163,24 @@ Existing installs keep working. To adopt v0.4 pieces on an existing vault: re-ru
 
 The CV style reads `--brand-primary`, `--brand-secondary`, `--brand-body`, and `--brand-font-family` from the same `brand.css` `:root` block that `design-your-brand` writes, so one brand setup drives both render styles. No maintainer-specific colours, fonts, or assets are baked in. The EB Garamond serif is the fixed signature of the statement style.
 
-## v0.2 — 25 May 2026
+## v0.2 (25 May 2026)
 
 Windows support added.
 
 ### Added
 
-- `scripts/install.ps1` — PowerShell installer for Windows. Mirrors the bash `install.sh` step for step: collects user name, vault name, vault location; refuses to overwrite an existing directory; copies the vault template to the destination; substitutes `[Your Name]`, `[Your Vault Name]`, `[Your Vault]` placeholders; initialises git; optionally adds the `vault` function to the user's PowerShell profile.
-- `scripts/vault.ps1` — PowerShell version of the session-start `vault` function. Reads the vault path from `$env:USERPROFILE\.config\moblee\vault-path`, auto-commits pending changes, shows recent git history, and confirms the vault is ready.
-- `docs/01-prerequisites-windows.md` — Windows-specific prerequisites doc covering Obsidian for Windows, Git for Windows, claude.ai web chat (in place of Cowork), PowerShell 7, and a brief WSL2 alternative.
-- `docs/02-install-windows.md` — Windows install walkthrough. Mirrors the structure of `02-install.md` (Mac) and covers the PowerShell execution-policy gate, post-install steps, Windows-specific quirks, and troubleshooting.
-- `docs/07-windows-workflow.md` — Day-to-day Windows-track workflow document. Covers claude.ai web chat as the Claude interface, the manual ingest workflow that replaces Claude Code automation, manual workarounds for each of the four bundled skills (`brain`, `wiki-capture`, `wiki-to-pdf`, `design-your-brand`), and a note on cross-platform vault portability.
-- `CHANGELOG.md` — this file. Records the v0.1 to v0.2 transition.
+- `scripts/install.ps1`: PowerShell installer for Windows. Mirrors the bash `install.sh` step for step: collects user name, vault name, vault location; refuses to overwrite an existing directory; copies the vault template to the destination; substitutes `[Your Name]`, `[Your Vault Name]`, `[Your Vault]` placeholders; initialises git; optionally adds the `vault` function to the user's PowerShell profile.
+- `scripts/vault.ps1`: PowerShell version of the session-start `vault` function. Reads the vault path from `$env:USERPROFILE\.config\moblee\vault-path`, auto-commits pending changes, shows recent git history, and confirms the vault is ready.
+- `docs/01-prerequisites-windows.md`: Windows-specific prerequisites doc covering Obsidian for Windows, Git for Windows, claude.ai web chat (in place of Cowork), PowerShell 7, and a brief WSL2 alternative.
+- `docs/02-install-windows.md`: Windows install walkthrough. Mirrors the structure of `02-install.md` (Mac) and covers the PowerShell execution-policy gate, post-install steps, Windows-specific quirks, and troubleshooting.
+- `docs/07-windows-workflow.md`: Day-to-day Windows-track workflow document. Covers claude.ai web chat as the Claude interface, the manual ingest workflow that replaces Claude Code automation, manual workarounds for each of the four bundled skills (`brain`, `wiki-capture`, `wiki-to-pdf`, `design-your-brand`), and a note on cross-platform vault portability.
+- `CHANGELOG.md`: this file. Records the v0.1 to v0.2 transition.
 
 ### Changed
 
-- `README.md` — clarified that Moblee now supports Windows alongside Mac, with Mac as the default path and Windows as the manual-workflow alternative. Added Windows pointer to the prerequisites and install sections.
-- `START_HERE.md` — extended the Claude briefing to recognise that the user may be on Mac or Windows, and to branch the install guidance accordingly. The platform-detection step is the new first thing Claude does in the conversation.
-- `docs/00-overview.md` — added a one-paragraph note acknowledging the Windows track and pointing at the Windows-specific docs.
+- `README.md`: clarified that Moblee now supports Windows alongside Mac, with Mac as the default path and Windows as the manual-workflow alternative. Added Windows pointer to the prerequisites and install sections.
+- `START_HERE.md`: extended the Claude briefing to recognise that the user may be on Mac or Windows, and to branch the install guidance accordingly. The platform-detection step is the new first thing Claude does in the conversation.
+- `docs/00-overview.md`: added a one-paragraph note acknowledging the Windows track and pointing at the Windows-specific docs.
 
 ### Trade-offs documented in v0.2
 
@@ -170,7 +197,7 @@ These are the real costs of the Windows path. The benefit is that Windows users 
 
 Existing v0.1 installs on Mac continue to work without changes. No vault-template, skills, or Mac script content was modified for v0.2. The new files are Windows-specific additions only.
 
-## v0.1 — 15 May 2026
+## v0.1 (15 May 2026)
 
 Initial public release.
 

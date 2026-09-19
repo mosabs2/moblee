@@ -12,8 +12,9 @@
 #   3. Refuses to overwrite an existing directory.
 #   4. Copies vault-template/ to the destination.
 #   5. Substitutes [Your Name] and [Your Vault Name] placeholders inside files.
-#   6. Optionally appends the `vault` shell function to ~/.zshrc.
-#   7. Prints next-step instructions.
+#   6. Installs the safety layer and the core skills.
+#   7. Shows the checklist (scripts/moblee-setup.py) for everything optional.
+#   8. Prints next-step instructions.
 
 set -euo pipefail
 
@@ -195,66 +196,33 @@ fi
 python3 "$PACKAGE_ROOT/scripts/seed-memory.py" --vault "$VAULT_LOCATION" \
   || echo "  (starting memories not seeded; harmless, Claude builds its own)"
 
-# ----- weekly health check on a schedule (v0.5, macOS) ------------------------
-if [[ "$(uname)" == "Darwin" && -f "$SCRIPT_DIR/install-schedule.sh" ]]; then
-  echo ""
-  echo "The weekly health check can run by itself every Saturday morning, so"
-  echo "the vault is checked without anyone having to remember."
-  read -r -p "Schedule the weekly health check? [Y/n]: " INSTALL_SCHED || INSTALL_SCHED="n"  # no answer: never schedule unasked, never stop half-way
-  if [[ ! "$INSTALL_SCHED" =~ ^[Nn]$ ]]; then
-    bash "$SCRIPT_DIR/install-schedule.sh" \
-      || echo "  (schedule not installed; ask Claude to set it up later)"
-  fi
-fi
-
-# ----- optional: the learning path (v0.5.1) -----------------------------------
-if [[ -f "$SCRIPT_DIR/install-learning-path.py" ]]; then
-  echo ""
-  echo "The learning path is thirty-two short lessons on getting the most from"
-  echo "this wiki, one an evening, with a reminder at 9 pm on a Mac. You can add"
-  echo "it later instead (see docs/08-updating.md)."
-  read -r -p "Add the learning path? [y/N]: " INSTALL_LESSONS || INSTALL_LESSONS=""
-  if [[ "$INSTALL_LESSONS" =~ ^[Yy]$ ]]; then
-    python3 "$SCRIPT_DIR/install-learning-path.py" --vault "$VAULT_LOCATION" | sed 's/^/  /' \
-      || echo "  (learning path not fully added; see docs/08-updating.md to add it later)"
-  fi
-fi
-
-# ----- optional: voice stack (macOS) ------------------------------------------
-if [[ "$(uname)" == "Darwin" && -f "$PACKAGE_ROOT/voice/install-voice.py" ]]; then
-  echo ""
-  echo "The voice stack reads Claude's replies aloud and nudges you audibly"
-  echo "when Claude is waiting on you. Free (built-in macOS voice), upgradable"
-  echo "to ElevenLabs later. See voice/README.md."
-  read -r -p "Install the voice stack? [y/N]: " INSTALL_VOICE || INSTALL_VOICE=""
-  if [[ "$INSTALL_VOICE" =~ ^[Yy]$ ]]; then
-    python3 "$PACKAGE_ROOT/voice/install-voice.py" || echo "  (voice install failed; see voice/README.md)"
-  fi
-fi
-
-# ----- optional: install the vault shell function -----------------------------
+# ----- the core skills (v0.6: installed here, no longer a separate step) -----
 echo ""
-read -r -p "Append the \`vault\` shell function to ~/.zshrc? [y/N]: " INSTALL_VAULT_FN || INSTALL_VAULT_FN=""
-if [[ "$INSTALL_VAULT_FN" =~ ^[Yy]$ ]]; then
-  # write the configured vault path to ~/.config/moblee/vault-path so vault.sh
-  # picks it up
-  mkdir -p "$HOME/.config/moblee"
-  echo "$VAULT_LOCATION" > "$HOME/.config/moblee/vault-path"
+echo "Installing the core skills (brain, capture, interview, PDF, galaxy and more)..."
+bash "$SCRIPT_DIR/install-skills.sh" --quiet \
+  || echo "  (core skills not fully installed; run  bash scripts/install-skills.sh  later)"
 
-  # append vault.sh contents to ~/.zshrc, with a guard so re-running the
-  # installer does not duplicate the function
-  if ! grep -q "# >>> moblee vault function >>>" "$HOME/.zshrc" 2>/dev/null; then
-    {
-      echo ""
-      echo "# >>> moblee vault function >>>"
-      cat "$SCRIPT_DIR/vault.sh"
-      echo "# <<< moblee vault function <<<"
-    } >> "$HOME/.zshrc"
-    echo "  Appended to ~/.zshrc. Open a new Terminal or run \`source ~/.zshrc\`."
-  else
-    echo "  Already present in ~/.zshrc, skipped."
-  fi
-fi
+# ----- the checklist (v0.6) -----------------------------------------------------
+# Everything optional is chosen in one place: the Mac's own apps, Google,
+# GitHub, Chrome, video, documents, editing tools, the news brief, the paid
+# extras and the habits (weekly check, learning path, voice, the vault
+# shortcut). Each line says what it does, the time, the space and the cost;
+# nothing paid is ticked by default. It can be run again at any time.
+echo ""
+echo "==================================================================="
+echo "  Your wiki is ready. Now connect it to your life."
+echo "==================================================================="
+echo ""
+echo "Next comes a checklist of everything Moblee can connect and install:"
+echo "your Mac's Calendar, Mail and Reminders, Google, GitHub, Chrome, video,"
+echo "documents, editing tools and more. You tick what you want; it tells you"
+echo "the time, the space and any cost before anything starts. Ticking"
+echo "everything free takes about an hour and a half the first time, mostly downloads."
+echo "You can also skip it now and run it later with:"
+echo "  python3 scripts/moblee-setup.py"
+echo ""
+MOBLEE_VAULT="$VAULT_LOCATION" python3 "$SCRIPT_DIR/moblee-setup.py" \
+  || echo "  (the checklist stopped early; run  python3 scripts/moblee-setup.py  to carry on)"
 
 # ----- commit the settings the install wrote (v0.5) ---------------------------
 # The initial commit happened before the safety step; the permission rules and
@@ -280,19 +248,17 @@ echo "Your vault lives at:"
 echo "  $VAULT_LOCATION"
 echo ""
 echo "Next steps:"
-echo "  1. Install the bundled skills:"
-echo "       bash scripts/install-skills.sh"
-echo ""
-echo "  2. Open Obsidian, choose \"Open folder as vault\", and point it at:"
+echo "  1. Open Obsidian, choose \"Open folder as vault\", and point it at:"
 echo "       $VAULT_LOCATION"
 echo ""
-echo "  3. Open the vault's Welcome.md and follow it from there. Or paste"
+echo "  2. Open the vault's Welcome.md and follow it from there. Or paste"
 echo "     START_HERE.md into Claude and let it walk you through."
 echo ""
-echo "  4. Optional extras, whenever you like:"
+echo "  3. Whenever you like:"
+echo "       Add or repair anything:  python3 scripts/moblee-setup.py"
+echo "       Test that it all works:  python3 scripts/moblee-setup.py --check"
 echo "       Dashboard:  python3 \"$VAULT_LOCATION/dashboard/server.py\"   (then open the printed URL)"
 echo "       Galaxy:     say \"galaxy\" to Claude in your vault"
-echo "       Health check: runs by itself on Saturdays if you scheduled it; or ask Claude to \"run the lint\""
 echo ""
 echo "  Safety: the delete guard is on. Claude cannot delete files in this vault"
 echo "  at all; if something must go, Claude tells you what and you remove it"

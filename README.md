@@ -10,38 +10,36 @@ The Karpathy pattern rests on four files, each with one job. `CLAUDE.md` is the 
 
 The templates come with opinionated defaults (British English, paragraph-first prose, no em dashes, dated absolute references, structured ingest workflows), and you can keep, change or strip any of them. `CLAUDE.md` is the source of truth for your conventions; once it is installed in your vault, you own it.
 
+**New in v0.6.0.** Everything optional is now chosen from **one checklist** (`scripts/moblee-setup.py`), which the installer shows at the end of a new install and the updater offers. It connects the wiki to **your Mac's Calendar, Reminders, Mail and Notes** (through Orchard, with its delete tools blocked), **Gmail, Google Calendar and Google Drive**, **GitHub**, and **Chrome** with your own X, Instagram and YouTube logins and the Obsidian Web Clipper; it adds **video watching**, **PDF, Word, PowerPoint and Excel**, **film, audio and picture editing**, a **news brief** in which every item is confirmed by a second source, **trip planning**, **X capture**, a **skill maker** and **Obsidian extras**; and it holds the habits that used to be separate installer questions (weekly health check, learning path, voice, the `vault` shortcut). Each line says what the item does, the time, the space and the cost; nothing paid is ticked by default, and the one paid option (generating images, video and voices with ElevenLabs) is your own account and decision. `python3 scripts/moblee-setup.py --check` tests every connection at any time. The vault's `CLAUDE.md` gains a section on **connected accounts and live facts** (read on request; never send, post, delete or spend without a yes; current facts fetched live and cited), which the updater adds to existing vaults. The installer now installs the core skills itself. Moblee is now Mac only. See `docs/10-connections.md`.
+
 **New in v0.4.** The pack now carries a proven operational layer, generalised for any vault: the **brain skill grown to eleven patterns** (reflective queries, `_context` tier management, persona ghost-voices, and a daily rhythm of morning brief / close-day / week planning over a new Daily Notes layer); a **structural health layer** (`scripts/lint-v2.py` weekly checks, a `compact` skill that keeps the always-loaded files light, and a git **commit gate** that catches format drift before a commit exists); a **local dashboard** (orientation state, an Ask box that runs Claude against your vault, and a Visuals tab whose charts you add by asking Claude); the **3D galaxy** view of your knowledge graph; and an optional **voice stack** (replies read aloud and audible nudges when Claude needs you, free with the built-in macOS voice and upgradable to ElevenLabs). All of it is optional, and the same one-command installer sets it up.
 
 **New in v0.5.** The pack now installs **a safety layer that cannot be skipped**. A delete guard inspects every shell command Claude composes and refuses deletion, history rewriting and force pushes however they are phrased; a starter permission list stops the constant prompts for routine work (safe only because the guard sits beneath it); and the never-delete rule is written into `CLAUDE.md` and into a new always-loaded **`wiki/Identity.md`** that holds who Claude is to you (verify rather than guess, challenge rather than flatter). Also new: **`scripts/update.sh`**, which brings an existing vault up to the current version without touching its content (there was no update path before v0.5); the **galaxy skill**; the commit gate wired through `scripts/hooks/` so updates reach it; five more health checks, the link guard, and a **weekly health check on a schedule**; a log appender that reads the clock itself; four starting memories; and a `VERSION` file. The compaction skill now lists what it would move or drop and asks first. See `docs/08-updating.md` and `docs/09-safety.md`.
 
-**New in v0.5.1.** An optional **learning path**: thirty-two short lessons on getting the most from the wiki, one an evening, given by Claude when you say "lesson", with a reminder at nine each evening. It needs a Mac with Claude Code; the installer and the updater ask whether you want it, and the Windows track does not include it. Also: clearer instructions for updates done through a clinic note, a rule that keeps clinic reports out of the wiki, a writing rule against the habits that make machine prose read as machine prose (with a weekly check for them), and a documentation pass throughout.
+**New in v0.5.1.** An optional **learning path**: thirty-two short lessons on getting the most from the wiki, one an evening, given by Claude when you say "lesson", with a reminder at nine each evening. It needs Claude Code; the installer and the updater ask whether you want it. Also: clearer instructions for updates done through a clinic note, a rule that keeps clinic reports out of the wiki, a writing rule against the habits that make machine prose read as machine prose (with a weekly check for them), and a documentation pass throughout.
 
 ## What you'll need
 
-Moblee supports two paths: a Mac path (full automation through Claude Code and the bundled skills) and a Windows path (manual workflow through Claude.ai web chat, added in v0.2). Pick the one that fits your hardware.
+Moblee runs on a Mac only (Apple Silicon recommended; tested on macOS 14 and later). The older Windows files are kept, unmaintained, in `archive/windows/`.
 
-**Mac path (default; full automation):**
-
-- A Mac (Apple Silicon recommended; tested on M-series macOS 14 and later)
 - [Obsidian](https://obsidian.md), free
-- [Claude Code](https://claude.ai/code), needs an Anthropic account
-- Git (comes with macOS Command Line Tools, `xcode-select --install`)
-- Python 3 (for the optional PDF rendering skill)
-- Detailed install: `docs/01-prerequisites.md` then `docs/02-install.md`.
+- [Claude Code](https://claude.ai/code), which needs an Anthropic account
+- Apple's free developer tools, which bring git (`xcode-select --install`)
+- Python 3, which comes with the developer tools
 
-**Windows path (manual workflow; v0.2):**
+`docs/01-prerequisites.md` covers each of these, then `docs/02-install.md` walks through the install.
 
-- Windows 10 22H2 or Windows 11
-- [Obsidian](https://obsidian.md) for Windows, free
-- [claude.ai](https://claude.ai) web chat (Cowork desktop is Mac-only)
-- [Git for Windows](https://git-scm.com/download/win)
-- PowerShell 7 recommended ([github.com/PowerShell/PowerShell](https://github.com/PowerShell/PowerShell))
-- Detailed install: `docs/01-prerequisites-windows.md` then `docs/02-install-windows.md`.
-- The Windows path runs the same vault pattern with reduced automation; see `docs/07-windows-workflow.md` for the day-to-day flow and the manual workarounds for the bundled skills.
+## The checklist, and what the full package gives you
+
+The installer lays down the vault, the safety layer and the core skills, then shows a checklist of everything optional. You tick what you want; each line says what the item does, roughly how long it takes, how much space it uses and what it costs, and a summary before anything starts says when you will be needed at the keyboard. Sign-ins (Google, GitHub, the Chrome extensions, the Mac's own permission pop-ups) are yours to do, and the checklist prints plain step-by-step instructions for each and waits while you do them.
+
+With everything free ticked, Claude can read your Mac's Calendar, Reminders, Mail and Notes, your Gmail, Google Calendar and Google Drive, your GitHub projects, and web pages behind your own logins in Chrome (including X, Instagram and YouTube); watch and summarise videos; turn pages into PDFs and make or read Word, PowerPoint and Excel files; edit film, audio and pictures on copies of your files; give you a news brief with every item checked against a second source; keep trip pages; save X posts into your inbox; and learn your own routines as one-word commands. Claude reads these accounts only when you ask, and never sends, posts, deletes or spends without your yes for that one action.
+
+A full free install takes about an hour and a half the first time, mostly waiting for downloads, and several gigabytes of space (Apple's developer tools, Homebrew and the video renderer are the large parts). Nothing paid is ticked by default. The only paid option, generating new images, video, voices and music, uses your own ElevenLabs account: as of September 2026 it has a free tier with small limits and paid plans from about $6 a month (check elevenlabs.io/pricing). Run the checklist again at any time to add something, or run `python3 scripts/moblee-setup.py --check` to test that everything still works. `docs/10-connections.md` explains every item.
 
 ## Getting started, the one-paste route
 
-The fastest path is to paste the contents of [`START_HERE.md`](START_HERE.md) into Claude (Claude.ai web chat, Claude Code in a Terminal, or Cowork on the desktop) and let Claude walk you through everything. You do not need to read these files first; the prompt tells Claude how the system works and what order to set it up in.
+The fastest path is to paste the contents of [`START_HERE.md`](START_HERE.md) into Claude (Claude Code in a Terminal, Cowork on the desktop, or Claude.ai web chat) and let Claude walk you through everything. You do not need to read these files first; the prompt tells Claude how the system works and what order to set it up in.
 
 If you prefer to read first, start at [`docs/00-overview.md`](docs/00-overview.md).
 
@@ -52,15 +50,15 @@ moblee/
 ├── README.md                  ← this file
 ├── START_HERE.md              ← paste into Claude to begin the guided setup
 ├── LICENSE                    ← MIT
+├── VERSION                    ← the pack version (copied into every vault)
 ├── vault-template/            ← the Obsidian vault scaffolding
 │   ├── CLAUDE.md              ← the schema (rules Claude follows in your vault)
 │   ├── Welcome.md             ← first page you'll see in Obsidian
-│   ├── wiki/                  ← Index.md, log.md, _context.md, methodology pages
+│   ├── wiki/                  ← Index.md, log.md, _context.md, Identity.md, methodology pages
 │   ├── raw/                   ← drop zone for PDFs, text, images
 │   ├── Clippings/             ← Obsidian Web Clipper deposits land here
-│   └── outputs/               ← generated reports (lint passes, PDFs)
-├── VERSION                    ← the pack version (copied into every vault)
-├── skills/                    ← seven Claude skills that pair with the vault
+│   └── outputs/               ← generated reports (lint passes, PDFs, setup checks)
+├── skills/                    ← the seven core skills, installed by the installer
 │   ├── brain/                 ← reflective queries against the wiki, and the daily rhythm
 │   ├── compact/               ← keeps the always-loaded files light (asks before dropping anything)
 │   ├── galaxy/                ← rebuilds and opens the 3D graph of the wiki
@@ -68,39 +66,46 @@ moblee/
 │   ├── wiki-interview/        ← builds a page from your own testimony
 │   ├── wiki-to-pdf/           ← renders any wiki page as a branded PDF
 │   └── design-your-brand/     ← interview that captures your visual identity
+├── extras/
+│   └── skills/                ← skills the checklist installs when ticked (v0.6.0)
+│       ├── film/              ← video editing from a plain description
+│       ├── audio/             ← audio editing and read-aloud
+│       ├── pictures/          ← picture editing
+│       ├── news-brief/        ← a news brief, every item confirmed by a second source
+│       ├── trips/             ← a page per trip, with legs and day plans
+│       └── x-capture/         ← saves X posts into raw/ through Chrome
 ├── safety/                    ← the delete guard and the starter permission rules (v0.5; not optional)
 ├── memory-seed/               ← four starting memories for your Claude (v0.5)
 ├── clinic/                    ← tools for whoever maintains Moblee for other people (v0.5)
 ├── learning-path/             ← optional: 32 evening lessons and their reminder (v0.5.1)
-├── voice/                     ← optional macOS voice stack
+├── voice/                     ← optional voice stack (replies read aloud)
 ├── dashboard/                 ← optional local web dashboard
 ├── scripts/                   ← installers and the vault tooling
-│   ├── install.sh             ← Mac: lays down the vault, tooling, safety layer
-│   ├── update.sh              ← Mac: brings an existing vault to this version (v0.5)
-│   ├── install.ps1            ← Windows: PowerShell installer (v0.2)
-│   ├── install-skills.sh      ← Mac: copies the skills to ~/.claude/skills/
-│   ├── install-schedule.sh    ← Mac: puts the weekly health check on a schedule (v0.5)
+│   ├── install.sh             ← lays down the vault, tooling, safety layer and core skills, then the checklist
+│   ├── moblee-setup.py        ← the checklist: connections and optional tools; --check tests them (v0.6.0)
+│   ├── update.sh              ← brings an existing vault to this version, then offers the checklist (v0.5)
+│   ├── install-skills.sh      ← copies the core skills to ~/.claude/skills/ (run by the installer)
+│   ├── install-schedule.sh    ← puts the weekly health check on a schedule (v0.5)
 │   ├── install-learning-path.py ← adds the optional learning path to a vault (v0.5.1)
-│   ├── vault.sh               ← Mac: session-start function (paste into ~/.zshrc)
-│   ├── vault.ps1              ← Windows: session-start function (added to PowerShell profile, v0.2)
+│   ├── vault.sh               ← the `vault` session-start function (added to ~/.zshrc by the checklist)
 │   ├── lint-v2.py, vault-gate.py, log-append.py, vault-orient-preflight.sh, patch-claude-md.py, seed-memory.py
 │   ├── hooks/                 ← the git hooks a vault runs (commit gate), wired by core.hooksPath
 │   ├── cadence/               ← the weekly lint runner and its launchd template
 │   └── wiki-galaxy/           ← the galaxy builder and viewer
 ├── docs/                      ← longer-form documentation
 │   ├── 00-overview.md         ← what this is and why it works
-│   ├── 01-prerequisites.md    ← Mac: what to install before running Moblee
-│   ├── 01-prerequisites-windows.md ← Windows prerequisites (v0.2)
-│   ├── 02-install.md          ← Mac: step-by-step install
-│   ├── 02-install-windows.md  ← Windows install walkthrough (v0.2)
+│   ├── 01-prerequisites.md    ← what to install before running Moblee
+│   ├── 02-install.md          ← step-by-step install
 │   ├── 03-first-conversation.md  ← how to work with Claude in this system
 │   ├── 04-first-ingest.md     ← walk through ingesting your first source
 │   ├── 05-skills.md           ← reference for the bundled Claude Code skills
 │   ├── 06-karpathy-method.md  ← the methodology explained for a beginner
-│   ├── 07-windows-workflow.md ← Windows-track day-to-day workflow (v0.2)
 │   ├── 08-updating.md         ← how to update a vault without touching its content (v0.5)
-│   └── 09-safety.md           ← why Claude cannot delete your files (v0.5)
-└── CHANGELOG.md               ← release notes, v0.1 to v0.5.2
+│   ├── 09-safety.md           ← why Claude cannot delete your files (v0.5)
+│   └── 10-connections.md      ← the checklist item by item, and what Claude may do with each (v0.6.0)
+├── archive/
+│   └── windows/               ← retired files, kept but not maintained
+└── CHANGELOG.md               ← release notes, v0.1 to v0.6.0
 ```
 
 ## License

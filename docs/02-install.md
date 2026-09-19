@@ -1,6 +1,6 @@
 # 02. Installing Moblee
 
-This document walks through the step-by-step install of the Moblee starter pack on a Mac. It assumes you have the prerequisites from [01-prerequisites.md](01-prerequisites.md) in place.
+This document walks through the step-by-step install of the Moblee starter pack on a Mac (Moblee runs on a Mac only). It assumes you have the prerequisites from [01-prerequisites.md](01-prerequisites.md) in place.
 
 ## Step 1: get the Moblee package
 
@@ -19,9 +19,9 @@ To confirm you're in the right place:
 ls
 ```
 
-You should see `README.md`, `START_HERE.md`, `LICENSE`, and the `vault-template/`, `skills/`, `scripts/`, and `docs/` folders.
+You should see `README.md`, `START_HERE.md`, `LICENSE`, and the `vault-template/`, `skills/`, `extras/`, `scripts/`, and `docs/` folders.
 
-## Step 2: run the vault installer
+## Step 2: run the installer
 
 From inside the Moblee folder:
 
@@ -35,77 +35,70 @@ The script will ask you three questions:
 2. **Vault name**, used as the folder name and substituted into template files. Default: `MyWiki`.
 3. **Vault location**, where to put the vault. Default: `~/Wiki/<vault name>`.
 
-You can press Enter at each prompt to accept the default.
+You can press Return at each prompt to accept the default.
 
-After confirming, the script will:
+After that, the script will:
 
 - Copy the `vault-template/` to your chosen location.
 - Substitute `[Your Name]`, `[Your Vault Name]`, and `[Your Vault]` placeholders inside all markdown, CSS, HTML, Python, and other text files.
-- Copy the vault tooling into `scripts/` and `dashboard/`.
+- Copy the vault tooling into `scripts/` and `dashboard/`, and record the vault's location at `~/.config/moblee/vault-path` so the tooling can find it.
 - Initialise a git repository in the new vault, make the first commit, and point git at the commit gate in `scripts/hooks/`.
 - Install the safety layer: the delete guard (proved working before it is registered) and the starter permission rules. This step is not optional; if it fails, the installer stops and says why. `docs/09-safety.md` explains what it does.
 - Seed four starting memories for your Claude.
-- Ask whether to schedule the weekly health check (say yes; it runs on Saturday mornings and needs nothing from you).
-- Offer the voice stack (optional) and the `vault` shell function (say yes).
+- Install the seven core skills into `~/.claude/skills/`. There is no separate skills step to run.
+- Show the checklist (Step 3 below).
+- Commit the settings and choices it wrote, so the vault starts clean, and print the next steps.
 
-If you answer yes to the `vault` shell function prompt, the installer also writes the vault path to `~/.config/moblee/vault-path` so the function knows where to `cd` to. (The safety step writes the same file, so the tooling finds the vault either way.)
+The part before the checklist takes a few minutes.
 
-**Updating later.** You never run the installer twice on the same vault. When a new Moblee version comes out, download it and run `bash scripts/update.sh`; see `docs/08-updating.md`.
+**Updating later.** You never run the installer twice on the same vault; if you point it at an existing Moblee vault, it hands over to the updater instead of overwriting anything. When a new Moblee version comes out, download it and run the updater; see `docs/08-updating.md`.
 
-## Step 3: install the skills
+## Step 3: the checklist
 
-```
-bash scripts/install-skills.sh
-```
+When the vault is ready, the installer shows a checklist of everything optional: your Mac's Calendar, Reminders, Mail and Notes; Gmail, Google Calendar and Google Drive; GitHub; Chrome with your X, Instagram and YouTube logins and the Obsidian Web Clipper; video watching; PDF, Word, PowerPoint and Excel; film, audio and picture editing; a news brief; trip pages; X capture; a skill maker; Obsidian extras; the paid options; and the habits (the weekly health check, the learning path, spoken replies, and the `vault` shortcut in Terminal).
 
-This copies the seven bundled skills from `skills/<name>/` to `~/.claude/skills/<name>/`. If a skill is already present, the script skips it (use `-f` to replace it; the previous copy is kept under `~/.config/moblee/backups/`, never deleted).
+Each line says what the item does, about how long it takes, how much space it uses and what it costs. Items already working are marked `working`. Type the numbers of items to tick or untick (for example `3 7 12`), `all` for everything, `free` for everything free, or `none` to clear, then press Return on its own to accept. Before anything starts, the checklist shows the order it will work in, its estimate of time and space, and each moment it will need you at the keyboard, then asks "Start now?".
 
-The script then prompts you to install the WeasyPrint dependencies that the `wiki-to-pdf` skill needs. Answer yes if you plan to use the PDF renderer; otherwise no.
+Be ready for the time and space. Ticking everything free takes **about an hour and a half the first time** and **several gigabytes**, most of it downloads of Apple's developer tools, Homebrew and the video renderer. Keep the Mac plugged in and awake. Nothing paid is ticked by default. The one paid option, creating new images, video, voices and music with ElevenLabs, is your own account and your own decision: as of September 2026 it has a free tier with small limits and paid plans from about $6 a month, so check elevenlabs.io/pricing before paying for anything.
 
-## Step 4: configure the vault shell function
+The sign-ins are yours: your Mac password once for Homebrew, Allow on the Mac's permission pop-ups, Google on claude.ai's Connectors page, GitHub with a code in the browser, and two Chrome extensions. When each comes up, the checklist prints the steps in plain words, opens the right page and waits for you to press Return. Type `s` and Return to skip a step and finish it later.
 
-If you skipped step 2's `vault` shell function prompt, you can install it manually now. Open `~/.zshrc` in any editor and append the contents of `scripts/vault.sh`:
+At the end it checks every item it installed, prints `WORKING` or `NOT WORKING` with a reason, and saves the result in your vault under `outputs/setup/`. If you added any connections, quit Claude Code and open it again so it sees them; if you added Chrome, type `/chrome` inside Claude Code and switch it on.
 
-```
-cat scripts/vault.sh >> ~/.zshrc
-```
-
-Then write the vault path to its config file:
+**You can leave it for later.** To install nothing extra now, type `none`, press Return, and press Return again. Run the checklist whenever you like from the Moblee folder:
 
 ```
-mkdir -p ~/.config/moblee
-echo "$HOME/Wiki/<your-vault-name>" > ~/.config/moblee/vault-path
+python3 scripts/moblee-setup.py
 ```
 
-Replace `<your-vault-name>` with whatever you chose in step 2.
-
-Open a new Terminal window (or run `source ~/.zshrc`) and type:
+and test that everything works, changing nothing, with:
 
 ```
-vault
+python3 scripts/moblee-setup.py --check
 ```
 
-You should see the vault path printed, a brief git status, the message "Working tree clean — nothing to commit", and the ready signal. If you see an error about the path, re-check `~/.config/moblee/vault-path`.
+`docs/10-connections.md` explains every item: what it connects, the exact sign-in steps, the cost, and what Claude will and will never do with it.
 
-## Step 5: open the vault in Obsidian
+## Step 4: open the vault in Obsidian
 
-Launch Obsidian. On the welcome screen (or `File → Open vault`), choose **Open folder as vault**. Navigate to the location you chose in step 2 and select the vault folder. Obsidian will open it and you'll see `Welcome.md` in the file pane.
+Launch Obsidian. On the welcome screen (or File, then Open vault), choose **Open folder as vault**. Navigate to the location you chose in Step 2 and select the vault folder. Obsidian will open it and you'll see `Welcome.md` in the file pane.
 
 Click `Welcome.md` and read it.
 
-## Step 6: verify the install
+## Step 5: verify the install
 
 A quick checklist to confirm everything is in place:
 
 - The vault folder exists at the location you chose.
-- `~/.claude/skills/` contains seven subfolders: `brain/`, `compact/`, `galaxy/`, `wiki-capture/`, `wiki-interview/`, `wiki-to-pdf/`, `design-your-brand/`.
+- `~/.claude/skills/` contains the seven core skills: `brain/`, `compact/`, `galaxy/`, `wiki-capture/`, `wiki-interview/`, `wiki-to-pdf/`, `design-your-brand/` (plus any extras you ticked).
 - `~/.claude/hooks/bash-guard.py` exists, and the vault's `.claude/settings.local.json` lists the permission rules (the installer printed the counts).
-- The vault's `VERSION` file reads `0.5.0`.
-- Typing `vault` in a new Terminal cds you into the vault and prints the ready signal.
+- The vault's `VERSION` file reads `0.6.0` for this release.
+- `python3 scripts/moblee-setup.py --check`, run from the Moblee folder, shows `WORKING` for each item you ticked.
+- If you added the `vault` shortcut: typing `vault` in a new Terminal window takes you into the vault and prints the ready signal.
 - Obsidian opens the vault and displays `Welcome.md`.
-- Running `claude` in the vault's Terminal session starts a Claude Code session that can see your vault.
+- Running `claude` in the vault's folder starts a Claude Code session that can see your vault.
 
-If anything is missing, re-run the relevant installer; both scripts are idempotent and safe to run again.
+If anything is missing, run the installer again with the same answers (it finishes the job through the updater without touching what is already there), or run the checklist for a single item with `--only` and the item's key (`--list` prints the keys).
 
 ## What's next
 
