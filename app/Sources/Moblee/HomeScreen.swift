@@ -174,6 +174,7 @@ struct RequestTile: View {
 /// Claude wrote, a Terminal window, or clicks inside Claude.
 struct ExplainScreen: View {
     @EnvironmentObject var home: HomeModel
+    @Environment(\.stillPicture) private var still
     let tile: HomeModel.Tile
 
     private var isSkill: Bool { tile.kind == .skill }
@@ -200,10 +201,20 @@ struct ExplainScreen: View {
                             .font(.system(size: 18, weight: .semibold, design: .rounded))
                         Text("What it says it does")
                             .font(.system(size: 12, weight: .semibold, design: .rounded)).foregroundStyle(.secondary)
-                        ScrollView {
-                            Text(tile.detail.isEmpty ? "It does not say." : tile.detail)
-                                .font(.system(size: 14, design: .rounded))
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                        // A scrolling area cannot be drawn to a picture file, so the
+                        // drawn version shows the words plainly.
+                        Group {
+                            if still {
+                                Text(tile.detail.isEmpty ? "It does not say." : tile.detail)
+                                    .font(.system(size: 14, design: .rounded))
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            } else {
+                                ScrollView {
+                                    Text(tile.detail.isEmpty ? "It does not say." : tile.detail)
+                                        .font(.system(size: 14, design: .rounded))
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
                         }
                         .frame(height: 96)
                         Text("Files: " + tile.files.prefix(6).joined(separator: ", ")
