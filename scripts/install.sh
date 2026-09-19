@@ -21,6 +21,22 @@
 # (the delete guard, the permission rules, the skills), and those changes are
 # the owner's to make where they can see them.
 
+#
+# Answers can also be given up front, which is how the Moblee app runs this
+# script (one install path, whether it is started from Terminal or the app):
+#
+#   bash scripts/install.sh --name "Sam" --vault-name "MyWiki" \
+#        --location "$HOME/Wiki/MyWiki" --progress
+#
+#   --name, --vault-name, --location   each answers its question in advance
+#   --progress   also print one line per step for a program to read, each
+#                starting "@@moblee " followed by a small JSON object
+#
+# Every run, however it is started, keeps a plain diary of its steps at
+# ~/.config/moblee/install-diary.txt: what ran, what passed, what failed and
+# why. It holds no names and writes the home folder as "~", so it is safe to
+# pass to whoever is helping if an install goes wrong.
+
 set -euo pipefail
 
 # ----- locate the package root ------------------------------------------------
@@ -28,9 +44,81 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 VAULT_TEMPLATE="$PACKAGE_ROOT/vault-template"
 
+# ----- answers given up front -------------------------------------------------
+ARG_NAME=""; ARG_VAULT_NAME=""; ARG_LOCATION=""; PROGRESS=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --name)        ARG_NAME="${2:-}"; shift 2 ;;
+    --vault-name)  ARG_VAULT_NAME="${2:-}"; shift 2 ;;
+    --location)    ARG_LOCATION="${2:-}"; shift 2 ;;
+    --progress)    PROGRESS=1; shift ;;
+    *) echo "Unknown option: $1"; exit 2 ;;
+  esac
+done
+
+# ----- the install diary and the progress lines -------------------------------
+DIARY_DIR="$HOME/.config/moblee"
+DIARY="$DIARY_DIR/install-diary.txt"
+mkdir -p "$DIARY_DIR"
+STEP_TOTAL=6
+STEP_N=0
+CURRENT_STEP="starting"
+
+diary() {
+  # the home folder is written as "~" so the diary carries no account name
+  local line="$*"
+  line="${line//\/private$HOME/~}"
+  line="${line//$HOME/~}"
+  printf '%s  %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$line" >> "$DIARY" 2>/dev/null || true
+}
+emit() {
+  # emit <step> <state> [why]   (why is always one of a fixed set of words)
+  [[ $PROGRESS -eq 1 ]] || return 0
+  if [[ -n "${3:-}" ]]; then
+    printf '@@moblee {"step":"%s","state":"%s","n":%d,"of":%d,"why":"%s"}\n' "$1" "$2" "$STEP_N" "$STEP_TOTAL" "$3"
+  else
+    printf '@@moblee {"step":"%s","state":"%s","n":%d,"of":%d}\n' "$1" "$2" "$STEP_N" "$STEP_TOTAL"
+  fi
+}
+step_start() { STEP_N=$((STEP_N+1)); CURRENT_STEP="$1"; diary "step $STEP_N of $STEP_TOTAL, $1: started"; emit "$1" start; }
+step_ok()    { diary "step $STEP_N of $STEP_TOTAL, $1: done"; emit "$1" ok; }
+step_fail()  { diary "step $STEP_N of $STEP_TOTAL, $1: FAILED ($2)"; emit "$1" fail "$2"; }
+diary_tail() {
+  # the last lines of a step's own output, kept only when the step failed
+  local file="$1" l
+  [[ -f "$file" ]] || return 0
+  while IFS= read -r l; do diary "    | $l"; done < <(tail -n 15 "$file")
+}
+on_exit() {
+  local code=$?
+  if [[ $code -ne 0 ]]; then
+    diary "stopped during \"$CURRENT_STEP\" with exit code $code"
+    emit "$CURRENT_STEP" stopped
+  fi
+}
+trap on_exit EXIT
+
+{
+  printf '\n'
+} >> "$DIARY" 2>/dev/null || true
+diary "=== Moblee install begins ==="
+diary "pack version: $(cat "$PACKAGE_ROOT/VERSION" 2>/dev/null || echo unknown)"
+diary "macOS: $(sw_vers -productVersion 2>/dev/null || echo unknown), chip: $(uname -m)"
+if xcode-select -p >/dev/null 2>&1; then
+  diary "python3: $(command -v python3 || echo none) ($(python3 --version 2>&1 || true))"
+  diary "git: $(git --version 2>&1 || echo none)"
+else
+  # asking the stand-in python3 or git for a version would pop up Apple's
+  # install window, so the diary only notes that the tools are missing
+  diary "Apple's developer tools are not installed (no git, no python3)"
+fi
+diary "started from: $([[ $PROGRESS -eq 1 ]] && echo 'the app' || echo 'Terminal'); answers up front: name=$([[ -n "$ARG_NAME" ]] && echo yes || echo no) wiki-name=$([[ -n "$ARG_VAULT_NAME" ]] && echo yes || echo no) place=$([[ -n "$ARG_LOCATION" ]] && echo yes || echo no)"
+
 if [[ ! -d "$VAULT_TEMPLATE" ]]; then
   echo "Error: vault-template/ not found at $VAULT_TEMPLATE"
   echo "Are you running this script from inside the Moblee package?"
+  diary "the pack's vault-template folder is missing"
+  emit starting fail template-missing
   exit 1
 fi
 
@@ -43,14 +131,26 @@ echo "This script lays down a Karpathy-style Obsidian vault on your Mac."
 echo ""
 
 # ----- collect user input -----------------------------------------------------
-read -r -p "Your name (used in templates) [Your Name]: " USER_NAME
+if [[ -n "$ARG_NAME" ]]; then
+  USER_NAME="$ARG_NAME"
+else
+  read -r -p "Your name (used in templates) [Your Name]: " USER_NAME || USER_NAME=""
+fi
 USER_NAME="${USER_NAME:-[Your Name]}"
 
-read -r -p "Vault name [MyWiki]: " VAULT_NAME
+if [[ -n "$ARG_VAULT_NAME" ]]; then
+  VAULT_NAME="$ARG_VAULT_NAME"
+else
+  read -r -p "Vault name [MyWiki]: " VAULT_NAME || VAULT_NAME=""
+fi
 VAULT_NAME="${VAULT_NAME:-MyWiki}"
 
 DEFAULT_LOCATION="$HOME/Wiki/$VAULT_NAME"
-read -r -p "Vault location [$DEFAULT_LOCATION]: " VAULT_LOCATION
+if [[ -n "$ARG_LOCATION" ]]; then
+  VAULT_LOCATION="$ARG_LOCATION"
+else
+  read -r -p "Vault location [$DEFAULT_LOCATION]: " VAULT_LOCATION || VAULT_LOCATION=""
+fi
 VAULT_LOCATION="${VAULT_LOCATION:-$DEFAULT_LOCATION}"
 
 # expand a leading ~ if the user typed one
@@ -66,6 +166,9 @@ if [[ -f "$VAULT_LOCATION/CLAUDE.md" && -d "$VAULT_LOCATION/wiki" ]]; then
   echo ""
   echo "There is already a Moblee vault at $VAULT_LOCATION."
   echo "Nothing there will be overwritten. Bringing it up to this version instead..."
+  diary "a Moblee wiki already exists at the chosen place; handing over to the updater"
+  emit starting handed-to-updater
+  trap - EXIT
   exec bash "$SCRIPT_DIR/update.sh" "$VAULT_LOCATION"
 fi
 
@@ -75,10 +178,13 @@ if [[ -e "$VAULT_LOCATION" ]]; then
   echo "Error: $VAULT_LOCATION already exists."
   echo "Refusing to overwrite. Pick a different location, or delete the existing"
   echo "directory first if you're sure you want to replace it."
+  diary "the chosen place already holds something that is not a Moblee wiki; nothing was changed"
+  emit starting fail place-taken
   exit 1
 fi
 
 # ----- copy the template ------------------------------------------------------
+step_start folder
 echo ""
 echo "Creating vault at $VAULT_LOCATION..."
 mkdir -p "$(dirname "$VAULT_LOCATION")"
@@ -92,13 +198,25 @@ echo "Substituting placeholders..."
 # Use a portable in-place sed that works on both BSD (macOS default) and GNU.
 # We write to a temp file and move it back to avoid sed -i incompatibilities.
 TODAY="$(date '+%-d %B %Y')"
+# A name typed by a person can hold characters sed treats specially in a
+# replacement (a backslash, an ampersand, the | used as the separator here),
+# so they are escaped before use: "Tom & Sam" must arrive as typed.
+sed_safe() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//&/\\&}"
+  s="${s//|/\\|}"
+  printf '%s' "$s"
+}
+SED_USER_NAME="$(sed_safe "$USER_NAME")"
+SED_VAULT_NAME="$(sed_safe "$VAULT_NAME")"
 substitute_in_file() {
   local file="$1"
   local tmp
   tmp="$(mktemp)"
-  sed -e "s|\[Your Name\]|$USER_NAME|g" \
-      -e "s|\[Your Vault Name\]|$VAULT_NAME|g" \
-      -e "s|\[Your Vault\]|$VAULT_NAME|g" \
+  sed -e "s|\[Your Name\]|$SED_USER_NAME|g" \
+      -e "s|\[Your Vault Name\]|$SED_VAULT_NAME|g" \
+      -e "s|\[Your Vault\]|$SED_VAULT_NAME|g" \
       -e "s|\[Install date\]|$TODAY|g" \
       "$file" > "$tmp"
   mv "$tmp" "$file"
@@ -115,7 +233,10 @@ done < <(find "$VAULT_LOCATION" \
                  -o -name "*.yaml" -o -name "*.json" \) \
               -print0)
 
+step_ok folder
+
 # ----- copy the vault tooling (v0.4, extended v0.5) ---------------------------
+step_start tools
 echo "Copying vault tooling (lint, commit gate, preflight, log appender, galaxy, dashboard)..."
 mkdir -p "$VAULT_LOCATION/scripts"
 for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh log-append.py; do
@@ -141,8 +262,10 @@ mkdir -p "$HOME/.config/moblee"
 echo "$VAULT_LOCATION" > "$HOME/.config/moblee/vault-path"
 # and the pack's own folder, so the owner's Claude can point back at the checklist
 echo "$PACKAGE_ROOT" > "$HOME/.config/moblee/package-path"
+step_ok tools
 
 # ----- git init ---------------------------------------------------------------
+step_start history
 echo "Initialising git repository..."
 (
   cd "$VAULT_LOCATION"
@@ -178,6 +301,13 @@ elif [[ -f "$VAULT_LOCATION/scripts/vault-gate.py" && -d "$VAULT_LOCATION/.git" 
   chmod +x "$VAULT_LOCATION/.git/hooks/pre-commit"
   echo "Commit gate installed (.git/hooks/pre-commit)."
 fi
+if git -C "$VAULT_LOCATION" rev-parse --verify --quiet HEAD >/dev/null 2>&1; then
+  step_ok history
+else
+  # the wiki works without its first commit, so this is recorded and not fatal
+  diary "step $STEP_N of $STEP_TOTAL, history: the first commit was not made"
+  emit history ok
+fi
 
 # ----- safety layer (v0.5; not optional) --------------------------------------
 # The delete guard inspects every shell command Claude composes and refuses
@@ -186,9 +316,13 @@ fi
 # to hand to anyone, so a failure here stops the install.
 echo ""
 echo "Installing the safety layer (delete guard and permission rules)..."
-if python3 "$PACKAGE_ROOT/safety/install-safety.py" --vault "$VAULT_LOCATION"; then
-  :
+step_start safety
+SAFETY_OUT="$(mktemp)"
+if python3 "$PACKAGE_ROOT/safety/install-safety.py" --vault "$VAULT_LOCATION" 2>&1 | tee "$SAFETY_OUT"; then
+  step_ok safety
 else
+  step_fail safety safety-layer
+  diary_tail "$SAFETY_OUT"
   echo ""
   echo "The safety layer did not install, so the installer has stopped here:"
   echo "a vault without it is not safe to use. The message above says why."
@@ -200,14 +334,21 @@ else
 fi
 
 # ----- starting memories (v0.5) -----------------------------------------------
+step_start skills
 python3 "$PACKAGE_ROOT/scripts/seed-memory.py" --vault "$VAULT_LOCATION" \
-  || echo "  (starting memories not seeded; harmless, Claude builds its own)"
+  || { echo "  (starting memories not seeded; harmless, Claude builds its own)"; diary "    starting memories not seeded (harmless)"; }
 
 # ----- the core skills (v0.6: installed here, no longer a separate step) -----
 echo ""
 echo "Installing the core skills (brain, capture, interview, PDF, galaxy and more)..."
-bash "$SCRIPT_DIR/install-skills.sh" --quiet \
-  || echo "  (core skills not fully installed; run  bash scripts/install-skills.sh  later)"
+SKILLS_OUT="$(mktemp)"
+if bash "$SCRIPT_DIR/install-skills.sh" --quiet 2>&1 | tee "$SKILLS_OUT"; then
+  step_ok skills
+else
+  echo "  (core skills not fully installed; run  bash scripts/install-skills.sh  later)"
+  step_fail skills skills-incomplete
+  diary_tail "$SKILLS_OUT"
+fi
 
 # ----- the checklist (v0.6; offered, not shown, from v0.7) -------------------
 # Everything optional is chosen from one checklist. From v0.7 nothing on it is
@@ -238,6 +379,7 @@ fi
 # ----- commit the settings the install wrote (v0.5) ---------------------------
 # The initial commit happened before the safety step; the permission rules and
 # the ignore file it added are committed now, so the vault starts clean.
+step_start finish
 (
   cd "$VAULT_LOCATION"
   # one path per git add: a missing path makes git stage nothing at all
@@ -248,6 +390,14 @@ fi
     git commit --quiet -m "moblee: safety layer, settings and chosen options" 2>/dev/null || true
   fi
 )
+step_ok finish
+CURRENT_STEP="finished"
+diary "=== Moblee install finished ==="
+if [[ $PROGRESS -eq 1 ]]; then
+  JSON_VAULT="${VAULT_LOCATION//\\/\\\\}"
+  JSON_VAULT="${JSON_VAULT//\"/\\\"}"
+  printf '@@moblee {"step":"done","state":"ok","n":%d,"of":%d,"vault":"%s"}\n' "$STEP_TOTAL" "$STEP_TOTAL" "$JSON_VAULT"
+fi
 
 # ----- done -------------------------------------------------------------------
 echo ""
