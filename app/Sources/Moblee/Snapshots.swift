@@ -117,6 +117,18 @@ enum Snapshots {
         draw(homeScene { $0.homeModel.needsRepair = true }, "12-home-repair", to: folder)
         draw(homeScene { $0.homeModel.tiles = sample; $0.homeModel.explaining = sample[1] }, "13-explain-terminal", to: folder)
         draw(homeScene { $0.homeModel.tiles = sample; $0.homeModel.explaining = sample[2] }, "14-explain-clicks", to: folder)
+        var made = HomeModel.Tile(kind: .skill, key: "gym-log", title: "A skill Claude wrote: gym-log",
+                                  why: "You asked to log gym sets by saying log gym.",
+                                  detail: "Logs the owner's gym sets to the Gym Log page when they say log gym.",
+                                  how: .silent, paid: false)
+        made.files = ["SKILL.md"]
+        var bad = HomeModel.Tile(kind: .skill, key: "brain", title: "A skill Claude wrote: brain",
+                                 why: "A better brain.", detail: "", how: .silent, paid: false)
+        bad.state = .blocked
+        bad.note = "'brain' is the name of one of Moblee's own skills; the draft needs a different name."
+        draw(homeScene { $0.homeModel.tiles = [made, bad] }, "16-home-skills", to: folder)
+        draw(homeScene { $0.homeModel.tiles = [made]; $0.homeModel.explaining = made }, "17-explain-skill", to: folder)
+        draw(homeScene { $0.homeModel.listUnreadable = true }, "18-home-list-unreadable", to: folder)
         draw(homeScene { f in
             f.mode = .update
             f.install.items = InstallRun.updateItems()

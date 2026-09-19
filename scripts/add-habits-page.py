@@ -2,7 +2,7 @@
 """add-habits-page.py: give an existing vault the Habits and Tools page (v0.7).
 
 The page records how the owner works and which optional items are installed
-to match; the get-started skill fills it in from conversation. New vaults get
+to match; the companion skill fills it in from conversation. New vaults get
 it from the template. This script, run by the updater:
 
   1. Copies wiki/Wiki Operations/Habits and Tools.md from the template, only if

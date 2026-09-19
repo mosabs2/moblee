@@ -2,10 +2,22 @@ import SwiftUI
 
 @main
 struct MobleeApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var flow = Flow()
 
     init() {
-        MainActor.assumeIsolated { Snapshots.runIfAsked() }
+        MainActor.assumeIsolated {
+            // The modes that do real work in a practice home refuse to start
+            // without one, before anything at all has looked at the real home.
+            let args = CommandLine.arguments
+            let practice = Flow.value(after: "--home", in: args) != nil
+                || !(ProcessInfo.processInfo.environment["MOBLEE_TEST_HOME"] ?? "").isEmpty
+            if (args.contains("--self-drive") || args.contains("--rehearse")) && !practice {
+                print("--self-drive and --rehearse only run with --home <practice folder>; nothing was done.")
+                exit(2)
+            }
+            Snapshots.runIfAsked()
+        }
     }
 
     var body: some Scene {
@@ -18,6 +30,20 @@ struct MobleeApp: App {
         .windowResizability(.contentSize)
         .windowStyle(.hiddenTitleBar)
     }
+}
+
+/// Quitting half-way through a build or an update would leave it half done, so
+/// the app waits for the engine to finish; one window, and closing it quits.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    @MainActor static weak var install: InstallRun?
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let busy = MainActor.assumeIsolated { AppDelegate.install?.phase == .running }
+        if busy { NSSound.beep(); return .terminateCancel }
+        return .terminateNow
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }
 
 /// The screens, in the order the owner meets them.
@@ -39,7 +65,11 @@ final class Flow: ObservableObject {
 
     @Published var mode: Mode = .install
     @Published var step: Step = .welcome
-    @Published var ownerName: String = ""
+    @Published var ownerName: String = "" {
+        didSet { if oldValue != ownerName { chosenPlace = nil } }   // a new name means a new folder
+    }
+    /// Where this run's wiki goes, fixed at the first try so a second try finishes the same one.
+    var chosenPlace: (name: String, url: URL)?
     let install = InstallRun()
     let homeModel = HomeModel()
 
@@ -67,6 +97,7 @@ final class Flow: ObservableObject {
             step = s
         }
         if let v = Self.value(after: "--owner", in: args) { ownerName = v }
+        AppDelegate.install = install
         if HomeModel.existingVault(home: home) != nil && !args.contains("--fresh") {
             mode = .home
             homeModel.load(home: home, bundledPack: bundledPack)

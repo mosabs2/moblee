@@ -1307,9 +1307,11 @@ def main() -> int:
 
     results = final_check(items, only={it.key for it in chosen})
     path = write_report(results, vault_path())
-    for it, ok, _ in results:
+    for it, ok, detail in results:
         status[it.key] = ok
-        emit(it.key, "ok" if ok else "fail")
+        # the check's own plain sentence travels with a failure, so the app can
+        # say why ("it needs the Chrome item first") and not only that it failed
+        emit(it.key, "ok" if ok else "fail", detail=str(detail).replace(str(HOME), "~"))
     state = {"last_run": STAMP, "chosen": [it.key for it in chosen],
              "working": [it.key for it, ok, _ in results if ok],
              "status": status}

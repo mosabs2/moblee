@@ -36,7 +36,11 @@ struct BuildScreen: View {
     private var sentence: String {
         switch install.phase {
         case .idle, .running: return "Building your wiki…"
-        case .finished: return "Your wiki is ready."
+        case .finished:
+            // a step the engine carries on past (Claude's skills) can fail without stopping the build
+            return install.items.contains { $0.state == .failed }
+                ? "Your wiki is ready. One part did not finish; tell Claude: run a check-up."
+                : "Your wiki is ready."
         case .failed(let why):
             switch why {
             case "place-taken": return "That name is taken. Go back and change it."
@@ -66,7 +70,10 @@ struct BuildScreen: View {
             install.phase = .failed(why: "no-pack")
             return
         }
-        let place = flow.freeLocation()
+        // A second try goes into the same folder as the first: the installer
+        // finishes a half-built wiki and never makes a second one beside it.
+        let place = flow.chosenPlace ?? flow.freeLocation()
+        flow.chosenPlace = place
         install.start(home: flow.home, ownerName: flow.trimmedName,
                       wikiName: place.name, location: place.url, bundledPack: pack)
     }

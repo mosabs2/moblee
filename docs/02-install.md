@@ -2,6 +2,16 @@
 
 This document walks through the step-by-step install of the Moblee starter pack on a Mac (Moblee runs on a Mac only). It assumes you have the prerequisites from [01-prerequisites.md](01-prerequisites.md) in place.
 
+## The app route
+
+From v0.8.0 there is a second way to install: the Moblee app, a small Mac app. It is offered on the Releases page of the GitHub repository when a signed build is available. If none is offered yet, use the Terminal steps below, which always work.
+
+You double-click the app and follow its screens. Each screen has one picture, one sentence and one button. After the welcome, it checks what the Mac needs: Apple's developer tools and Claude's app, with a Get button beside anything missing, and Obsidian, marked "Can wait". It asks one typed question, "What should Claude call you?". It then builds the wiki, shown as six pictures that light up in turn: the wiki, its tools, its history, the guard, Claude's skills, and finishing. The last screen shows three numbered pictures: click Code in Claude's app, pick the wiki's folder, and say "get me started". The Open Claude button copies those words for you to paste. The Code tab in Claude's app needs a paid Claude plan.
+
+The wiki is named after you (for example "Sam Wiki") and placed in a `Wiki` folder in your home folder. If that name is taken, it gets a number. There are no other questions.
+
+The app runs the pack's own `scripts/install.sh` underneath, so an app install and a Terminal install are the same install, and everything from Step 3 onwards applies to both. The app carries the pack inside it and copies it once to `~/Library/Application Support/Moblee/pack-<version>`, because the wiki's tools need the pack later (for the checklist and for updates). If the build stops, the button reads "Show what happened" and points you to the install diary described below.
+
 ## Step 1: get the Moblee package
 
 The simplest way is GitHub's green Code button, then Download ZIP; open the ZIP and it unpacks to a folder called `moblee-main` (in your Downloads folder, `cd ~/Downloads/moblee-main`). If you use git, you can clone it instead:
@@ -51,6 +61,10 @@ After that, the script will:
 
 It takes a few minutes. You run the installer yourself, rather than asking Claude to, because it changes Claude's own settings (the guard, the permission rules and the skills); those changes are yours to make, on your own screen.
 
+**The install diary.** Every run of the installer, from Terminal or from the app, keeps a plain diary of its steps at `~/.config/moblee/install-diary.txt`: what ran, what passed, what failed and why. It holds no names, and it writes your home folder as `~`, so it is safe to pass to whoever is helping you if an install goes wrong. Each run adds to the end of the file; nothing in it is overwritten.
+
+**Answers up front.** The three questions can also be answered on the command line, which is how the app runs the installer: `bash scripts/install.sh --name "Sam" --vault-name "MyWiki" --location "$HOME/Wiki/MyWiki"`. Adding `--progress` prints one extra line per step for a program to read; you do not need it. A name that contains `&`, `|` or a backslash now arrives in your wiki exactly as you typed it.
+
 **Updating later.** You never run the installer twice on the same vault; if you point it at an existing Moblee vault, it hands over to the updater instead of overwriting anything. When a new Moblee version comes out, download it and run the updater; see `docs/08-updating.md`.
 
 ## Step 3: open the vault in Obsidian
@@ -61,7 +75,7 @@ Click `Welcome.md` and read it.
 
 ## Step 4: choosing the extras
 
-**The usual way: ask Claude.** With the vault open in Obsidian, go into the vault's folder in Terminal, type `claude`, and say **get me started**. Claude asks how you use your Mac, where your mail and calendar live, and what you read, watch and make. It suggests only the extras that fit, each with its reason, time, space and cost, and gives you one command to run from the Moblee folder, for example `python3 scripts/moblee-setup.py --tick videos,documents,google`. That opens the checklist below with those items ticked. Your answers are kept on the wiki's `Habits and Tools` page, and Claude checks back from time to time as your habits change (say **review my setup** whenever you like). It asks before anything is added, and anything you say no to is not suggested again for ninety days.
+**The usual way: ask Claude.** With the vault open in Obsidian, go into the vault's folder in Terminal and type `claude` (or, in Claude's app, click Code and pick the vault's folder), and say **get me started**. Claude asks how you use your Mac, where your mail and calendar live, and what you read, watch and make. It helps you make your first page, then proposes one or two extras that clearly fit, each with its reason, time, space and cost. If you have the Moblee app, what you agree to waits there as a tile with an Add button (`docs/10-connections.md` says which items the app adds by itself and which need you at a Terminal window). If you installed from Terminal, Claude gives you one command to run from the Moblee folder, for example `python3 scripts/moblee-setup.py --tick videos`. That opens the checklist below with those items ticked. Your answers are kept on the wiki's `Habits and Tools` page, and on any later day you can say **guide me** for one next step, or **review my setup** to go over the whole setup. It asks before anything is added, and anything you say no to is not suggested again for ninety days.
 
 **The checklist.** Run on its own, or through the command Claude gives you, the checklist covers everything optional: your Mac's Calendar, Reminders, Mail and Notes; Gmail, Google Calendar and Google Drive; GitHub; Chrome with your X, Instagram and YouTube logins and the Obsidian Web Clipper; video watching; PDF, Word, PowerPoint and Excel; film, audio and picture editing; a news brief; trip pages; X capture; a skill maker; Obsidian extras; the paid options; and looking after the wiki (the weekly health check, the learning path, spoken replies, and the `vault` shortcut in Terminal).
 
@@ -92,9 +106,10 @@ python3 scripts/moblee-setup.py --check
 A quick checklist to confirm everything is in place:
 
 - The vault folder exists at the location you chose.
-- `~/.claude/skills/` contains the eight core skills: `brain/`, `compact/`, `galaxy/`, `get-started/`, `wiki-capture/`, `wiki-interview/`, `wiki-to-pdf/`, `design-your-brand/` (plus any extras you ticked).
+- `~/.claude/skills/` contains the eight core skills: `brain/`, `compact/`, `companion/`, `galaxy/`, `wiki-capture/`, `wiki-interview/`, `wiki-to-pdf/`, `design-your-brand/` (plus any extras you ticked).
 - `~/.claude/hooks/bash-guard.py` exists, and the vault's `.claude/settings.local.json` lists the permission rules (the installer printed the counts).
-- The vault's `VERSION` file reads `0.7.0` for this release.
+- The vault's `VERSION` file reads `0.8.0` for this release.
+- `python3 scripts/moblee-doctor.py`, run from the Moblee folder, changes nothing and marks each finding `OK`, `LOOK` or `PROBLEM`.
 - `python3 scripts/moblee-setup.py --check`, run from the Moblee folder, shows `WORKING` for each item you ticked.
 - If you added the `vault` shortcut: typing `vault` in a new Terminal window takes you into the vault and prints the ready signal.
 - Obsidian opens the vault and displays `Welcome.md`.

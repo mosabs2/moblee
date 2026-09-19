@@ -24,7 +24,7 @@ How the owner works day to day, how they like Claude to work with them, and what
 
 ## Installed, and why
 
-*(One line per checklist item the owner agreed to, written when they agree and marked working once the check shows it: a dash, the item's key in backticks, the date, and the reason the owner gave. For example: - `videos`, 19 September 2026: saves YouTube and Instagram videos to watch later (working).)*
+*(One line per checklist item that has been added and checked, moved here from "Waiting in Moblee" and marked working: a dash, the item's key in backticks, the date, and the reason the owner gave. For example: - `videos`, 19 September 2026: saves YouTube and Instagram videos to watch later (working).)*
 
 ## Made for the owner
 

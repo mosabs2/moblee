@@ -18,7 +18,7 @@
 #   5. Installs the safety layer: delete guard, hook registration, permission rules.
 #   6. Adds the new rules and sections to CLAUDE.md without replacing the file.
 #   7. Adds wiki/Identity.md if the vault has none, the starting memories, and
-#      (v0.7) the Habits and Tools page the get-started conversation fills in.
+#      (v0.7) the Habits and Tools page the companion's first conversation fills in.
 #   8. Offers the weekly health-check schedule (Mac).
 #   9. Offers the optional learning path (refreshes it if already added).
 #  10. Writes the new VERSION and commits the update in the vault.
@@ -45,14 +45,34 @@ emit() {
   [[ $PROGRESS -eq 1 ]] || return 0
   printf '@@moblee {"step":"%s","state":"%s","n":%d,"of":%d}\n' "$1" "$2" "$USTEP_N" "$USTEP_TOTAL"
 }
+# The same plain diary the installer keeps (~/.config/moblee/install-diary.txt):
+# no names, the home folder written as "~". It is what the app shows, and what
+# the check-up reads, when an update stops part-way.
+DIARY="$HOME/.config/moblee/install-diary.txt"
+mkdir -p "$HOME/.config/moblee"
+diary() {
+  local line="$*"
+  if [[ -n "${VAULT:-}" ]]; then
+    line="${line//\/private$VAULT/<wiki>}"
+    line="${line//$VAULT/<wiki>}"
+    line="${line//$(basename "$VAULT")/<wiki>}"
+  fi
+  line="${line//\/private$HOME/~}"
+  line="${line//$HOME/~}"
+  printf '%s  %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$line" >> "$DIARY" 2>/dev/null || true
+}
 ustep() {
   # closes the step before, opens the next
-  if [[ -n "$USTEP" ]]; then emit "$USTEP" ok; fi
+  if [[ -n "$USTEP" ]]; then emit "$USTEP" ok; diary "update step $USTEP_N of $USTEP_TOTAL, $USTEP: done"; fi
   USTEP="$1"; USTEP_N=$((USTEP_N+1)); emit "$USTEP" start
+  diary "update step $USTEP_N of $USTEP_TOTAL, $USTEP: started"
 }
 on_exit() {
   local code=$?
-  if [[ $code -ne 0 && -n "$USTEP" ]]; then emit "$USTEP" fail; emit "$USTEP" stopped; fi
+  if [[ $code -ne 0 ]]; then
+    diary "the update stopped during \"${USTEP:-starting}\" with exit code $code; the wiki's own pages were not touched"
+    if [[ -n "$USTEP" ]]; then emit "$USTEP" fail; emit "$USTEP" stopped; fi
+  fi
 }
 trap on_exit EXIT
 
@@ -70,6 +90,9 @@ if [[ -z "$VAULT" || ! -f "$VAULT/CLAUDE.md" || ! -d "$VAULT/wiki" ]]; then
   exit 1
 fi
 OLD_VERSION="$(cat "$VAULT/VERSION" 2>/dev/null || echo 'before 0.5')"
+printf '\n' >> "$DIARY" 2>/dev/null || true
+diary "=== Moblee update begins ==="
+diary "from version $OLD_VERSION to $NEW_VERSION; macOS $(sw_vers -productVersion 2>/dev/null || echo unknown), chip $(uname -m); started from $([[ $PROGRESS -eq 1 ]] && echo 'the app' || echo 'Terminal')"
 
 echo ""
 echo "==================================================================="
@@ -299,7 +322,8 @@ if [[ -d "$VAULT/.git" ]]; then
   )
 fi
 
-if [[ -n "$USTEP" ]]; then emit "$USTEP" ok; USTEP=""; fi
+if [[ -n "$USTEP" ]]; then emit "$USTEP" ok; diary "update step $USTEP_N of $USTEP_TOTAL, $USTEP: done"; USTEP=""; fi
+diary "=== Moblee update finished ==="
 if [[ $PROGRESS -eq 1 ]]; then
   printf '@@moblee {"step":"done","state":"ok","n":%d,"of":%d}\n' "$USTEP_TOTAL" "$USTEP_TOTAL"
 fi

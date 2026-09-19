@@ -1,10 +1,26 @@
 # 10. Connections: the checklist, item by item
 
-Moblee's wiki works on its own, but it is more useful when Claude can read what is already on your Mac and in your accounts: your calendar, your mail, your files, a video someone sent you. Everything of that kind is chosen from one checklist, `scripts/moblee-setup.py`. The easiest way to fill it in is to say "get me started" to Claude in your wiki, which suggests what fits and gives you the command. The installer and the updater also offer it, and you can run it at any time from the Moblee folder in Terminal:
+Moblee's wiki works on its own, but it is more useful when Claude can read what is already on your Mac and in your accounts: your calendar, your mail, your files, a video someone sent you. Everything of that kind is chosen from one checklist, `scripts/moblee-setup.py`. The easiest way to choose from it is to say "get me started" or "guide me" to Claude in your wiki, which suggests what fits; the next section says how the item then reaches your Mac. The installer and the updater also offer the checklist, and you can run it at any time from the Moblee folder in Terminal:
 
 ```
 python3 scripts/moblee-setup.py
 ```
+
+## How items are usually added now
+
+From v0.8.0 the usual way to add an item is to agree it with Claude and then add it in the Moblee app. In your wiki, say "guide me" (or "get me started" the first time). Claude proposes an item only for a reason you gave or your wiki shows, and writes what you agree on the `Habits and Tools` page and in a small file the app reads. Open Moblee, and the item is waiting as a tile with its reason, its time, space and cost, and an Add button. The Terminal commands on this page still work, and they are the way to add items if you have no app.
+
+The tiles are of three sorts.
+
+- **Added by the app itself**, with a progress mark, because they ask nothing and need no password: the news brief (`news-brief`), trip planning (`trips`), X capture (`x-capture`), the weekly health check (`weekly`), the learning path (`lessons`) and spoken replies (`voice`).
+- **Added in a Terminal window the app opens for you**, because they need your Mac password for Homebrew, a sign-in, or the `claude` command: the Mac's Calendar, Reminders, Mail and Notes (`mac-apps`), GitHub (`github`), Chrome (`chrome`), video watching (`videos`), documents (`documents`), film, audio and picture editing (`film`, `audio`, `pictures`), the skill maker (`skill-maker`) and the Obsidian extras (`obsidian-extras`). The app first shows three pictures of what is about to happen, then opens a Terminal window that runs `python3 scripts/moblee-setup.py --only <item>`. Follow it, close it when it says so, and go back to Moblee.
+- **Connected by clicks inside Claude's own app**: Gmail, Google Calendar and Google Drive (`google`) and ElevenLabs (`generation`). The app shows the clicks as three pictures and opens Claude's connectors page. Signing in is yours, and paying for anything is your choice, on that company's own site.
+
+The `vault` shortcut (`vault-fn`) is only useful to someone who works in Terminal, so it never appears as a tile. A skill Claude has drafted for you appears as a tile too, marked as made for you; `docs/11-the-app-and-the-companion.md` explains that.
+
+When you have added something, go back to Claude and say so. Claude tests the item and records that it is working. If you added a connection, quit Claude and open it again first so it sees it.
+
+## The checklist in Terminal
 
 Each line of the checklist says what the item does, roughly how long it takes, how much space it uses and what it costs. Items that are already working are marked `working` and left alone. You type the numbers of the items to tick or untick (for example `3 7 12`), `all` for everything, `free` for everything that costs nothing, or `none` to clear the list, and then press Return on its own when the list is right. Before anything is installed the checklist shows a summary: the order it will work in, its estimate of time and space for what you ticked, and every moment you will be needed at the keyboard. It then asks "Start now?". Nothing is ticked in advance. The easier way to choose is to open Claude in your wiki and say "get me started" (or "review my setup" later): Claude asks how you work and gives you a command, such as `python3 scripts/moblee-setup.py --tick videos,google`, that opens this checklist with only the fitting items ticked. You can still change anything before you press Return. `--list` prints every item with its key, time, space and cost.
 

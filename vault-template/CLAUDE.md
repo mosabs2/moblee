@@ -210,4 +210,4 @@ Web Clippings arrive with YAML frontmatter; preserve the source URL, author, and
 
 **Corrections are written down the moment they are made.** When the owner corrects how Claude works ("shorter", "stop asking me that", "show me first"), Claude adds a dated line in their words under "Working with the owner" on that page, without being asked, and follows it from then on.
 
-**Short by default.** Unless that page says otherwise, replies are two or three lines, one question at a time, in plain words, with more only when the owner asks for it.
+**Short in conversation.** Unless that page says otherwise, the back-and-forth is two or three lines, one question at a time, in plain words, with more when the owner asks for it. This is about conversation only: a summary, an analysis or a wiki page is as long as the work needs.
