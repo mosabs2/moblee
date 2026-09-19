@@ -6,6 +6,8 @@
 #   bash scripts/install-skills.sh         # safe install, refuses to overwrite
 #   bash scripts/install-skills.sh -f      # replace existing skills (old copies are kept)
 #   bash scripts/install-skills.sh --update  # same as -f, and skips the PDF question
+#   bash scripts/install-skills.sh --quiet   # safe install, no header, no PDF question
+#                                            # (the installer uses this; PDF is on the checklist)
 #
 # Each skill in skills/<name>/ becomes ~/.claude/skills/<name>/. Claude Code
 # and Cowork pick them up automatically at the next session. Nothing is ever
@@ -33,13 +35,17 @@ if [[ "${1:-}" == "--update" ]]; then
   FORCE=1
   UPDATE=1
 fi
+QUIET=0
+if [[ "${1:-}" == "--quiet" ]]; then
+  QUIET=1
+fi
 BACKUP_DIR="$HOME/.config/moblee/backups/$(date '+%Y%m%d-%H%M%S')/skills"
 
 # ----- destination ------------------------------------------------------------
 SKILLS_DST="$HOME/.claude/skills"
 mkdir -p "$SKILLS_DST"
 
-if [[ $UPDATE -eq 0 ]]; then
+if [[ $UPDATE -eq 0 && $QUIET -eq 0 ]]; then
   echo ""
   echo "==================================================================="
   echo "  Moblee skills installer"
@@ -110,7 +116,7 @@ fi
 # This step is entirely optional and only matters for PDF rendering. Skipping it
 # is the recommended default: nothing else in the pack depends on it, and Claude
 # can set it up on request the first time a PDF is actually wanted.
-if [[ $UPDATE -eq 1 ]]; then
+if [[ $UPDATE -eq 1 || $QUIET -eq 1 ]]; then
   exit 0
 fi
 echo ""

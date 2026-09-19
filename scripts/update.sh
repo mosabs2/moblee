@@ -269,5 +269,24 @@ echo ""
 echo "Your wiki's content was not touched. Replaced files were kept at:"
 echo "  $BACKUP"
 echo ""
+# ----- the checklist (v0.6) -----------------------------------------------------
+# Existing vaults get the same checklist a new install shows: the Mac's own
+# apps, Google, GitHub, Chrome, video, documents, editing tools, the news brief
+# and the paid extras. Items already working are marked and left alone.
+if [[ -f "$SCRIPT_DIR/moblee-setup.py" ]]; then
+  echo "New in this version: a checklist that connects your wiki to your Mac's"
+  echo "Calendar, Mail and Reminders, Google, GitHub, Chrome, videos, documents"
+  echo "and editing tools. It says the time, space and any cost before anything"
+  echo "starts, and it can be run any time with: python3 scripts/moblee-setup.py"
+  if [[ -t 0 ]]; then
+    read -r -p "Open the checklist now? [Y/n]: " OPEN_SETUP || OPEN_SETUP="n"  # no answer: do not open
+    if [[ ! "$OPEN_SETUP" =~ ^[Nn]$ ]]; then
+      MOBLEE_VAULT="$VAULT" python3 "$SCRIPT_DIR/moblee-setup.py" \
+        || echo "  (the checklist stopped early; run it again to carry on)"
+    fi
+  fi
+  echo ""
+fi
+
 echo "Next time you open Claude Code in the vault, say: orient"
 echo ""

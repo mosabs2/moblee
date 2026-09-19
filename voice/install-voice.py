@@ -30,8 +30,13 @@ def main():
         return 1
 
     os.makedirs(HOOKS, exist_ok=True)
+    keep = os.path.expanduser("~/.config/moblee/backups/" + time.strftime("%Y%m%d-%H%M%S") + "/hooks")
     for name in ("speak-elevenlabs.py", "voice", "nudge.sh"):
         src, dst = os.path.join(HERE, name), os.path.join(HOOKS, name)
+        if os.path.exists(dst):  # an existing hook is kept before it is replaced
+            os.makedirs(keep, exist_ok=True)
+            shutil.copy2(dst, os.path.join(keep, name))
+            print(f"kept the previous {name} at {keep}")
         shutil.copy2(src, dst)
         os.chmod(dst, os.stat(dst).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         print(f"installed {dst}")

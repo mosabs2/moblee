@@ -45,6 +45,7 @@ FILES = [
     "scripts/log-append.py",
     "scripts/vault-orient-preflight.sh",
     "scripts/patch-claude-md.py",
+    "scripts/moblee-setup.py",
     "scripts/seed-memory.py",
     "scripts/add-identity.py",
     "scripts/vault.sh",

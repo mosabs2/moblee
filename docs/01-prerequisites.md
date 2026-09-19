@@ -1,6 +1,6 @@
 # 01. Prerequisites
 
-Moblee runs on a Mac. It has been tested on Apple Silicon (M-series) machines running macOS 14 and later; it should work on earlier hardware as well, but the install commands below assume macOS. Before running the installer, get the four pieces of software described here in place.
+Moblee runs on a Mac only. It has been tested on Apple Silicon (M-series) machines running macOS 14 and later; it should work on earlier hardware as well, though connecting the Mac's own Calendar, Reminders, Mail and Notes needs macOS 14 (Sonoma) or later. Before running the installer, get the four pieces of software described here in place. Everything else (Homebrew, the PDF renderer, the video tools, the Chrome extensions) comes later, from the checklist the installer shows at the end; see [10-connections.md](10-connections.md).
 
 ## Obsidian
 
@@ -24,9 +24,9 @@ claude --version
 
 You should see a version string. If you see "command not found", the installer's PATH step did not complete; see the Claude Code install docs for fixes.
 
-## Git
+## Apple's developer tools and git
 
-Git is the version control system that backs the vault's audit trail. On macOS, git comes with the Command Line Tools, which you install once.
+Git is the version control system that backs the vault's audit trail. On macOS, git comes with Apple's free developer tools (the Command Line Tools), which you install once. Several checklist items need them too, so they only ever need installing once.
 
 To install:
 
@@ -34,7 +34,7 @@ To install:
 xcode-select --install
 ```
 
-A dialog will pop up asking you to install the Command Line Tools. Accept it. The install takes a few minutes.
+A window will appear asking to install the Command Line Tools. Click Install, then Agree. It usually takes 5 to 20 minutes and uses around 1.5 GB.
 
 To verify:
 
@@ -53,30 +53,23 @@ The Moblee `vault` shell function reminds you to do this if you skip it; you can
 
 ## Python 3
 
-Python 3 runs the vault tooling: the weekly health check (`lint-v2.py`), the commit gate, the dashboard, the galaxy view, and the optional `wiki-to-pdf` renderer. Recent macOS versions ship with Python 3 preinstalled, so this step is usually a one-line check. To verify:
+Python 3 runs the vault tooling (the weekly health check, the commit gate, the dashboard, the galaxy view) and the checklist itself. It comes with Apple's developer tools, so once those are in, this step is a one-line check. To verify:
 
 ```
 python3 --version
 ```
 
-If you see something like `Python 3.11.x`, you're set. If not, install Python 3 from [python.org](https://www.python.org/downloads/) or via Homebrew (`brew install python3`).
+If you see `Python 3.9` or anything later, you're set (the version that comes with the developer tools is enough). If you see "command not found" or a window offering to install the developer tools, finish the previous step first.
 
-The PDF renderer additionally needs WeasyPrint and a few system libraries. `install-skills.sh` offers to install these, and skips the step cleanly if Homebrew is not present, since the Python packages are of no use without the system libraries underneath them. There is no need to do any of it up front: ask Claude to set up the PDF renderer the first time you actually want a PDF.
+## Homebrew, and everything else, comes later
 
-To install them by hand, take the system libraries first and the Python packages second:
-
-```
-brew install cairo pango gdk-pixbuf libffi
-pip3 install --user weasyprint markdown jinja2 PyYAML pypdf
-```
-
-Stock macOS ships pip 21.2.4, which does not understand `--break-system-packages`; that option only exists from pip 23.0 onwards. Homebrew itself, if you do not already have it, installs from [brew.sh](https://brew.sh). The Moblee installer never tries to install Homebrew for you.
+Homebrew is the free, standard way to install tools on a Mac. You do not need it before installing Moblee. If anything you tick on the checklist needs it, the checklist installs it for you: it asks for your Mac password once (typing it shows nothing on screen, which is normal) and takes 5 to 10 minutes. The PDF renderer, the video tools, the editing tools and the Chrome extensions are all checklist items in the same way, so there is nothing more to install by hand.
 
 ## Optional: Obsidian Web Clipper
 
 The Obsidian Web Clipper is a browser extension that saves a clean markdown copy of any web page (with YAML frontmatter for source, author, and date) directly into a folder of your choice. It's the easiest way to feed reading material into the wiki's `Clippings/` inbox.
 
-Install it from the Chrome Web Store, the Firefox Add-ons store, or the Safari extension gallery. Then, in the extension's settings, point its save location at the `Clippings/` folder inside your vault (which you'll create with the Moblee installer in a moment).
+The checklist's Chrome item opens its page in the Chrome Web Store for you to add it; you can also install it yourself from the Chrome Web Store, the Firefox Add-ons store or the Safari extension gallery. Then, in the extension's settings, point its save location at the `Clippings/` folder inside your vault (which you'll create with the Moblee installer in a moment).
 
 This is optional. You can also save sources by hand: drag PDFs into `raw/`, paste text into a markdown file under `raw/`, or save a webpage as markdown using any tool you prefer.
 
@@ -88,4 +81,4 @@ You can ignore the Readwise paragraph in `CLAUDE.md` if you don't use Readwise; 
 
 ## Ready?
 
-When you have Obsidian, Claude Code, Git, and (optionally) Python 3 installed and verified, move on to [02-install.md](02-install.md).
+When you have Obsidian, Claude Code, Apple's developer tools (with git) and Python 3 installed and verified, move on to [02-install.md](02-install.md).
