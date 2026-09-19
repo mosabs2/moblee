@@ -63,6 +63,8 @@ enum Snapshots {
 
     private static func drawAll(to folder: URL) {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        // No window and no screen being drawn yet, so waiting here is safe.
+        Checkup.knownBeforeDrawing = Checkup.developerToolsInstalled()
 
         draw(scene(.welcome), "00-welcome", to: folder)
         draw(scene(.checkup), "01-checkup", to: folder)

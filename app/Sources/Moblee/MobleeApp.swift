@@ -134,13 +134,16 @@ struct RootView: View {
                 removal: .move(edge: .leading).combined(with: .opacity)))
 
             if flow.isTestMode {
-                Text("Practice run")
+                Text(SelfDrive.asked ? "Practice run, driving itself" : "Practice run")
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, 10).padding(.vertical, 4)
                     .background(.orange.opacity(0.85), in: Capsule())
                     .foregroundStyle(.white)
                     .padding(.top, 10)
             }
+        }
+        .task {
+            if SelfDrive.asked { await SelfDrive.run(flow) }
         }
     }
 }
