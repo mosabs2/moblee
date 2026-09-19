@@ -77,6 +77,8 @@ echo ""
 echo "Creating vault at $VAULT_LOCATION..."
 mkdir -p "$(dirname "$VAULT_LOCATION")"
 cp -R "$VAULT_TEMPLATE" "$VAULT_LOCATION"
+# the vault's VERSION always comes from the pack, so the template's copy cannot drift
+if [[ -f "$PACKAGE_ROOT/VERSION" ]]; then cp "$PACKAGE_ROOT/VERSION" "$VAULT_LOCATION/VERSION"; fi
 
 # ----- substitute placeholders ------------------------------------------------
 echo "Substituting placeholders..."
@@ -205,6 +207,19 @@ if [[ "$(uname)" == "Darwin" && -f "$SCRIPT_DIR/install-schedule.sh" ]]; then
   fi
 fi
 
+# ----- optional: the learning path (v0.5.1) -----------------------------------
+if [[ -f "$SCRIPT_DIR/install-learning-path.py" ]]; then
+  echo ""
+  echo "The learning path is thirty-two short lessons on getting the most from"
+  echo "this wiki, one an evening, with a reminder at 9 pm on a Mac. You can add"
+  echo "it later instead (see docs/08-updating.md)."
+  read -r -p "Add the learning path? [y/N]: " INSTALL_LESSONS || INSTALL_LESSONS=""
+  if [[ "$INSTALL_LESSONS" =~ ^[Yy]$ ]]; then
+    python3 "$SCRIPT_DIR/install-learning-path.py" --vault "$VAULT_LOCATION" | sed 's/^/  /' \
+      || echo "  (learning path not fully added; see docs/08-updating.md to add it later)"
+  fi
+fi
+
 # ----- optional: voice stack (macOS) ------------------------------------------
 if [[ "$(uname)" == "Darwin" && -f "$PACKAGE_ROOT/voice/install-voice.py" ]]; then
   echo ""
@@ -246,9 +261,12 @@ fi
 # the ignore file it added are committed now, so the vault starts clean.
 (
   cd "$VAULT_LOCATION"
-  git add -A .claude .gitignore VERSION 2>/dev/null || true
+  # one path per git add: a missing path makes git stage nothing at all
+  for p in .claude .gitignore VERSION CLAUDE.md scripts wiki/Index.md "wiki/Wiki Operations/Moblee Learning Path.md"; do
+    if [[ -e "$p" ]]; then git add -A -- "$p" 2>/dev/null || true; fi
+  done
   if ! git diff --cached --quiet 2>/dev/null; then
-    git commit --quiet -m "moblee: safety layer and settings" 2>/dev/null || true
+    git commit --quiet -m "moblee: safety layer, settings and chosen options" 2>/dev/null || true
   fi
 )
 

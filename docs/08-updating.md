@@ -23,7 +23,17 @@ Running it twice is safe. Each step checks what is already there and skips it.
 
 ## If you would rather not use the Terminal
 
-Ask whoever gave you Moblee for a clinic note. That is a file you drop into your `raw/` folder; your own Claude reads it and does the update for you, step by step, and writes a report you can send back. Nothing about the update is different; only who types.
+Ask whoever gave you Moblee for a clinic note. That is a file you drop into your `raw/` folder; your own Claude reads it, carries out the update step by step, and writes a report you can send back. One part still needs you: anything written into the hidden `~/.claude/` folder (the delete guard and its settings) has to be pasted into Terminal by you, because your Claude is not allowed to write there. The clinic note gives you the exact line to paste for that part.
+
+## Adding the learning path later
+
+The learning path is thirty-two short lessons on getting the most from the wiki, one an evening, with an optional reminder at nine each evening. It needs a Mac with Claude Code; the Windows track does not include it. The installer and the updater both ask whether you want it; if you said no, or want it now, run this from the folder where you downloaded Moblee (the same place you run the updater from), naming your vault:
+
+```bash
+python3 scripts/install-learning-path.py --vault ~/Wiki/MyWiki
+```
+
+Use `--hour 20` for a different reminder time, or `--no-reminder` to have the lessons without a notification. Running it again is safe: the lessons page, with its record of which lessons you have had, is never replaced. Then open Claude Code in your vault and say **lesson**. If the reminder never appears, allow notifications for Script Editor in System Settings, under Notifications.
 
 ## Checking what version you have
 

@@ -1,12 +1,12 @@
-# Prerequisites — Windows
+# Prerequisites: Windows
 
-This is the Windows companion to `01-prerequisites.md` (which covers the macOS path). Moblee v0.2 supports Windows 10 and 11 with a slightly different toolchain to the Mac path and with reduced automation around Claude itself. Read the trade-offs in `docs/07-windows-workflow.md` before deciding whether the Windows track suits you.
+This is the Windows companion to `01-prerequisites.md` (which covers the macOS path). Moblee v0.2 supports Windows 10 and 11 with a slightly different toolchain to the Mac path and with less automation around Claude itself. Read the trade-offs in `docs/07-windows-workflow.md` before deciding whether the Windows track suits you.
 
-If you have any access to a Mac, the macOS path is materially smoother and is still the default. The Windows track exists so that you can begin without one and migrate later without losing the vault you build.
+If you have any access to a Mac, the macOS path is much smoother and is still the default. The Windows track lets you begin without one and move to a Mac later without losing the vault you build.
 
 ## What you will install
 
-A list, with the install steps below.
+The install steps for each follow the list.
 
 - **Windows 10 22H2 or Windows 11.** Earlier versions are not supported.
 - **Obsidian for Windows**, free. The reading layer; works identically on Windows and Mac.
@@ -73,7 +73,7 @@ WSL2 is an alternative path: it gives you a real Ubuntu shell inside Windows, wh
 - **Native Windows (this document)**: use PowerShell; install via `scripts\install.ps1`; vault lives at a Windows path like `C:\Users\You\Wiki\MyWiki`.
 - **WSL2**: install Ubuntu via the Microsoft Store, then run the original Bash install script from inside WSL; the vault lives at a Linux path like `/home/you/Wiki/MyWiki`. Obsidian on Windows can open WSL paths via `\\wsl.localhost\Ubuntu\home\you\Wiki\MyWiki`, but the cross-filesystem performance is a small cost.
 
-For most Windows users new to the Karpathy pattern, native Windows is simpler. WSL2 is the right choice if you are already comfortable in a Linux shell and want the Bash automation that the Mac path gets.
+For most Windows users new to the Karpathy pattern, native Windows is simpler. Choose WSL2 if you are already comfortable in a Linux shell and want the Bash automation that the Mac path gets.
 
 ## Next
 

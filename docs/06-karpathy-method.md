@@ -1,6 +1,6 @@
 # 06. The Karpathy method, explained for a beginner
 
-If you've made it this far without reading Andrej Karpathy's April 2026 description of the LLM Wiki Pattern, this document fills in the methodology. It explains the "why" behind the system: why the wiki is shaped the way it is, why ingest looks the way it does, why the four-file separation matters, and why this whole approach tends to work better than the alternatives most people reach for first.
+If you've made it this far without reading Andrej Karpathy's April 2026 description of the LLM Wiki Pattern, this document fills in the method. It explains the "why" behind the system: why the wiki is shaped the way it is, why ingest looks the way it does, why the four-file separation matters, and why this whole approach tends to work better than the alternatives most people reach for first.
 
 ## The problem this solves
 
@@ -16,7 +16,7 @@ The pattern rests on two insights.
 
 **The first insight: writing is the bottleneck.** If you had to maintain a wiki of your own knowledge by hand, you wouldn't. The cost of formatting, cross-linking, keeping a tone consistent, and not letting old pages drift is too high. Most people who try a personal wiki give up within months for exactly this reason. But if writing is delegated to an LLM that follows your conventions, the bottleneck disappears. The user only reads and approves; the LLM handles the upkeep.
 
-**The second insight: the LLM needs a schema.** An LLM left to its own devices will not produce a coherent wiki; it'll improvise different formats on different pages, contradict itself, forget which page is canonical, and slowly degrade the corpus. The fix is a written schema: a `CLAUDE.md` at vault root that documents the conventions in detail (filename rules, link syntax, log format, house style, source attribution, ingest workflow, git workflow). The LLM reads `CLAUDE.md` at the start of every session and follows it consistently. The schema is what turns "an LLM and some markdown files" into "a maintainable knowledge system".
+**The second insight: the LLM needs a schema.** An LLM left to its own devices will not produce a coherent wiki; it'll improvise different formats on different pages, contradict itself, forget which page is canonical, and slowly degrade the corpus. The answer is a written schema: a `CLAUDE.md` at vault root that documents the conventions in detail (filename rules, link syntax, log format, house style, source attribution, ingest workflow, git workflow). The LLM reads `CLAUDE.md` at the start of every session and follows it consistently. The schema is what turns "an LLM and some markdown files" into "a maintainable knowledge system".
 
 These two insights together are the whole thing. Everything else is design choices that follow from them.
 
@@ -28,7 +28,7 @@ From those two insights, the structure falls out.
 
 **Three ownership layers.** Raw sources are immutable (you drop in, the LLM reads, nothing rewrites). The wiki is the LLM's to write (you read; the LLM writes). The schema is shared (you set conventions, the LLM follows them). The boundary between these layers is rigid because it's what keeps the system from drifting.
 
-**Four canonical files, each with one role.** `CLAUDE.md` is the schema. `wiki/Index.md` is the navigation catalogue. `wiki/_context.md` is the working state. `wiki/log.md` is the chronological audit trail. Each file owns one role and does not duplicate the others. The discipline of keeping them separate is what makes the system queryable and auditable. If you fold the log onto Index ("I'll just keep a list of recent ingests on the front page") the Index loses its role as a navigation catalogue and gains the role of a stale chronology, and now neither file is doing its job well.
+**Four canonical files, each with one role.** `CLAUDE.md` is the schema. `wiki/Index.md` is the navigation catalogue. `wiki/_context.md` is the working state. `wiki/log.md` is the chronological audit trail. Each file owns one role and does not duplicate the others. The discipline of keeping them separate is what makes the system queryable and auditable. If you fold the log onto Index ("I'll just keep a list of recent ingests on the front page") the Index loses its role as a navigation catalogue and gains the role of a stale chronology, and now neither file is doing its job well. Moblee adds a fifth file to the four, `wiki/Identity.md`, which holds how Claude works with you.
 
 **Append-only logging.** The log is never reordered or rewritten. New entries go at the bottom. Old entries stay exactly as written. This makes the log an audit trail rather than a draft document; you can trust it as a historical record, and corrections are added as new entries rather than rewrites of old ones.
 
@@ -38,9 +38,9 @@ From those two insights, the structure falls out.
 
 The ingest workflow has seven explicit steps. Each step has a reason.
 
-**Step 1, read the source.** Obvious; the LLM needs to know what the source says before it can integrate the content.
+**Step 1, read the source.** The LLM needs to know what the source says before it can integrate the content.
 
-**Step 2, update every relevant existing wiki page.** A single source typically touches five to fifteen pages: a domain page, an entity page, a methodology page, cross-references on adjacent topics. The LLM updates all of them. The reason this matters is that without this step, the wiki becomes a pile of one-off pages with weak cross-references; with this step, the wiki becomes a graph.
+**Step 2, update every relevant existing wiki page.** A single source typically touches five to fifteen pages: a domain page, an entity page, a method page, cross-references on adjacent topics. The LLM updates all of them. Without this step the wiki becomes a pile of one-off pages with weak cross-references; with it, the wiki becomes a graph.
 
 **Step 3, append a log entry.** The log is the chronology. Every ingest gets one entry. The entry says what was ingested, what pages were touched, what page was created if any.
 
@@ -52,11 +52,11 @@ The ingest workflow has seven explicit steps. Each step has a reason.
 
 **Step 7, commit to git.** One commit per unit of work, with a commit message that mirrors the log entry. The git history and the log together form the audit trail.
 
-Each step has a job and the workflow does not skip steps. Skipping the move-to-processed makes the inbox confusing. Skipping the log entry breaks the chronology. Skipping the commit loses atomicity. The discipline of doing all seven on every ingest is what makes the system robust over years.
+The workflow does not skip steps. Skipping the move-to-processed makes the inbox confusing, skipping the log entry breaks the chronology, and skipping the commit loses atomicity. Doing all seven on every ingest is what lets the system hold up over years.
 
 ## Synthesis pages and cluster notes
 
-One pattern worth calling out explicitly: how the wiki handles a topic that's accumulating many sources.
+This is how the wiki handles a topic that is accumulating many sources.
 
 For the first three or four sources on a topic, the convention is to write directly into a single top-level page. Each ingest extends the page with new claims and new attribution lines. The page grows.
 
@@ -70,7 +70,7 @@ The system feels like overhead in week one. By month three, the cross-references
 
 The compounding works because the structure is right. Plain markdown is portable. Cross-references form a graph that gets richer with each ingest. The append-only log makes the history queryable. The four-file separation keeps each role doing its job. The LLM's job is to keep the conventions in place; the user's job is to read the world and drop sources in the inbox.
 
-This is the whole method. The Moblee starter pack just gives you a clean implementation of it, with the schema written, the skills installed, and the install scripts ready to run.
+The Moblee starter pack gives you a clean implementation of this method, with the schema written, the skills installed, and the install scripts ready to run.
 
 ## Further reading
 

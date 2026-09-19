@@ -1,4 +1,4 @@
-# Install — Windows
+# Install: Windows
 
 This is the Windows companion to `02-install.md` (which covers macOS). You should already have everything in `01-prerequisites-windows.md` installed before starting here. Total install time once you have the prerequisites in place: 10 to 15 minutes.
 
@@ -18,7 +18,7 @@ Three questions, with sensible defaults you can accept by pressing Enter.
 
 **Your name.** Used to personalise placeholders in the seeded vault pages (your CLAUDE.md, your Welcome.md, your house-style notes). Defaults to `[Your Name]` if you leave it blank, which you can search and replace later.
 
-**Vault name.** The folder name for your vault. Defaults to `MyWiki`. Pick something you will recognise; this is the name Obsidian will show when you open the vault. Examples: `MoSabsWiki`, `MyBrain`, `KhanWiki`. Avoid spaces and special characters for cleaner paths.
+**Vault name.** The folder name for your vault. Defaults to `MyWiki`. Pick something you will recognise; this is the name Obsidian will show when you open the vault. Examples: `MyBrain`, `ResearchWiki`. Avoid spaces and special characters for cleaner paths.
 
 **Vault location.** Where on disk to put the vault folder. Defaults to `C:\Users\You\Wiki\<vault name>`. Accepting the default is fine; if you want the vault elsewhere (e.g. on a different drive or under a OneDrive-synced folder), type the full path here.
 
@@ -69,9 +69,9 @@ Open [claude.ai](https://claude.ai) in your browser. Start a new conversation. P
 
 ## Windows-specific things to know
 
-A short list of things that are different from the Mac path:
+What differs from the Mac path:
 
-- **No Cowork.** Cowork is a Mac-only desktop application as of Moblee v0.2. Your Claude interface on Windows is web chat at claude.ai. The functional difference is that you copy-paste sources into chat by hand (and copy Claude's responses out by hand into your vault), rather than the Mac flow where Cowork can write files into the vault directly.
+- **No Cowork.** Cowork is a Mac-only desktop application as of Moblee v0.2. Your Claude interface on Windows is web chat at claude.ai. In practice you copy-paste sources into chat by hand and copy Claude's responses back into your vault by hand; on the Mac, Cowork can write files into the vault directly.
 - **Claude Code is not the default Windows interface.** Claude Code runs on Windows but is documented as an advanced setup in v0.2. The skills bundled in the Moblee package (`brain`, `wiki-capture`, `wiki-to-pdf`) target Claude Code on macOS and are not installed by the Windows install script. See `docs/07-windows-workflow.md` for the workflow you use in their place.
 - **Git is manual via the `vault` function.** The Mac path is fully automatic in Claude Code; the Windows path uses the `vault` function to auto-commit on every session start, plus manual `git add . && git commit -m "..."` inside PowerShell at the close of a substantive session. There is no in-Claude commit step on the Windows track.
 - **Paths use backslashes.** Wiki content inside your vault should still use forward slashes (`wiki/Geopolitics.md`) because the wiki is markdown, but Windows PowerShell paths to the vault use backslashes (`C:\Users\You\Wiki\MyWiki`).
@@ -91,4 +91,4 @@ A short list of things that are different from the Mac path:
 
 ## Next
 
-Read `docs/07-windows-workflow.md` for the day-to-day Windows-track workflow (claude.ai web chat as the Claude interface, manual ingest workflow, the `vault` function as your session-start ritual, where the skills are missing and what to do instead).
+Read `docs/07-windows-workflow.md` for the day-to-day Windows-track workflow (claude.ai web chat as the Claude interface, the manual ingest workflow, the `vault` function at the start of each session, and what to do in place of the missing skills).

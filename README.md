@@ -4,19 +4,21 @@ A starter pack for building your own LLM-managed personal knowledge wiki, follow
 
 ## What this is
 
-Moblee is the scaffolding you need to start a Karpathy-style personal wiki on your own machine. The system is an Obsidian vault (your reading layer), a set of structured workflows for getting material into it (the ingest pipeline), and Claude as the maintainer (the writing layer). You read; Claude writes. You drop sources into an inbox; Claude reads them, updates the relevant pages, logs the change, and commits to git. Over time the vault compounds into a living, interlinked record of what you know, what you're working on, and how your thinking has evolved.
+Moblee is the scaffolding you need to start a Karpathy-style personal wiki on your own machine. The system is an Obsidian vault (your reading layer), a set of structured workflows for getting material into it (the ingest pipeline), and Claude as the maintainer (the writing layer). You read; Claude writes. You drop sources into an inbox, and Claude reads them, updates the relevant pages, logs the change and commits to git. Over time the vault builds into an interlinked record of what you know, what you are working on, and how your thinking has changed.
 
-The Karpathy pattern is built on a four-file separation of concerns. `CLAUDE.md` is the schema (the rules Claude follows). `wiki/Index.md` is the content catalogue (what pages exist). `wiki/_context.md` is the working state (active threads, open decisions). `wiki/log.md` is the chronology (an append-only audit trail). Each file owns one role and does not duplicate the others. The system is deliberately simple: plain markdown, no proprietary formats, no lock-in. You could walk away from Claude tomorrow and you would still have a complete Obsidian vault.
+The Karpathy pattern rests on four files, each with one job. `CLAUDE.md` is the schema (the rules Claude follows). `wiki/Index.md` is the content catalogue (what pages exist). `wiki/_context.md` is the working state (active threads, open decisions). `wiki/log.md` is the chronology (an append-only audit trail). No file duplicates another. Moblee adds a fifth, `wiki/Identity.md`, which sets how Claude works with you. The system is deliberately simple: plain markdown, no proprietary formats, no lock-in. If you stopped using Claude tomorrow, you would still have a complete Obsidian vault.
 
-This starter pack is opinionated but not prescriptive. The templates are seeded with sensible defaults (British English, paragraph-first prose, no em dashes, dated absolute references, structured ingest workflows) which you can keep, change, or strip as you see fit. The `CLAUDE.md` is the source of truth for your conventions; once it's installed in your vault, you own it.
+The templates come with opinionated defaults (British English, paragraph-first prose, no em dashes, dated absolute references, structured ingest workflows), and you can keep, change or strip any of them. `CLAUDE.md` is the source of truth for your conventions; once it is installed in your vault, you own it.
 
-**New in v0.4** — the pack now carries the maintainer's battle-tested operational layer, generalised for any vault: the **brain skill grown to eleven patterns** (reflective queries, `_context` tier management, persona ghost-voices, and a daily rhythm of morning brief / close-day / week planning over a new Daily Notes layer); a **structural health layer** (`scripts/lint-v2.py` weekly checks, a `compact` skill that keeps the always-loaded files light, and a git **commit gate** that catches format drift before a commit exists); a **local dashboard** (orientation state, an Ask box that runs Claude against your vault, and a Visuals tab whose charts you add by simply asking Claude); the **3D galaxy** view of your knowledge graph; and an optional **voice stack** (replies read aloud, audible nudges when Claude needs you — free with the built-in macOS voice, upgradable to ElevenLabs). All optional, all installed by the same one-command installer.
+**New in v0.4.** The pack now carries a proven operational layer, generalised for any vault: the **brain skill grown to eleven patterns** (reflective queries, `_context` tier management, persona ghost-voices, and a daily rhythm of morning brief / close-day / week planning over a new Daily Notes layer); a **structural health layer** (`scripts/lint-v2.py` weekly checks, a `compact` skill that keeps the always-loaded files light, and a git **commit gate** that catches format drift before a commit exists); a **local dashboard** (orientation state, an Ask box that runs Claude against your vault, and a Visuals tab whose charts you add by asking Claude); the **3D galaxy** view of your knowledge graph; and an optional **voice stack** (replies read aloud and audible nudges when Claude needs you, free with the built-in macOS voice and upgradable to ElevenLabs). All of it is optional, and the same one-command installer sets it up.
 
-**New in v0.5** — the pack now installs what its maintainer had and its users did not: **a safety layer that is not optional**. A delete guard inspects every shell command Claude composes and refuses deletion, history rewriting and force pushes however they are phrased; a starter permission list stops the constant prompts for routine work (safe only because the guard sits beneath it); and the never-delete rule is written into `CLAUDE.md` and into a new always-loaded **`wiki/Identity.md`** that holds who Claude is to you (verify rather than guess, challenge rather than flatter). Also new: **`scripts/update.sh`**, which brings an existing vault up to the current version without touching its content (there was no update path before v0.5); the **galaxy skill**; the commit gate wired through `scripts/hooks/` so updates reach it; five more health checks, the link guard, and a **weekly health check on a schedule**; a log appender that reads the clock itself; four starting memories; and a `VERSION` file. The compaction skill now lists what it would move or drop and asks first. See `docs/08-updating.md` and `docs/09-safety.md`.
+**New in v0.5.** The pack now installs **a safety layer that cannot be skipped**. A delete guard inspects every shell command Claude composes and refuses deletion, history rewriting and force pushes however they are phrased; a starter permission list stops the constant prompts for routine work (safe only because the guard sits beneath it); and the never-delete rule is written into `CLAUDE.md` and into a new always-loaded **`wiki/Identity.md`** that holds who Claude is to you (verify rather than guess, challenge rather than flatter). Also new: **`scripts/update.sh`**, which brings an existing vault up to the current version without touching its content (there was no update path before v0.5); the **galaxy skill**; the commit gate wired through `scripts/hooks/` so updates reach it; five more health checks, the link guard, and a **weekly health check on a schedule**; a log appender that reads the clock itself; four starting memories; and a `VERSION` file. The compaction skill now lists what it would move or drop and asks first. See `docs/08-updating.md` and `docs/09-safety.md`.
+
+**New in v0.5.1.** An optional **learning path**: thirty-two short lessons on getting the most from the wiki, one an evening, given by Claude when you say "lesson", with a reminder at nine each evening. It needs a Mac with Claude Code; the installer and the updater ask whether you want it, and the Windows track does not include it. Also: clearer instructions for updates done through a clinic note, a rule that keeps clinic reports out of the wiki, a writing rule against the habits that make machine prose read as machine prose (with a weekly check for them), and a documentation pass throughout.
 
 ## What you'll need
 
-Moblee supports two paths: a Mac path (full automation through Claude Code and the bundled skills) and a Windows path (manual workflow through Claude.ai web chat, added in v0.2). Pick whichever fits the hardware you have.
+Moblee supports two paths: a Mac path (full automation through Claude Code and the bundled skills) and a Windows path (manual workflow through Claude.ai web chat, added in v0.2). Pick the one that fits your hardware.
 
 **Mac path (default; full automation):**
 
@@ -39,7 +41,7 @@ Moblee supports two paths: a Mac path (full automation through Claude Code and t
 
 ## Getting started, the one-paste route
 
-The fastest path: paste the contents of [`START_HERE.md`](START_HERE.md) into Claude (Claude.ai web chat, Claude Code in a Terminal, or Cowork on the desktop) and let Claude walk you through everything. You do not need to read these files first. Claude reads the prompt, knows the system, and sequences your setup from there.
+The fastest path is to paste the contents of [`START_HERE.md`](START_HERE.md) into Claude (Claude.ai web chat, Claude Code in a Terminal, or Cowork on the desktop) and let Claude walk you through everything. You do not need to read these files first; the prompt tells Claude how the system works and what order to set it up in.
 
 If you prefer to read first, start at [`docs/00-overview.md`](docs/00-overview.md).
 
@@ -69,6 +71,7 @@ moblee/
 ├── safety/                    ← the delete guard and the starter permission rules (v0.5; not optional)
 ├── memory-seed/               ← four starting memories for your Claude (v0.5)
 ├── clinic/                    ← tools for whoever maintains Moblee for other people (v0.5)
+├── learning-path/             ← optional: 32 evening lessons and their reminder (v0.5.1)
 ├── voice/                     ← optional macOS voice stack
 ├── dashboard/                 ← optional local web dashboard
 ├── scripts/                   ← installers and the vault tooling
@@ -77,6 +80,7 @@ moblee/
 │   ├── install.ps1            ← Windows: PowerShell installer (v0.2)
 │   ├── install-skills.sh      ← Mac: copies the skills to ~/.claude/skills/
 │   ├── install-schedule.sh    ← Mac: puts the weekly health check on a schedule (v0.5)
+│   ├── install-learning-path.py ← adds the optional learning path to a vault (v0.5.1)
 │   ├── vault.sh               ← Mac: session-start function (paste into ~/.zshrc)
 │   ├── vault.ps1              ← Windows: session-start function (added to PowerShell profile, v0.2)
 │   ├── lint-v2.py, vault-gate.py, log-append.py, vault-orient-preflight.sh, patch-claude-md.py, seed-memory.py
@@ -96,7 +100,7 @@ moblee/
 │   ├── 07-windows-workflow.md ← Windows-track day-to-day workflow (v0.2)
 │   ├── 08-updating.md         ← how to update a vault without touching its content (v0.5)
 │   └── 09-safety.md           ← why Claude cannot delete your files (v0.5)
-└── CHANGELOG.md               ← release notes, v0.1 to v0.5
+└── CHANGELOG.md               ← release notes, v0.1 to v0.5.1
 ```
 
 ## License
@@ -105,4 +109,4 @@ MIT, see [LICENSE](LICENSE).
 
 ## Credit
 
-Built collaboratively by [Your Name] and Claude (via Cowork) as a starter pack for new wiki authors. Methodology credit: Andrej Karpathy, April 2026.
+Built with Claude (via Cowork) as a starter pack for new wiki authors. Credit for the method: Andrej Karpathy, April 2026.

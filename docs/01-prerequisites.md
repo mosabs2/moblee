@@ -26,7 +26,7 @@ You should see a version string. If you see "command not found", the installer's
 
 ## Git
 
-Git is the version control system that backs the vault's audit trail. On macOS, git comes with the Command Line Tools, which you install once and then forget about.
+Git is the version control system that backs the vault's audit trail. On macOS, git comes with the Command Line Tools, which you install once.
 
 To install:
 
@@ -53,9 +53,7 @@ The Moblee `vault` shell function reminds you to do this if you skip it; you can
 
 ## Python 3
 
-Python 3 runs the vault tooling: the weekly health check (`lint-v2.py`), the commit gate, the dashboard, the galaxy view, and the optional `wiki-to-pdf` renderer. macOS already ships it, so in practice this section is a one-line check rather than an install.
-
-Recent macOS versions ship with Python 3 preinstalled. To verify:
+Python 3 runs the vault tooling: the weekly health check (`lint-v2.py`), the commit gate, the dashboard, the galaxy view, and the optional `wiki-to-pdf` renderer. Recent macOS versions ship with Python 3 preinstalled, so this step is usually a one-line check. To verify:
 
 ```
 python3 --version
@@ -72,7 +70,7 @@ brew install cairo pango gdk-pixbuf libffi
 pip3 install --user weasyprint markdown jinja2 PyYAML pypdf
 ```
 
-Note that stock macOS ships pip 21.2.4, which does not understand `--break-system-packages`; that option only exists from pip 23.0 onwards. Homebrew itself, if you do not already have it, installs from [brew.sh](https://brew.sh). The Moblee installer never tries to install Homebrew for you.
+Stock macOS ships pip 21.2.4, which does not understand `--break-system-packages`; that option only exists from pip 23.0 onwards. Homebrew itself, if you do not already have it, installs from [brew.sh](https://brew.sh). The Moblee installer never tries to install Homebrew for you.
 
 ## Optional: Obsidian Web Clipper
 

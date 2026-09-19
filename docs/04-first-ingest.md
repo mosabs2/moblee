@@ -1,6 +1,6 @@
 # 04. Your first ingest: a worked example
 
-This document walks through ingesting your first source from start to finish, so you can see exactly what the workflow looks like in practice. The example uses a hypothetical New York Times article on home composting; substitute whatever you're actually reading.
+This document walks through ingesting your first source from start to finish. The example uses a hypothetical New York Times article on home composting; substitute whatever you're actually reading.
 
 ## The setup
 
@@ -87,7 +87,7 @@ By the end of this one ingest, you've used every piece of the system:
 - The source moved to `processed/` (file movement is part of ingest, not optional cleanup).
 - A git commit captured the whole change atomically.
 
-This same sequence repeats for every ingest. Different sources, different pages, but always the same shape.
+The same sequence repeats for every ingest, whatever the source and whichever pages it touches.
 
 ## What to do next
 

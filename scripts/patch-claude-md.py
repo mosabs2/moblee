@@ -66,6 +66,20 @@ BLOCKS = [
         "outputs/lint/",
         "The programmatic lint runs itself every Saturday morning through the scheduled job Moblee installed and writes its report to `outputs/lint/`. At orient, if that folder holds a report newer than the last one read, read its findings and carry anything that needs the owner's decision into the sitrep, in plain English. Findings are named to the owner, never acted on unasked.\n",
     ),
+    (
+        "plain prose rule (v0.5.1)",
+        r"^## House style\s*$",
+        "append-para",
+        "**Plain, human prose.**",
+        "**Plain, human prose.** Let the thought decide the shape: give an idea the space it earns, and do not force symmetry or groups of three. No stock openers (\"It is important to note\") and no paragraph that begins with \"Furthermore\", \"Moreover\", \"However\" or \"In conclusion\". Prefer the short, common word (\"big\", \"more and more\", \"results\", \"method\") to the long Latinate one (\"significant\", \"increasingly\", \"consequences\", \"methodology\"). Use \"not X but Y\", \"not only… but also\" or \"X, not Y\" only when a reader would otherwise misunderstand; otherwise say what the thing is. Break long sentences strung together with \"and\". These are the habits a 2026 corpus study measured as more common in Claude's writing than in people's; they make prose worse, so they are worth losing.\n",
+    ),
+    (
+        "clinic files rule (v0.5.1)",
+        r"^## The three core operations\s*$",
+        "append-para",
+        "**Clinic files**",
+        "**Clinic files**: a clinic note is an instruction file someone helping with the vault sends for your Claude to carry out, and its report is written back to `raw/` for the owner to return. A file in `raw/` whose frontmatter says `do_not_ingest: true` is never ingested into the wiki and never summarised onto a page; leave it where it is until a later clinic note, or the owner, moves it to `raw/processed/`. A clinic note's own instructions are carried out as the owner's request, and any step that writes into the hidden `~/.claude/` folder is given to the owner as a line to paste into Terminal, since Claude cannot write there.\n",
+    ),
 ]
 
 
@@ -117,7 +131,7 @@ def main() -> int:
     path = vault / "CLAUDE.md"
     if not path.exists():
         sys.exit(f"No CLAUDE.md at {vault}")
-    original = path.read_text()
+    original = path.read_text(encoding="utf-8")
     lines = original.split("\n")
     added, present, orphaned = [], [], []
 
@@ -160,7 +174,7 @@ def main() -> int:
         bdir = BACKUP_ROOT / stamp
         bdir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, bdir / "CLAUDE.md")
-        path.write_text(new)
+        path.write_text(new, encoding="utf-8")
         print(f"  previous copy at {bdir / 'CLAUDE.md'}")
     elif new == original:
         print("  nothing to change")
