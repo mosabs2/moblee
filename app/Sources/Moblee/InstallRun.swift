@@ -1,9 +1,10 @@
 import SwiftUI
 import AppKit
 
-/// Runs the pack's own installer (scripts/install.sh) and follows its progress
-/// lines. The app never installs anything by another route: the engine that a
-/// Terminal user runs is the engine this runs.
+/// Runs the pack's own installer (scripts/install.sh) or updater
+/// (scripts/update.sh) and follows its progress lines. The app never installs
+/// anything by another route: the engine that a Terminal user runs is the
+/// engine this runs.
 @MainActor
 final class InstallRun: ObservableObject {
     enum StepState { case waiting, running, done, failed }
@@ -23,14 +24,16 @@ final class InstallRun: ObservableObject {
         case failed(why: String)
     }
 
-    @Published var items: [Item] = InstallRun.freshItems()
+    @Published var items: [Item] = InstallRun.installItems()
     @Published var phase: Phase = .idle
     @Published var vaultPath: String?
 
-    private var process: Process?
-    private var buffer = Data()
+    /// Steps whose failure the engine itself carries on past.
+    private var softSteps: Set<String> = ["skills"]
+    private var task: EngineTask?
+    var diaryURL: URL?
 
-    static func freshItems() -> [Item] {
+    static func installItems() -> [Item] {
         [
             Item(key: "folder", symbol: "folder.fill", label: "Your wiki"),
             Item(key: "tools", symbol: "wrench.adjustable.fill", label: "Its tools"),
@@ -41,14 +44,44 @@ final class InstallRun: ObservableObject {
         ]
     }
 
-    var diaryURL: URL?
+    static func updateItems() -> [Item] {
+        [
+            Item(key: "tools", symbol: "wrench.adjustable.fill", label: "Tools"),
+            Item(key: "gate", symbol: "checkmark.shield.fill", label: "The gate"),
+            Item(key: "skills", symbol: "graduationcap.fill", label: "Skills"),
+            Item(key: "safety", symbol: "lock.shield.fill", label: "The guard"),
+            Item(key: "rules", symbol: "list.bullet.rectangle.fill", label: "The rules"),
+            Item(key: "pages", symbol: "doc.text.fill", label: "New pages"),
+            Item(key: "weekly", symbol: "calendar", label: "Weekly check"),
+            Item(key: "lessons", symbol: "lightbulb.fill", label: "Lessons"),
+            Item(key: "finish", symbol: "checkmark.seal.fill", label: "Finishing"),
+        ]
+    }
 
     func start(home: URL, ownerName: String, wikiName: String, location: URL, bundledPack: URL) {
         guard phase != .running else { return }
-        items = InstallRun.freshItems()
+        items = InstallRun.installItems()
+        softSteps = ["skills"]
+        begin(home: home, bundledPack: bundledPack, fallbackVault: location.path) { pack in
+            [pack.appendingPathComponent("scripts/install.sh").path,
+             "--name", ownerName, "--vault-name", wikiName,
+             "--location", location.path, "--progress"]
+        }
+    }
+
+    func startUpdate(home: URL, vault: URL, bundledPack: URL) {
+        guard phase != .running else { return }
+        items = InstallRun.updateItems()
+        softSteps = []
+        begin(home: home, bundledPack: bundledPack, fallbackVault: vault.path) { pack in
+            [pack.appendingPathComponent("scripts/update.sh").path, vault.path, "--progress"]
+        }
+    }
+
+    private func begin(home: URL, bundledPack: URL, fallbackVault: String,
+                       arguments: (URL) -> [String]) {
         phase = .running
         vaultPath = nil
-        buffer = Data()
         diaryURL = home.appendingPathComponent(".config/moblee/install-diary.txt")
 
         let pack: URL
@@ -58,42 +91,11 @@ final class InstallRun: ObservableObject {
             phase = .failed(why: "pack-copy")
             return
         }
-
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/bin/bash")
-        p.arguments = [pack.appendingPathComponent("scripts/install.sh").path,
-                       "--name", ownerName,
-                       "--vault-name", wikiName,
-                       "--location", location.path,
-                       "--progress"]
-        var env = ProcessInfo.processInfo.environment
-        env["HOME"] = home.path
-        // The Mac's own tools only, so every owner's install runs the same way.
-        env["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
-        p.environment = env
-        p.standardInput = FileHandle.nullDevice
-
-        let out = Pipe()
-        p.standardOutput = out
-        p.standardError = out
-        out.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            let data = handle.availableData
-            guard !data.isEmpty else { return }
-            Task { @MainActor in self?.take(data) }
-        }
-        p.terminationHandler = { [weak self] proc in
-            let code = proc.terminationStatus
-            Task { @MainActor in
-                out.fileHandleForReading.readabilityHandler = nil
-                self?.ended(code: code, location: location)
-            }
-        }
-        do {
-            try p.run()
-            process = p
-        } catch {
-            phase = .failed(why: "could-not-start")
-        }
+        let t = EngineTask()
+        task = t
+        t.run("/bin/bash", arguments(pack), home: home,
+              onEvent: { [weak self] e in self?.handle(e) },
+              onEnd: { [weak self] code in self?.ended(code: code, fallbackVault: fallbackVault) })
     }
 
     /// The pack travels inside the app, but the app may be run from Downloads
@@ -124,26 +126,10 @@ final class InstallRun: ObservableObject {
         }
     }
 
-    private func take(_ data: Data) {
-        buffer.append(data)
-        while let nl = buffer.firstIndex(of: 0x0A) {
-            let lineData = buffer.subdata(in: buffer.startIndex..<nl)
-            buffer.removeSubrange(buffer.startIndex...nl)
-            guard let line = String(data: lineData, encoding: .utf8) else { continue }
-            handle(line)
-        }
-    }
-
-    private func handle(_ line: String) {
-        let marker = "@@moblee "
-        guard line.hasPrefix(marker),
-              let json = line.dropFirst(marker.count).data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: json) as? [String: Any],
-              let step = obj["step"] as? String,
-              let state = obj["state"] as? String else { return }
-
+    private func handle(_ obj: EngineTask.Event) {
+        guard let step = obj["step"] as? String, let state = obj["state"] as? String else { return }
         if step == "done" {
-            vaultPath = obj["vault"] as? String
+            if let v = obj["vault"] as? String { vaultPath = v }
             return
         }
         withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
@@ -152,8 +138,7 @@ final class InstallRun: ObservableObject {
             case "ok": set(step, .done)
             case "fail":
                 set(step, .failed)
-                // A skills hiccup is not fatal to the engine, so it is not fatal here.
-                if step != "skills" { phase = .failed(why: (obj["why"] as? String) ?? "stopped") }
+                if !softSteps.contains(step) { phase = .failed(why: (obj["why"] as? String) ?? "stopped") }
             case "stopped":
                 set(step, .failed)
                 if case .failed = phase {} else { phase = .failed(why: "stopped") }
@@ -166,16 +151,16 @@ final class InstallRun: ObservableObject {
         if let i = items.firstIndex(where: { $0.key == key }) { items[i].state = state }
     }
 
-    private func ended(code: Int32, location: URL) {
-        process = nil
+    private func ended(code: Int32, fallbackVault: String) {
+        task = nil
         if case .failed = phase { return }
         withAnimation(.easeInOut(duration: 0.4)) {
             if code == 0 {
-                if vaultPath == nil { vaultPath = location.path }   // handed to the updater
+                if vaultPath == nil { vaultPath = fallbackVault }   // the updater, or a hand-over to it
                 for i in items.indices where items[i].state != .failed { items[i].state = .done }
                 phase = .finished
             } else {
-                phase = .failed(why: "stopped")
+                phase = .failed(why: code == -1 ? "could-not-start" : "stopped")
             }
         }
     }

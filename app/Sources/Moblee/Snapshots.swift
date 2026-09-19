@@ -89,6 +89,41 @@ enum Snapshots {
             f.ownerName = "Sam"
             f.install.vaultPath = "/Users/sam/Wiki/Sam Wiki"
         }, "07-handoff", to: folder)
+
+        // the home screen of a Mac that already has a wiki
+        let sample: [HomeModel.Tile] = [
+            .init(kind: .item, key: "trips", title: "Trip planning",
+                  why: "You said you travel most months.", detail: "About 1 min · 1 MB · free",
+                  how: .silent, paid: false),
+            .init(kind: .item, key: "videos", title: "Watch and summarise videos",
+                  why: "You save YouTube videos to watch later.", detail: "About 4 min · 200 MB · free",
+                  how: .terminal, paid: false),
+            .init(kind: .item, key: "generation", title: "Create new images, video, voices and music",
+                  why: "You want a voice for your podcast.", detail: "About 5 min · 0 MB · can cost money",
+                  how: .clicks, paid: true),
+        ]
+        func homeScene(_ configure: (Flow) -> Void) -> Flow {
+            let f = Flow(); f.mode = .home; f.homeModel.loaded = true
+            f.homeModel.wikiVersion = "0.8.0"; f.homeModel.packVersion = "0.8.0"
+            configure(f); return f
+        }
+        draw(homeScene { $0.homeModel.tiles = sample }, "08-home-waiting", to: folder)
+        draw(homeScene { f in
+            var t = sample; t[0].state = .done; t[1].state = .handedOver; t[2].state = .failed
+            f.homeModel.tiles = t
+        }, "09-home-states", to: folder)
+        draw(homeScene { _ in }, "10-home-nothing-waiting", to: folder)
+        draw(homeScene { $0.homeModel.wikiVersion = "0.7.0" }, "11-home-update", to: folder)
+        draw(homeScene { $0.homeModel.needsRepair = true }, "12-home-repair", to: folder)
+        draw(homeScene { $0.homeModel.tiles = sample; $0.homeModel.explaining = sample[1] }, "13-explain-terminal", to: folder)
+        draw(homeScene { $0.homeModel.tiles = sample; $0.homeModel.explaining = sample[2] }, "14-explain-clicks", to: folder)
+        draw(homeScene { f in
+            f.mode = .update
+            f.install.items = InstallRun.updateItems()
+            f.install.phase = .running
+            for i in 0..<4 { f.install.items[i].state = .done }
+            f.install.items[4].state = .running
+        }, "15-update-running", to: folder)
     }
 
     private static func rehearse(to folder: URL) {

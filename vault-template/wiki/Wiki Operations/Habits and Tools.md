@@ -4,15 +4,31 @@ last_reviewed:
 
 # Habits and Tools
 
-How the owner works day to day, and which of Moblee's optional items are installed to match. Claude writes this page from conversation: the first "get me started" conversation, and the setup reviews after it. It is how Claude knows what to suggest and what not to suggest again. See [[Index]] for the rest of the wiki.
+How the owner works day to day, how they like Claude to work with them, and what has been added to Moblee to match. Claude writes this page from conversation: the first "get me started" conversation, the corrections the owner makes along the way, and the setup reviews. It is how Claude knows what to suggest, what not to suggest again, and how to talk. See [[Index]] for the rest of the wiki.
 
 ## How the owner works
 
 *(Filled in during the "get me started" conversation, in the owner's words: where their mail, calendar and notes live, what they read, watch and make, what they repeat. Leave blank rather than guess.)*
 
+## How Claude talks with the owner
+
+*(Short replies or full ones, spoken or not, and anything else the owner has asked for. Until something is written here, replies are short: two or three lines, one question at a time.)*
+
+## Working with the owner
+
+*(One dated line for every correction the owner makes to how Claude works, in their words, written the moment it is made. For example: - 19 September 2026: "show me the page before you commit it".)*
+
+## Waiting in Moblee
+
+*(One line per thing agreed with the owner and not yet added: a dash, the key in backticks, the date, and the reason the owner gave. The same things are listed in `.moblee/requests.json`, which the Moblee app reads. A line moves to "Installed, and why" once the check shows it working.)*
+
 ## Installed, and why
 
 *(One line per checklist item the owner agreed to, written when they agree and marked working once the check shows it: a dash, the item's key in backticks, the date, and the reason the owner gave. For example: - `videos`, 19 September 2026: saves YouTube and Instagram videos to watch later (working).)*
+
+## Made for the owner
+
+*(One entry per made-to-measure build: what it is, where it lives in the vault, how it is started, what it depends on, the date, and why it was built, in the owner's words.)*
 
 ## Said no to
 
