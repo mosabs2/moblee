@@ -33,9 +33,15 @@ enum Step: Int, CaseIterable {
 /// started with.
 @MainActor
 final class Flow: ObservableObject {
+    /// A Mac with no wiki yet gets the install; a Mac that has one gets the
+    /// home screen (what is waiting to be added, an update, a repair).
+    enum Mode { case install, home, update }
+
+    @Published var mode: Mode = .install
     @Published var step: Step = .welcome
     @Published var ownerName: String = ""
     let install = InstallRun()
+    let homeModel = HomeModel()
 
     /// Practice run: `--home <folder>` (or MOBLEE_TEST_HOME) makes the whole run
     /// treat that folder as the home folder, so an install can be rehearsed
@@ -61,6 +67,10 @@ final class Flow: ObservableObject {
             step = s
         }
         if let v = Self.value(after: "--owner", in: args) { ownerName = v }
+        if HomeModel.existingVault(home: home) != nil && !args.contains("--fresh") {
+            mode = .home
+            homeModel.load(home: home, bundledPack: bundledPack)
+        }
     }
 
     static func value(after flag: String, in args: [String]) -> String? {
@@ -121,14 +131,20 @@ struct RootView: View {
             Theme.background.ignoresSafeArea()
 
             Group {
-                switch flow.step {
-                case .welcome: WelcomeScreen()
-                case .checkup: CheckupScreen()
-                case .name: NameScreen()
-                case .build: BuildScreen()
-                case .handoff: HandoffScreen()
+                switch flow.mode {
+                case .home: HomeScreen()
+                case .update: UpdateScreen()
+                case .install:
+                    switch flow.step {
+                    case .welcome: WelcomeScreen()
+                    case .checkup: CheckupScreen()
+                    case .name: NameScreen()
+                    case .build: BuildScreen()
+                    case .handoff: HandoffScreen()
+                    }
                 }
             }
+            .environmentObject(flow.homeModel)
             .transition(.asymmetric(
                 insertion: .move(edge: .trailing).combined(with: .opacity),
                 removal: .move(edge: .leading).combined(with: .opacity)))

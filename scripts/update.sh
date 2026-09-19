@@ -33,6 +33,29 @@ NEW_VERSION="$(cat "$PACKAGE_ROOT/VERSION" 2>/dev/null || echo unknown)"
 STAMP="$(date '+%Y%m%d-%H%M%S')"
 BACKUP="$HOME/.config/moblee/backups/$STAMP"
 
+# ----- progress lines for the Moblee app (--progress, anywhere on the line) ----
+PROGRESS=0
+ARGS=()
+for a in "$@"; do
+  if [[ "$a" == "--progress" ]]; then PROGRESS=1; else ARGS+=("$a"); fi
+done
+set -- ${ARGS[@]+"${ARGS[@]}"}
+USTEP=""; USTEP_N=0; USTEP_TOTAL=9
+emit() {
+  [[ $PROGRESS -eq 1 ]] || return 0
+  printf '@@moblee {"step":"%s","state":"%s","n":%d,"of":%d}\n' "$1" "$2" "$USTEP_N" "$USTEP_TOTAL"
+}
+ustep() {
+  # closes the step before, opens the next
+  if [[ -n "$USTEP" ]]; then emit "$USTEP" ok; fi
+  USTEP="$1"; USTEP_N=$((USTEP_N+1)); emit "$USTEP" start
+}
+on_exit() {
+  local code=$?
+  if [[ $code -ne 0 && -n "$USTEP" ]]; then emit "$USTEP" fail; emit "$USTEP" stopped; fi
+}
+trap on_exit EXIT
+
 # ----- find the vault ---------------------------------------------------------
 VAULT="${1:-}"
 if [[ -z "$VAULT" && -n "${MOBLEE_VAULT:-}" ]]; then
@@ -71,6 +94,7 @@ keep_copy() {
 }
 
 # ----- 2. tooling --------------------------------------------------------------
+ustep tools
 echo "1. Vault tooling"
 mkdir -p "$VAULT/scripts"
 for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh log-append.py; do
@@ -118,6 +142,7 @@ mkdir -p "$HOME/.config/moblee"
 echo "$VAULT" > "$HOME/.config/moblee/vault-path"
 
 # ----- 3. git hooks -----------------------------------------------------------
+ustep gate
 echo "2. Commit gate"
 if [[ -d "$VAULT/.git" ]]; then
   if [[ -d "$VAULT/scripts/hooks" ]]; then
@@ -134,6 +159,7 @@ else
 fi
 
 # ----- 4. skills --------------------------------------------------------------
+ustep skills
 echo "3. Skills"
 if ! bash "$SCRIPT_DIR/install-skills.sh" --update | sed 's/^/   /'; then
   echo ""
@@ -144,6 +170,7 @@ if ! bash "$SCRIPT_DIR/install-skills.sh" --update | sed 's/^/   /'; then
 fi
 
 # ----- 5. safety --------------------------------------------------------------
+ustep safety
 echo "4. Safety layer"
 if ! python3 "$PACKAGE_ROOT/safety/install-safety.py" --vault "$VAULT" | sed 's/^/   /'; then
   echo ""
@@ -157,6 +184,7 @@ if ! python3 "$PACKAGE_ROOT/safety/install-safety.py" --vault "$VAULT" | sed 's/
 fi
 
 # ----- 6. CLAUDE.md -----------------------------------------------------------
+ustep rules
 echo "5. CLAUDE.md"
 if ! python3 "$SCRIPT_DIR/patch-claude-md.py" --vault "$VAULT" | sed 's/^/   /'; then
   echo ""
@@ -167,6 +195,7 @@ if ! python3 "$SCRIPT_DIR/patch-claude-md.py" --vault "$VAULT" | sed 's/^/   /';
 fi
 
 # ----- 7. identity and memories ----------------------------------------------
+ustep pages
 echo "6. Identity file and starting memories"
 # The owner's name comes from the vault's git identity, else from the sentence
 # the template CLAUDE.md carries, else is left for the opening conversation.
@@ -189,6 +218,7 @@ if [[ ! -f "$VAULT/Daily Notes/_TEMPLATE.md" && -f "$PACKAGE_ROOT/vault-template
 fi
 
 # ----- 8. schedule ------------------------------------------------------------
+ustep weekly
 echo "7. Weekly health check"
 if [[ "$(uname)" == "Darwin" && -f "$SCRIPT_DIR/install-schedule.sh" ]]; then
   if [[ -f "$HOME/Library/LaunchAgents/com.moblee.weekly-lint.plist" ]]; then
@@ -211,6 +241,7 @@ else
 fi
 
 # ----- 9. learning path (optional, v0.5.1) ------------------------------------
+ustep lessons
 echo "8. Learning path"
 if [[ -f "$VAULT/wiki/Wiki Operations/Moblee Learning Path.md" ]]; then
   # already chosen: refresh the reminder script and make sure the rule is present;
@@ -236,6 +267,7 @@ else
 fi
 
 # ----- 10. version and commit -------------------------------------------------
+ustep finish
 echo "9. Version and commit"
 echo "$NEW_VERSION" > "$VAULT/VERSION"
 if [[ ! -f "$VAULT/.gitignore" && -f "$PACKAGE_ROOT/vault-template/.gitignore" ]]; then
@@ -265,6 +297,11 @@ if [[ -d "$VAULT/.git" ]]; then
         || echo "   (commit did not go through; ask Claude to commit the update)"
     fi
   )
+fi
+
+if [[ -n "$USTEP" ]]; then emit "$USTEP" ok; USTEP=""; fi
+if [[ $PROGRESS -eq 1 ]]; then
+  printf '@@moblee {"step":"done","state":"ok","n":%d,"of":%d}\n' "$USTEP_TOTAL" "$USTEP_TOTAL"
 fi
 
 echo ""

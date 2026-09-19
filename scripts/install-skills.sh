@@ -90,6 +90,20 @@ for entry in "$SKILLS_SRC"/*; do
   cp -R "$entry" "$dst"
   INSTALLED+=("$name")
 done
+
+# ----- skills that have been renamed or folded into another -------------------
+# Left in place, an old skill would answer to the same phrases as its successor.
+# Once the successor is installed, the old copy is moved to the backups folder
+# (never deleted). "old:new" pairs.
+for pair in "get-started:companion"; do
+  old="${pair%%:*}"; new="${pair##*:}"
+  if [[ -d "$SKILLS_DST/$old" && -d "$SKILLS_DST/$new" ]]; then
+    mkdir -p "$BACKUP_DIR"
+    mv "$SKILLS_DST/$old" "$BACKUP_DIR/$old"
+    KEPT=1
+    echo "The \`$old\` skill is now part of \`$new\`; the old copy was moved aside."
+  fi
+done
 if [[ "${KEPT:-0}" -eq 1 ]]; then
   echo "Previous copies kept at ${BACKUP_DIR/#$HOME/~}"
 fi

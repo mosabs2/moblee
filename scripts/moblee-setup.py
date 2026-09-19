@@ -1094,7 +1094,34 @@ def choose(items: list, status: dict, preset: set | None, tick: set | None = Non
     return [it for it in items if ticked[it.key] and not status.get(it.key)]
 
 
-def summarise(chosen: list, foundations: list) -> bool:
+# How the Moblee app can add each item. "silent": the app runs it and shows
+# progress, since it asks nothing and needs no password. "terminal": it needs
+# the owner at a Terminal window (Homebrew's password, a sign-in, or the
+# `claude` command), so the app opens one with the command ready. "clicks":
+# it is done by clicks inside Claude's own app, which the app shows as
+# pictures. "hidden": only useful to someone who works in Terminal.
+HOW = {
+    "news-brief": "silent", "trips": "silent", "x-capture": "silent",
+    "weekly": "silent", "lessons": "silent", "voice": "silent",
+    "google": "clicks", "generation": "clicks",
+    "vault-fn": "hidden",
+}
+
+
+def how(key: str) -> str:
+    return HOW.get(key, "terminal")
+
+
+PROGRESS = False
+
+
+def emit(step: str, state: str, **extra) -> None:
+    """One machine-readable line per event, for the Moblee app (--progress)."""
+    if PROGRESS:
+        print("@@moblee " + json.dumps(dict({"step": step, "state": state}, **extra)), flush=True)
+
+
+def summarise(chosen: list, foundations: list, assume_yes: bool = False) -> bool:
     minutes = sum(it.minutes for it in chosen) + sum(FOUNDATION_COST[f][0] for f in foundations)
     space = sum(it.space_mb for it in chosen) + sum(FOUNDATION_COST[f][1] for f in foundations)
     rule("Before anything is installed")
@@ -1122,6 +1149,8 @@ def summarise(chosen: list, foundations: list) -> bool:
         say("You ticked something that can cost money: " + ", ".join(it.title for it in paid) + ".")
         say("Nothing is bought by this installer; you decide on that company's own site.")
     say("")
+    if assume_yes:
+        return True  # the owner already pressed the item's button in the Moblee app
     return yes("Start now?", default=True)
 
 
@@ -1157,13 +1186,32 @@ def main() -> int:
     ap.add_argument("--only", help="comma-separated item keys to install, skipping the checklist")
     ap.add_argument("--tick", help="comma-separated item keys to show ticked in the checklist (the owner still confirms)")
     ap.add_argument("--list", action="store_true", help="print every item with its key, time, space and cost, and stop")
+    ap.add_argument("--json", action="store_true", help="with --list: print the items as JSON, for the Moblee app")
+    ap.add_argument("--yes", action="store_true", help="with --only: do not ask 'Start now?' (the Moblee app uses this after the owner presses an item's button)")
+    ap.add_argument("--progress", action="store_true", help="also print one machine-readable line per item, for the Moblee app")
     args = ap.parse_args()
 
     if platform.system() != "Darwin":
         say("Moblee runs on a Mac only.")
         return 1
+    if args.yes and not args.only:
+        say("--yes is only for use with --only, so that nothing is installed that was not named.")
+        return 1
+    if args.yes and os.environ.get("CLAUDECODE"):
+        # Installing is the owner's act. Claude Code marks the commands it runs,
+        # so a run started by Claude is turned away here.
+        say("This has to be started by the owner, in the Moblee app or a Terminal window of their own.")
+        return 1
+    global PROGRESS
+    PROGRESS = args.progress
 
     items = build_items()
+    if args.list and args.json:
+        print(json.dumps([{"key": it.key, "title": it.title, "what": it.what, "minutes": it.minutes,
+                           "space_mb": it.space_mb, "cost": it.cost, "paid": it.cost.startswith("PAID"),
+                           "needs": it.needs, "signin": it.signin, "how": how(it.key)}
+                          for it in items], indent=2))
+        return 0
     if args.list:
         for it in items:
             size = f"{it.space_mb / 1000:.1f} GB" if it.space_mb >= 1000 else f"{it.space_mb} MB"
@@ -1200,10 +1248,20 @@ def main() -> int:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     (CONFIG_DIR / "package-path").write_text(str(PACKAGE_ROOT) + "\n")
 
-    say("Looking at what is already working (this can take a minute or two)...")
-    status = {it.key: it.check()[0] for it in items}
-
     preset = {k.strip() for k in args.only.split(",") if k.strip()} if args.only else None
+    if args.yes:
+        # Started from the Moblee app for named items: check only those now, and
+        # carry the rest forward from the last saved state, so a one-minute item
+        # is not kept waiting behind a sweep of everything.
+        try:
+            saved = json.loads(STATE_FILE.read_text()).get("status", {}) if STATE_FILE.exists() else {}
+        except (OSError, ValueError):
+            saved = {}
+        status = {it.key: (it.check()[0] if it.key in preset else bool(saved.get(it.key, False))) for it in items}
+    else:
+        say("Looking at what is already working (this can take a minute or two)...")
+        status = {it.key: it.check()[0] for it in items}
+
     tick = {k.strip() for k in args.tick.split(",") if k.strip()} if args.tick else None
     for asked in (preset, tick):
         unknown = (asked or set()) - {it.key for it in items}
@@ -1213,9 +1271,12 @@ def main() -> int:
     chosen = choose(items, status, preset, tick)
     if not chosen:
         say("Nothing to install. Everything you ticked is already working, or nothing was ticked.")
+        for k in sorted(preset or ()):
+            emit(k, "ok", already=True)
+        emit("done", "ok", restart=False)
         return 0
     foundations = foundations_needed(chosen)
-    if not summarise(chosen, foundations):
+    if not summarise(chosen, foundations, assume_yes=args.yes):
         say("Nothing was installed. Run this again whenever you are ready.")
         return 0
 
@@ -1231,6 +1292,7 @@ def main() -> int:
     for it in chosen:
         blocked = [n for n in it.needs if not have.get(n)]
         rule(it.title)
+        emit(it.key, "start")
         if blocked:
             say("  Skipped: it needs " + ", ".join(blocked) + ", which did not install.")
             continue
@@ -1247,6 +1309,7 @@ def main() -> int:
     path = write_report(results, vault_path())
     for it, ok, _ in results:
         status[it.key] = ok
+        emit(it.key, "ok" if ok else "fail")
     state = {"last_run": STAMP, "chosen": [it.key for it in chosen],
              "working": [it.key for it, ok, _ in results if ok],
              "status": status}
@@ -1264,8 +1327,10 @@ def main() -> int:
     else:
         say("Everything you ticked is working.")
     say(f"This result is saved at {path}")
-    if any(it.key in ("mac-apps", "google", "chrome", "generation", "videos", "film", "documents",
-                      "skill-maker", "obsidian-extras") for it in chosen):
+    restart = any(it.key in ("mac-apps", "google", "chrome", "generation", "videos", "film", "documents",
+                             "skill-maker", "obsidian-extras") for it in chosen)
+    emit("done", "ok", restart=restart)
+    if restart:
         say("")
         say("Quit Claude Code and open it again so it sees the new connections.")
         if any(it.key == "chrome" for it in chosen):
