@@ -1,6 +1,6 @@
 # Skills bundle
 
-This folder ships seven Claude skills that pair with the Moblee vault template. Once installed, Claude (running in Claude Code or in Cowork with the vault mounted) picks them up automatically and invokes them when the user's natural-language phrasing matches their trigger surface.
+This folder ships eight Claude skills that pair with the Moblee vault template. Once installed, Claude (running in Claude Code or in Cowork with the vault mounted) picks them up automatically and invokes them when the user's natural-language phrasing matches their trigger surface.
 
 ## What's in the bundle
 
@@ -10,11 +10,12 @@ This folder ships seven Claude skills that pair with the Moblee vault template. 
 - **`wiki-to-pdf/`**, renders any wiki page (and optionally its cluster notes) as a branded PDF. Markdown → HTML → WeasyPrint pipeline. Uses CSS custom properties so the brand is a one-place edit. Verifies its own output for leaked scaffolding before handing over.
 - **`design-your-brand/`**, short interview skill that captures the user's visual identity (colours, typography, monogram) and applies it to `wiki-to-pdf`. Run this first if you want the PDFs to be in your brand rather than the neutral default.
 - **`compact/`**, keeps the always-loaded files light. Acts on the lint's vault-weight flags: archive-only rotations run unattended, anything that drops a line or moves a file is listed and confirmed first, and lossy prose trims are proposed with before/after sizes and executed only on sign-off.
+- **`get-started/`**, the owner's first conversation in a new vault and the later setup reviews: asks how they use their Mac and what they read, watch and make, suggests the checklist items that fit with a reason for each, records the answers on `wiki/Wiki Operations/Habits and Tools.md`, and gives the owner a `moblee-setup.py --tick` command to run themselves. "Get me started", "review my setup". Never installs anything itself.
 - **`galaxy/`**, rebuilds the offline 3D knowledge-graph view of the vault (`scripts/wiki-galaxy/build.py`, output in `outputs/galaxy/`) and opens it in the default browser. "Galaxy", "show me my brain in 3D". Read-only on `wiki/`.
 
 ## Recommended install order
 
-1. Install all seven skills (one shell command, below).
+1. Install all eight skills (one shell command, below).
 2. Install the WeasyPrint Python and system dependencies if you plan to use `wiki-to-pdf`.
 3. Run `design-your-brand` once, in chat, to set up the brand.
 4. Try `wiki-to-pdf` against any wiki page to confirm the brand applies.
@@ -28,7 +29,7 @@ From the root of the Moblee bundle (the folder containing this `skills/` subdire
 mkdir -p ~/.claude/skills && cp -R skills/*/ ~/.claude/skills/
 ```
 
-This creates one folder per skill under `~/.claude/skills/` (`brain/`, `wiki-capture/`, `wiki-interview/`, `wiki-to-pdf/`, `design-your-brand/`, `compact/`, `galaxy/`). Each folder contains the skill's `SKILL.md` and any companion files. The `galaxy` skill runs `scripts/wiki-galaxy/build.py` from inside the vault, which the main installer copies there; if you installed the skills alone, copy `scripts/wiki-galaxy/` into your vault's `scripts/` folder as well.
+This creates one folder per skill under `~/.claude/skills/` (`brain/`, `wiki-capture/`, `wiki-interview/`, `wiki-to-pdf/`, `design-your-brand/`, `compact/`, `galaxy/`, `get-started/`). Each folder contains the skill's `SKILL.md` and any companion files. The `galaxy` skill runs `scripts/wiki-galaxy/build.py` from inside the vault, which the main installer copies there; if you installed the skills alone, copy `scripts/wiki-galaxy/` into your vault's `scripts/` folder as well.
 
 If you are installing the skills as part of running `install-skills.sh` from the Moblee bundle root, the script wires this same step plus the WeasyPrint dependency install.
 
@@ -47,7 +48,7 @@ The other skills have no external dependencies; they use Claude's built-in file 
 
 ## Verifying the install
 
-In Claude Code, run `/skills` at the prompt. The seven skills should appear in the list, each with its trigger surface as documented in its `SKILL.md`.
+In Claude Code, run `/skills` at the prompt. The eight skills should appear in the list, each with its trigger surface as documented in its `SKILL.md`.
 
 In Cowork, the skills appear automatically in the available-skills list at session start. Trigger one by phrasing a request that matches its description field, for instance "design my brand" for `design-your-brand`, or "PDF up [Your Domain]" for `wiki-to-pdf`.
 

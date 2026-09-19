@@ -14,7 +14,8 @@ housekeeping entries, frontmatter schemas on typed folders (cluster notes,
 daily notes), duplicate frontmatter blocks, dangling wikilinks, broken
 section anchors, orphan pages, source attribution, the token-budget weight
 guard (always-loaded files and the skills layer), and a handful of advisory
-sweeps (superlatives, prose boilerplate, correction rate).
+sweeps (superlatives, prose boilerplate, correction rate), and (v0.7) a
+habits-and-tools check that asks whether the owner's setup still fits.
 
 Vault detection, in order of precedence:
   1. the MOBLEE_VAULT environment variable (absolute path to the vault);
@@ -1682,6 +1683,154 @@ def check_correction_rate(vault: Path, findings: list[str]) -> tuple[int, int]:
 
 
 # ---------------------------------------------------------------------------
+# Habits and tools (informational, v0.7)
+# ---------------------------------------------------------------------------
+
+HABITS_PAGE = Path("wiki") / "Wiki Operations" / "Habits and Tools.md"
+HABITS_REVIEW_DAYS = 90
+HABITS_WINDOW_DAYS = 30
+HABITS_THRESHOLD = 3
+# item key -> (what the owner has been doing, link pattern)
+HABIT_SIGNALS = {
+    "videos": ("video links (YouTube, Instagram, TikTok)",
+               re.compile(r"https?://(?:www\.|m\.)?(?:youtube\.com/(?:watch|shorts)|youtu\.be/|instagram\.com/(?:reel|p)/|tiktok\.com/)[^\s)\]>\"']+")),
+    "x-capture": ("X posts",
+                  re.compile(r"https?://(?:www\.|mobile\.)?(?:x|twitter)\.com/\w+/status/\d+")),
+}
+
+
+_MONTHS = {m: i for i, m in enumerate(
+    ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], 1)}
+
+
+def _parse_day(text: str) -> datetime.date | None:
+    """The first date in the text, written as 2026-09-19, 19 September 2026,
+    19 Sept 2026 or September 19, 2026; None if there is none."""
+    m = re.search(r"(\d{4})-(\d{2})-(\d{2})", text)
+    if m:
+        try:
+            return datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return None
+    m = re.search(r"(\d{1,2})\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})", text)
+    if m:
+        day, mon, year = m.group(1), m.group(2), m.group(3)
+    else:
+        m = re.search(r"([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})", text)
+        if not m:
+            return None
+        mon, day, year = m.group(1), m.group(2), m.group(3)
+    month = _MONTHS.get(mon[:3].lower())
+    if not month:
+        return None
+    try:
+        return datetime.date(int(year), month, int(day))
+    except ValueError:
+        return None
+
+
+def _installed_now(key: str) -> bool | None:
+    """Look at the Mac itself where that is cheap; None when it cannot be told."""
+    if key == "videos":
+        return any(Path(d, "yt-dlp").exists() for d in ("/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"))
+    if key == "x-capture":
+        return (Path.home() / ".claude" / "skills" / "x-capture").is_dir()
+    return None
+
+
+def _item_installed(key: str) -> bool | None:
+    """True/False when known, None when it cannot be told from here. The Mac
+    itself is looked at first; the checklist's saved state is the fallback."""
+    now = _installed_now(key)
+    if now is not None:
+        return now
+    state = Path.home() / ".config" / "moblee" / "setup-state.json"
+    try:
+        import json
+        status = json.loads(state.read_text()).get("status", {})
+        if key in status:
+            return bool(status[key])
+    except Exception:
+        pass
+    return None
+
+
+def check_habits(vault: Path, findings: list[str]) -> tuple[int, int]:
+    """Whether the owner's setup still fits how they work. Two parts: the
+    Habits and Tools page's review date (the get-started conversation fills
+    it in), and links that keep arriving in the inboxes and daily notes for
+    something an uninstalled item would handle. Items the owner turned down
+    in the last ninety days stay quiet. Informational: every finding is a
+    question for the owner, never a to-do."""
+    today = datetime.date.today()
+    page = vault / HABITS_PAGE
+    if not page.exists():  # found by name anywhere under wiki/, as the updater does
+        page = next((p for p in (vault / "wiki").rglob(HABITS_PAGE.name)), page)
+    notes: list[str] = []
+
+    declined: dict[str, datetime.date] = {}
+    if not page.exists():
+        notes.append("there is no Habits and Tools page; the next Moblee update adds it")
+    else:
+        text = page_text(page)
+        fm = re.match(r"^---\n(.*?)\n---", text, re.DOTALL)
+        sec = re.search(r"^## Said no to\s*$(.*?)(?=^## |\Z)", text, re.MULTILINE | re.DOTALL)
+        if sec:
+            # any line in the section: every `key` in backticks, and the first date on the line
+            for line in sec.group(1).splitlines():
+                keys = re.findall(r"`([a-z0-9-]+)`", line)
+                d = _parse_day(line)
+                if keys and d:
+                    for k in keys:
+                        declined[k] = max(d, declined.get(k, d))
+        raw_reviewed = ""
+        if fm:
+            m = re.search(r"^last_reviewed:[ \t]*(.*)$", fm.group(1), re.MULTILINE)
+            raw_reviewed = m.group(1).strip() if m else ""
+        reviewed = _parse_day(raw_reviewed) if raw_reviewed else None
+        quiet = "get-started" in declined and (today - declined["get-started"]).days <= HABITS_REVIEW_DAYS
+        if raw_reviewed and reviewed is None:
+            notes.append(f"the review date on the Habits and Tools page (`{raw_reviewed}`) could not be read; write it as 19 September 2026")
+        elif quiet:
+            pass
+        elif reviewed is None:
+            notes.append("the \"get me started\" conversation has not been held yet; offer it to the owner once, and record a no as `get-started` under \"Said no to\"")
+        elif (today - reviewed).days > HABITS_REVIEW_DAYS:
+            notes.append(f"the setup was last reviewed on {reviewed.strftime('%-d %B %Y')}; offer the owner a setup review once, and record a no as `get-started` under \"Said no to\"")
+
+    roots = [vault / "raw", vault / "Clippings", vault / "Daily Notes"]
+    cutoff = datetime.datetime.now().timestamp() - HABITS_WINDOW_DAYS * 86400
+    seen: dict[str, set[str]] = {k: set() for k in HABIT_SIGNALS}
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for f in root.rglob("*.md"):
+            try:
+                if f.stat().st_mtime < cutoff:
+                    continue
+            except OSError:
+                continue
+            body = page_text(f)
+            for key, (_, rx) in HABIT_SIGNALS.items():
+                seen[key].update(rx.findall(body))
+
+    for key, (what, _) in HABIT_SIGNALS.items():
+        count = len(seen[key])
+        said_no = key in declined and (today - declined[key]).days <= HABITS_REVIEW_DAYS
+        if count < HABITS_THRESHOLD or said_no or _item_installed(key) is not False:
+            continue
+        notes.append(f"{count} {what} arrived in the last {HABITS_WINDOW_DAYS} days and the `{key}` item is not installed; ask the owner whether they want it")
+
+    if notes:
+        findings.append("- **Habits and tools (informational; questions for the owner, never to-dos)**:")
+        for n in notes:
+            findings.append(f"  - {n}.")
+    else:
+        findings.append("- **Habits and tools**: the setup fits what the vault shows.")
+    return (1, 1)  # informational: questions for the owner, never counted as issues
+
+
+# ---------------------------------------------------------------------------
 # Prose boilerplate sweep (informational)
 # ---------------------------------------------------------------------------
 
@@ -2048,6 +2197,9 @@ def main() -> int:
 
     pass_, tot = check_duplicate_frontmatter(vault, findings)
     scorecard.append(("Duplicate frontmatter blocks (advisory)", pass_, tot))
+
+    pass_, tot = check_habits(vault, findings)
+    scorecard.append(("Habits and tools (informational)", pass_, tot))
 
     # Read-failure surfacing: a file that exists but could not be read makes
     # every check that touched it silently clean. Count each failure as a

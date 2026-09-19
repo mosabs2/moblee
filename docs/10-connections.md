@@ -1,12 +1,12 @@
 # 10. Connections: the checklist, item by item
 
-Moblee's wiki works on its own, but it is more useful when Claude can read what is already on your Mac and in your accounts: your calendar, your mail, your files, a video someone sent you. Everything of that kind is chosen from one checklist, `scripts/moblee-setup.py`. The installer shows it at the end of a new install, the updater offers it, and you can run it again at any time from the Moblee folder in Terminal:
+Moblee's wiki works on its own, but it is more useful when Claude can read what is already on your Mac and in your accounts: your calendar, your mail, your files, a video someone sent you. Everything of that kind is chosen from one checklist, `scripts/moblee-setup.py`. The easiest way to fill it in is to say "get me started" to Claude in your wiki, which suggests what fits and gives you the command. The installer and the updater also offer it, and you can run it at any time from the Moblee folder in Terminal:
 
 ```
 python3 scripts/moblee-setup.py
 ```
 
-Each line of the checklist says what the item does, roughly how long it takes, how much space it uses and what it costs. Items that are already working are marked `working` and left alone. You type the numbers of the items to tick or untick (for example `3 7 12`), `all` for everything, `free` for everything that costs nothing, or `none` to clear the list, and then press Return on its own when the list is right. Before anything is installed the checklist shows a summary: the order it will work in, its estimate of time and space for what you ticked, and every moment you will be needed at the keyboard. It then asks "Start now?". Nothing paid is ticked unless you tick it.
+Each line of the checklist says what the item does, roughly how long it takes, how much space it uses and what it costs. Items that are already working are marked `working` and left alone. You type the numbers of the items to tick or untick (for example `3 7 12`), `all` for everything, `free` for everything that costs nothing, or `none` to clear the list, and then press Return on its own when the list is right. Before anything is installed the checklist shows a summary: the order it will work in, its estimate of time and space for what you ticked, and every moment you will be needed at the keyboard. It then asks "Start now?". Nothing is ticked in advance. The easier way to choose is to open Claude in your wiki and say "get me started" (or "review my setup" later): Claude asks how you work and gives you a command, such as `python3 scripts/moblee-setup.py --tick videos,google`, that opens this checklist with only the fitting items ticked. You can still change anything before you press Return. `--list` prints every item with its key, time, space and cost.
 
 **Time, space and cost, honestly.** Ticking everything free on a Mac that has never had developer tools takes about an hour and a half the first time, most of it waiting for downloads, and uses several gigabytes: Apple's developer tools, Homebrew (the standard free installer for Mac tools) and the video renderer are the large parts. The checklist prints its own estimate for what you actually ticked before it starts. Keep the Mac plugged in and awake. Only one item can cost money (creating new images, video and voices with ElevenLabs), and the checklist itself never buys anything.
 
@@ -146,13 +146,13 @@ These items install tools rather than connect accounts, so there is nothing to s
 
 **What it connects.** Spoken replies, and an audible nudge when Claude is waiting on you. The Mac's built-in voice is free; the voice installer then asks its own questions and offers an ElevenLabs voice as an optional paid upgrade. About 3 minutes. Not ticked unless you tick it. `voice/README.md` has the detail.
 
-## Habits
+## Looking after the wiki
 
-**Weekly health check (`weekly`).** The wiki checks itself every Saturday morning and tells you what needs attention. Ticked by default; free.
+**Weekly health check (`weekly`).** The wiki checks itself every Saturday morning and tells you what needs attention, including when your habits have moved on and a different extra might suit you. Free, and worth having: Claude suggests it in the "get me started" conversation.
 
-**The learning path (`lessons`).** Thirty-two short lessons, one an evening, with a reminder at 9 pm; say "lesson" in your vault. Not ticked unless you tick it; free.
+**The learning path (`lessons`).** Thirty-two short lessons, one an evening, with a reminder at 9 pm; say "lesson" in your vault. Free.
 
-**The `vault` shortcut in Terminal (`vault-fn`).** Type `vault` in Terminal to open Claude in your wiki. Not ticked unless you tick it; free. The checklist adds it to `~/.zshrc`, keeping a copy of the old file first.
+**The `vault` shortcut in Terminal (`vault-fn`).** Type `vault` in Terminal to open Claude in your wiki. Free. The checklist adds it to `~/.zshrc`, keeping a copy of the old file first.
 
 ## If something is not working
 
