@@ -404,7 +404,13 @@ def connector_status(name: str, _cache: dict = {}) -> str:
     and never as "not working"."""
     if "out" not in _cache:
         say("  Asking Claude Code which connections it can see (this can take a minute or two)...")
-        _cache["out"] = run(["claude", "mcp", "list"], timeout=240)[1] if claude_ok() else ""
+        # A test can stand a pretend `claude` in for the real one, but only in a
+        # declared practice run, the same rule the app's practice switches follow.
+        stand_in = os.environ.get("MOBLEE_CLAUDE") if os.environ.get("MOBLEE_PRACTICE") == "1" else None
+        if stand_in:
+            _cache["out"] = run([stand_in, "mcp", "list"], timeout=240)[1]
+        else:
+            _cache["out"] = run(["claude", "mcp", "list"], timeout=240)[1] if claude_ok() else ""
     lines = _cache["out"].splitlines()
     for line in lines:
         if line.startswith(f"claude.ai {name}:"):
@@ -415,9 +421,9 @@ def connector_status(name: str, _cache: dict = {}) -> str:
 
 
 NO_CLAUDE_AI = ("connections made in the Claude app only show inside Claude, so this check cannot "
-                "see them. Ask Claude to use it (\"what is on my calendar today?\"); if it answers, "
-                "it is connected. (In Terminal's Claude Code, /login with your Claude account lets "
-                "this check see them too)")
+                "see them. Ask Claude \"{ask}\"; if it answers, it is connected. (In Terminal's "
+                "Claude Code, /login with your Claude account lets this check see them too)")
+ASK = {"google": "what is on my calendar today?", "generation": "can you see ElevenLabs?"}
 
 APP_STATE = CONFIG_DIR / "app-state.json"
 
@@ -434,9 +440,10 @@ def unseen(key: str):
     """What a check returns when it cannot see the thing it is asked about.
     None is neither working nor broken. The owner's own word, given in the
     Moblee app, is reported as exactly that and no more."""
+    why = NO_CLAUDE_AI.format(ask=ASK.get(key, "can you use it?"))
     if owner_said_done(key):
-        return None, "you marked this as connected in Moblee; " + NO_CLAUDE_AI
-    return None, NO_CLAUDE_AI
+        return None, "you marked this as connected in Moblee; " + why
+    return None, why
 
 
 def forget_connector_cache() -> None:
