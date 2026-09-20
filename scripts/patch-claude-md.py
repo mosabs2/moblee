@@ -115,6 +115,19 @@ BLOCKS = [
 ]
 
 
+READER_BLOCK = (
+    "whichever assistant reads this file (v0.9)",
+    r"^## Session opener\s*$",
+    "para",
+    "written for whichever assistant is working in this wiki",
+    "**This file is written for whichever assistant is working in this wiki.** "
+    "Older parts of it say \"Claude\". If you are ChatGPT's agent, those rules are "
+    "addressed to you as well: read \"Claude\" as \"you\". Paths under `~/.claude/` "
+    "describe Claude's set-up; yours are `~/.codex/` and `~/.agents/skills/`, and "
+    "your standing notes are kept at `wiki/Wiki Operations/Assistant Memory.md`.",
+)
+
+
 def find_vault(explicit: str | None) -> Path:
     if explicit:
         return Path(explicit).expanduser().resolve()
@@ -183,7 +196,16 @@ def main() -> int:
     lines = original.split("\n")
     added, present, orphaned = [], [], []
 
-    for name, anchor, where, marker, text in BLOCKS:
+    # A rules file written by a version before 0.9 addresses Claude by name
+    # throughout, and blocks already present are never rewritten. When ChatGPT
+    # will read that file too, one paragraph tells it the rules are its own.
+    blocks = list(BLOCKS)
+    chatgpt_reads = (a.assistant in ("chatgpt", "both")
+                     or (vault / "AGENTS.md").exists() or (vault / "AGENTS.md").is_symlink())
+    if chatgpt_reads and "where Claude is the maintainer" in original:
+        blocks.append(READER_BLOCK)
+
+    for name, anchor, where, marker, text in blocks:
         if marker in original or any(marker in l for l in lines):
             present.append(name)
             continue
