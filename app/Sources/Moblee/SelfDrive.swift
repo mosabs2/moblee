@@ -154,7 +154,23 @@ enum SelfDrive {
         // the bottom when the sentence takes one line; a card is 236 tall, so
         // there is room to spare either way.
         let claudeCard = CGPoint(x: window.frame.width / 2 - 192, y: 269)
-        click(claudeCard)
+        // A window that is not the key window takes its first click as "come
+        // to the front" and gives the card nothing, which is ordinary macOS
+        // behaviour and not a fault in the screen. Another app can take the
+        // front at any moment while this runs (the one that started the test
+        // does, each time it prints), so the front is taken back and the tap
+        // made again, and the log says how many taps it took.
+        var taps = 0
+        while flow.assistant != .claude && taps < 4 {
+            if !window.isKeyWindow {
+                NSApp.activate(ignoringOtherApps: true)
+                window.makeKeyAndOrderFront(nil)
+                await pause(0.6)
+            }
+            click(claudeCard); taps += 1
+            await pause(0.8)
+        }
+        say("the Claude card took \(taps) tap(s)")
         await expect("tapping the Claude card answers the question") { flow.assistant == .claude }
         await pause(0.6)
         click(bigButton)                     // Next, now that it is live
