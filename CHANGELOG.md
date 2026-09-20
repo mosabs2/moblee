@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.9.0 (unreleased)
+
+The second-assistant release. Until now Moblee set a wiki up for Claude. From this version the owner chooses Claude, ChatGPT or both, at install or at any later update, and the whole pack (installer, updater, app, guard, check-up, guides, lessons and skills) serves that choice. Nothing changes for an owner of Claude who does nothing.
+
+### Added
+
+- **The choice of assistant.** `scripts/install.sh` and `scripts/update.sh` take `--assistant claude|chatgpt|both` (the installer also asks in Terminal), and the choice is kept in `~/.config/moblee/assistant`. No file means Claude. The Moblee app asks "Which assistant do you use?" at install, at an existing owner's first update in this version, and from a Change control on its home screen.
+- **The rules file under the name each assistant reads.** Claude reads `CLAUDE.md` and ChatGPT reads `AGENTS.md`. With both, `CLAUDE.md` is the real file and `AGENTS.md` a link to it. With ChatGPT alone, `AGENTS.md` is the real file and `CLAUDE.md` a link to it, so that an older copy of the Moblee app still recognises the wiki. Every script finds whichever is real. ChatGPT reads only the first 32 KiB of that file by default, so the installer adds one line to ChatGPT's settings file, `~/.codex/config.toml`, that lifts the limit, and changes nothing else in that file.
+- **The delete guard for ChatGPT.** The same `bash-guard.py`, installed to `~/.codex/hooks/` and entered in `~/.codex/hooks.json`. The entry is added at the end of the owner's list and no other character of the file is changed, because ChatGPT records the owner's trust per hook and silently skips an entry that has moved. On ChatGPT the guard reads the shell and also the agent's file-editing tool, which can delete, move and write over files: a deletion, a move out of the wiki, a move or an add onto an existing file, and a second claim on one new file within a patch are refused; an ordinary edit never is. Patches are read the way ChatGPT's own reader reads them, indented lines included. A patch fed to the shell is accepted only as one clean inline heredoc. A shell or interpreter started with nothing to run is refused for both assistants, since typed input never reaches a hook.
+- **The Trust step.** ChatGPT does not run a newly installed or changed hook until its owner has trusted it (ChatGPT menu, Settings, Hooks, "User config", Trust, and the switch), and says nothing on screen while it skips one. The installer, the updater, the safety guide, the delete-guard lesson, the companion skill and the app all give the same five steps, say that they must be done again after any update that changes the guard and that ChatGPT will not remind the owner, and say to reopen ChatGPT afterwards. The app has a Trust screen for it, with a Later button, and remembers that the step is outstanding.
+- **A proof that the guard is live.** `python3 scripts/moblee-doctor.py --prove-guard`, or "Prove the guard" in the app, asks ChatGPT's agent to remove a folder and delete a page in a scratch wiki. It reports the guard as proved only when both are still there and the agent's own output shows Moblee's guard refusing both the shell route and the file-editing route. Anything less is reported as "cannot tell", and a removal as a problem. It uses a little of the owner's ChatGPT allowance.
+- **The check-up reads the ChatGPT side**: the guard file, its hook entry, the size setting, the skills, the rules file's size against the limit in force, two separate rules files, and a link lost in syncing. Two new levels, `CANNOT SEE` and `CANNOT TELL`, for what the files cannot show. Field guide entries F26 to F28.
+- **Skills for ChatGPT** go to `~/.agents/skills`. A skill of the same name that is not Moblee's is left alone and reported.
+- **Starting memories for ChatGPT** are kept on a wiki page, `wiki/Wiki Operations/Assistant Memory.md`, which the rules file tells the assistant to read, since ChatGPT has no hand-written memory folder.
+- **An older wiki moved to ChatGPT** gains one paragraph in its rules file telling ChatGPT that rules addressed to Claude by name are its own.
+
+### Changed
+
+- **The pack's words.** Where a step is the same for either assistant the pack says "your assistant"; where it differs it gives both under **With Claude:** and **With ChatGPT:**. Features that exist for Claude only (connections, plugins, voice, the permission rules, the dashboard's Ask box, the extras checklist) are labelled, with one sentence: Moblee does not set this up for ChatGPT yet. A ChatGPT-only owner is not offered the extras checklist.
+- **Safety wording is no stronger than the code.** With ChatGPT the guard protects once it is trusted and proved; a guard that crashes or takes too long lets the command through; ChatGPT's sandbox is a second layer that does not stop a deletion inside the wiki. "Cannot be skipped" and "however it is phrased" are gone.
+- **The app**: its welcome and its name question name no assistant; the hand-off names the right app; it recognises a ChatGPT-only wiki; it will not change, update or repair a wiki newer than itself; it tells an older chat-only ChatGPT app from one that carries the agent.
+- **The guard's refusal sentence** names no assistant's folder or tool.
+- **Moblee's own commits name their paths**, so an owner's staged work is never swept into one.
+
+### Fixed
+
+- **Running the installer again over a wiki whose first install had stopped part-way** copied the template over its pages. It now never overwrites, and a wiki with history goes to the updater.
+- A lost or unreadable choice file no longer turns a ChatGPT wiki into a Claude one.
+- The starting notes are no longer added a second time after a heading is edited, and `wiki/Index.md` keeps its line endings.
+
+### How this release was checked
+
+A guard suite of 484 cases; an engine test of the installer, updater, check-up and safety installer across the three choices in sandboxed homes; the 0.8.1 engine and release tests against the same code, to show the Claude path unchanged; the app's test with a live window; live runs of ChatGPT's agent against the guard; and an independent review of the guard, the scripts, the app and the truth of every sentence told to an owner, whose findings are the second half of the lists above.
+
 ## v0.8.1 (20 September 2026)
 
 The app and companion release. v0.7.0 made the owner the one who installs, which meant Terminal for everyone, and its first conversation ended in a command to run there. It also treated getting to know the owner as one conversation and the occasional review. This release gives the owner an app to install, update and add things with, and turns the first conversation into a standing guide that grows the wiki with them, one step at a time. The principle is unchanged: the owner runs every installer, nothing is pasted into Claude as instructions, Claude never installs anything or edits its own settings, and nothing deletes. Mac only. A paid Claude plan is needed for the Code tab in Claude's app.
