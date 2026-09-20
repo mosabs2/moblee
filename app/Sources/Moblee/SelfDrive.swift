@@ -146,6 +146,7 @@ enum SelfDrive {
         await expect("nothing is chosen for the owner beforehand") { flow.assistant == nil }
         click(bigButton)                     // greyed out until one of the three is tapped
         await pause(0.8)
+        say("after the greyed-out Next: step \(flow.step), chosen \(String(describing: flow.assistant))")
         await expect("a greyed-out Next does nothing on the question either") { flow.step == .assistant && flow.assistant == nil }
         // The three choices are drawn side by side in the middle of the window:
         // cards 170 wide with 22 between them, so their centres are 192 apart,
