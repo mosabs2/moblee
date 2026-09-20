@@ -2,6 +2,10 @@
 """patch-claude-md.py — bring an existing vault's CLAUDE.md up to the current
 Moblee schema without replacing the file.
 
+The file patched is the vault's instruction file: CLAUDE.md, or AGENTS.md in a
+vault set up for ChatGPT alone. Where both are present CLAUDE.md is the real
+file and AGENTS.md a link to it, and the real file is the one patched.
+
 A vault's CLAUDE.md is part template and part the owner's own rules, so it is
 never overwritten. This script inserts the blocks a newer Moblee version needs,
 each at a named anchor, and skips any block that is already present (it looks
@@ -127,6 +131,18 @@ def find_vault(explicit: str | None) -> Path:
     sys.exit("Could not find the vault. Pass --vault <path> or run from inside it.")
 
 
+def instruction_file(vault: Path) -> Path:
+    """The vault's instruction file: CLAUDE.md if it is a regular file, else
+    AGENTS.md if it is a regular file, else CLAUDE.md. Where both assistants
+    are in use CLAUDE.md is the real file and AGENTS.md is a symlink to it, so
+    the real file is the one patched and the symlink is never written through."""
+    for name in ("CLAUDE.md", "AGENTS.md"):
+        p = vault / name
+        if p.is_file() and not p.is_symlink():
+            return p
+    return vault / "CLAUDE.md"
+
+
 def section_bounds(lines: list[str], anchor: str) -> tuple[int, int] | None:
     rx = re.compile(anchor)
     start = next((i for i, l in enumerate(lines) if rx.match(l)), None)
@@ -154,11 +170,15 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--vault")
     ap.add_argument("--dry-run", action="store_true")
-    a = ap.parse_args()
+    # Passed by the installer and the updater. The file is found by what is on
+    # disk, so the value only chooses the name used when no file is found.
+    ap.add_argument("--assistant")
+    a, _unknown = ap.parse_known_args()  # a switch this version does not know is ignored
     vault = find_vault(a.vault)
-    path = vault / "CLAUDE.md"
+    path = instruction_file(vault)
     if not path.exists():
-        sys.exit(f"No CLAUDE.md at {vault}")
+        missing = "AGENTS.md" if a.assistant == "chatgpt" else path.name
+        sys.exit(f"No {missing} at {vault}")
     original = path.read_text(encoding="utf-8")
     lines = original.split("\n")
     added, present, orphaned = [], [], []
@@ -192,7 +212,7 @@ def main() -> int:
             added.append(name + " (appended at end; anchor missing)")
 
     new = "\n".join(lines)
-    print(f"CLAUDE.md at {path}")
+    print(f"{path.name} at {path}")
     for n in present:
         print(f"  already present: {n}")
     for n in added:
@@ -201,9 +221,9 @@ def main() -> int:
         stamp = time.strftime("%Y%m%d-%H%M%S")
         bdir = BACKUP_ROOT / stamp
         bdir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(path, bdir / "CLAUDE.md")
+        shutil.copy2(path, bdir / path.name)
         path.write_text(new, encoding="utf-8")
-        print(f"  previous copy at {bdir / 'CLAUDE.md'}")
+        print(f"  previous copy at {bdir / path.name}")
     elif new == original:
         print("  nothing to change")
     return 0

@@ -29,6 +29,13 @@
 #        --location "$HOME/Wiki/MyWiki" --progress
 #
 #   --name, --vault-name, --location   each answers its question in advance
+#   --assistant claude|chatgpt|both    which assistant the wiki is for (v0.9).
+#                Claude reads CLAUDE.md and ChatGPT reads AGENTS.md, so the
+#                template's instruction file is laid down under the name the
+#                chosen assistant reads (for both: CLAUDE.md, with AGENTS.md a
+#                link to it). Asked as a fourth question in a Terminal run that
+#                asks the others; otherwise the choice already kept in
+#                ~/.config/moblee/assistant stands, and with none kept, claude.
 #   --progress   also print one line per step for a program to read, each
 #                starting "@@moblee " followed by a small JSON object
 #
@@ -46,15 +53,27 @@ VAULT_TEMPLATE="$PACKAGE_ROOT/vault-template"
 
 # ----- answers given up front -------------------------------------------------
 ARG_NAME=""; ARG_VAULT_NAME=""; ARG_LOCATION=""; PROGRESS=0
+ARG_ASSISTANT=""; ASSISTANT_FLAG=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --name)        ARG_NAME="${2:-}"; shift 2 ;;
     --vault-name)  ARG_VAULT_NAME="${2:-}"; shift 2 ;;
     --location)    ARG_LOCATION="${2:-}"; shift 2 ;;
+    --assistant)   ARG_ASSISTANT="${2:-}"; ASSISTANT_FLAG=1; shift; if [[ $# -gt 0 ]]; then shift; fi ;;
     --progress)    PROGRESS=1; shift ;;
     *) echo "Unknown option: $1"; exit 2 ;;
   esac
 done
+if [[ $ASSISTANT_FLAG -eq 1 ]]; then
+  case "$ARG_ASSISTANT" in
+    claude|chatgpt|both) ;;
+    *)
+      echo "The assistant must be one of: claude, chatgpt, both. \"$ARG_ASSISTANT\" is not one of them."
+      echo "Nothing was changed."
+      exit 2
+      ;;
+  esac
+fi
 
 # ----- the install diary and the progress lines -------------------------------
 DIARY_DIR="$HOME/.config/moblee"
@@ -85,6 +104,12 @@ emit() {
   else
     printf '@@moblee {"step":"%s","state":"%s","n":%d,"of":%d}\n' "$1" "$2" "$STEP_N" "$STEP_TOTAL"
   fi
+}
+emit_trust() {
+  # (v0.9) not one of the six steps, so it carries no count: ChatGPT will not
+  # run the delete guard until its owner trusts the hook in ChatGPT's settings
+  [[ $PROGRESS -eq 1 ]] || return 0
+  printf '@@moblee {"step":"trust","state":"needed","assistant":"chatgpt"}\n'
 }
 step_start() { STEP_N=$((STEP_N+1)); CURRENT_STEP="$1"; diary "step $STEP_N of $STEP_TOTAL, $1: started"; emit "$1" start; }
 step_ok()    { diary "step $STEP_N of $STEP_TOTAL, $1: done"; emit "$1" ok; }
@@ -162,6 +187,56 @@ VAULT_LOCATION="${VAULT_LOCATION:-$DEFAULT_LOCATION}"
 # expand a leading ~ if the user typed one
 VAULT_LOCATION="${VAULT_LOCATION/#\~/$HOME}"
 
+# ----- which assistant the wiki is for (v0.9) ---------------------------------
+# claude, chatgpt or both, kept as one word in ~/.config/moblee/assistant; no
+# file means claude. The question is put only in a Terminal run that is already
+# asking the others: a run whose answers all came up front, a run started by
+# the app, and a run with no Terminal to ask in are never asked, and take the
+# choice already kept on this Mac, or claude where none is kept.
+ASSISTANT_FILE="$HOME/.config/moblee/assistant"
+STORED_ASSISTANT=""
+if [[ -f "$ASSISTANT_FILE" ]]; then
+  STORED_ASSISTANT="$(head -1 "$ASSISTANT_FILE" 2>/dev/null | tr -d '[:space:]' || true)"
+fi
+case "$STORED_ASSISTANT" in
+  claude|chatgpt|both) ;;
+  *) STORED_ASSISTANT="" ;;
+esac
+ASSISTANT="${STORED_ASSISTANT:-claude}"
+ASSISTANT_CHOSEN=0   # 1 when the owner named it on this run: by the option, or by answering the question
+if [[ $ASSISTANT_FLAG -eq 1 ]]; then
+  ASSISTANT="$ARG_ASSISTANT"
+  ASSISTANT_CHOSEN=1
+elif [[ $PROGRESS -eq 0 && -t 0 && ( -z "$ARG_NAME" || -z "$ARG_VAULT_NAME" || -z "$ARG_LOCATION" ) ]]; then
+  case "$ASSISTANT" in
+    chatgpt) ASSISTANT_DEFAULT=2 ;;
+    both)    ASSISTANT_DEFAULT=3 ;;
+    *)       ASSISTANT_DEFAULT=1 ;;
+  esac
+  echo ""
+  echo "Which assistant will you use with this wiki?"
+  echo "  1) Claude"
+  echo "  2) ChatGPT"
+  echo "  3) Both"
+  while true; do
+    read -r -p "Choose 1, 2 or 3 [$ASSISTANT_DEFAULT]: " ASSISTANT_ANSWER || ASSISTANT_ANSWER=""  # no answer: the default
+    case "$ASSISTANT_ANSWER" in
+      "")                     break ;;
+      1|[Cc]laude)            ASSISTANT="claude";  ASSISTANT_CHOSEN=1; break ;;
+      2|[Cc]hat[Gg][Pp][Tt])  ASSISTANT="chatgpt"; ASSISTANT_CHOSEN=1; break ;;
+      3|[Bb]oth)              ASSISTANT="both";    ASSISTANT_CHOSEN=1; break ;;
+      *) echo "  Please answer 1, 2 or 3." ;;
+    esac
+  done
+fi
+diary "assistant: $ASSISTANT"
+# how the assistant is named in the sentences below
+case "$ASSISTANT" in
+  chatgpt) ASSISTANT_LABEL="ChatGPT" ;;
+  both)    ASSISTANT_LABEL="your assistant" ;;
+  *)       ASSISTANT_LABEL="Claude" ;;
+esac
+
 # ----- an existing Moblee vault at this location is updated, not refused ------
 # (v0.5) A vault that already carries a VERSION file, or a CLAUDE.md and wiki/,
 # is handed to the updater, which brings it to this version without touching
@@ -177,17 +252,21 @@ if [[ -f "$IN_PROGRESS" && -e "$VAULT_LOCATION" && "$(head -1 "$IN_PROGRESS" 2>/
   # of the owner's can be in it yet, since no install ever handed it over.
   RESUME=1
 fi
-if [[ $RESUME -eq 0 && -f "$VAULT_LOCATION/CLAUDE.md" && -d "$VAULT_LOCATION/wiki" ]]; then
+# (v0.9) A wiki made for ChatGPT alone carries AGENTS.md where one made for
+# Claude carries CLAUDE.md; either marks a Moblee vault.
+if [[ $RESUME -eq 0 && ( -f "$VAULT_LOCATION/CLAUDE.md" || -f "$VAULT_LOCATION/AGENTS.md" ) && -d "$VAULT_LOCATION/wiki" ]]; then
   echo ""
   echo "There is already a Moblee vault at $VAULT_LOCATION."
   echo "Nothing there will be overwritten. Bringing it up to this version instead..."
   diary "a Moblee wiki already exists at the chosen place; handing over to the updater"
   emit starting handed-to-updater
   trap - EXIT
-  if [[ $PROGRESS -eq 1 ]]; then
-    exec bash "$SCRIPT_DIR/update.sh" "$VAULT_LOCATION" --progress
-  fi
-  exec bash "$SCRIPT_DIR/update.sh" "$VAULT_LOCATION"
+  # the assistant goes along only when it was named on this run; otherwise the
+  # updater keeps the choice this Mac already holds
+  HANDOVER=("$VAULT_LOCATION")
+  if [[ $PROGRESS -eq 1 ]]; then HANDOVER+=(--progress); fi
+  if [[ $ASSISTANT_CHOSEN -eq 1 ]]; then HANDOVER+=(--assistant "$ASSISTANT"); fi
+  exec bash "$SCRIPT_DIR/update.sh" "${HANDOVER[@]}"
 fi
 
 # ----- safety: refuse to overwrite --------------------------------------------
@@ -219,6 +298,9 @@ mkdir -p "$(dirname "$VAULT_LOCATION")" "$HOME/.config/moblee"
 # Which wiki is being made, so that a run that stops part-way can be finished
 # by running the installer again with the same answers.
 echo "$VAULT_LOCATION" > "$IN_PROGRESS"
+# The assistant is kept from here on, where a wiki is really being made: a run
+# that was refused above leaves the earlier choice as it was.
+echo "$ASSISTANT" > "$ASSISTANT_FILE"
 if [[ $RESUME -eq 1 ]]; then
   echo "Finishing the wiki that was started at $VAULT_LOCATION..."
   diary "an earlier install of this wiki stopped part-way; finishing it"
@@ -229,6 +311,32 @@ else
 fi
 # the vault's VERSION always comes from the pack, so the template's copy cannot drift
 if [[ -f "$PACKAGE_ROOT/VERSION" ]]; then cp "$PACKAGE_ROOT/VERSION" "$VAULT_LOCATION/VERSION"; fi
+
+# ----- the instruction file, under the name the assistant reads (v0.9) --------
+# Claude reads CLAUDE.md; ChatGPT reads AGENTS.md. The template carries one
+# file, CLAUDE.md. For ChatGPT alone it is renamed; for both it stays the real
+# file and AGENTS.md is a relative link to it, so there is one text to keep.
+# Done here, before the placeholders are filled in and before the first commit.
+# The placeholder walk below takes regular files only, so it fills in the real
+# file and never follows or rewrites the link.
+case "$ASSISTANT" in
+  chatgpt)
+    if [[ -f "$VAULT_LOCATION/CLAUDE.md" && ! -L "$VAULT_LOCATION/CLAUDE.md" ]]; then
+      mv -f "$VAULT_LOCATION/CLAUDE.md" "$VAULT_LOCATION/AGENTS.md"
+      echo "The wiki's instruction file is AGENTS.md, the name ChatGPT reads."
+      diary "    the instruction file was laid down as AGENTS.md"
+    fi
+    ;;
+  both)
+    if [[ ! -L "$VAULT_LOCATION/AGENTS.md" ]]; then
+      # -f matters only when an unfinished earlier run for ChatGPT alone left
+      # its own copy of the template here; a new wiki has nothing to replace
+      ( cd "$VAULT_LOCATION" && ln -sf CLAUDE.md AGENTS.md )
+      echo "The wiki's instruction file is CLAUDE.md, and AGENTS.md points at it for ChatGPT."
+      diary "    AGENTS.md was laid down as a link to CLAUDE.md"
+    fi
+    ;;
+esac
 
 # ----- substitute placeholders ------------------------------------------------
 echo "Substituting placeholders..."
@@ -275,7 +383,7 @@ done < <(find "$VAULT_LOCATION" \
 # fills them in, and the log's first entry can never be corrected afterwards.
 # The installer knows the moment, so it writes it.
 python3 "$SCRIPT_DIR/stamp-starter-dates.py" --vault "$VAULT_LOCATION" | sed 's/^/  /' \
-  || echo "  (the starter pages' dates were not filled in; harmless, Claude writes them at the first ingest)"
+  || echo "  (the starter pages' dates were not filled in; harmless, $ASSISTANT_LABEL writes them at the first ingest)"
 
 step_ok folder
 
@@ -355,8 +463,18 @@ echo ""
 echo "Installing the safety layer (delete guard and permission rules)..."
 step_start safety
 SAFETY_OUT="$(mktemp)"
-if python3 "$PACKAGE_ROOT/safety/install-safety.py" --vault "$VAULT_LOCATION" 2>&1 | tee "$SAFETY_OUT"; then
+TRUST_NEEDED=0
+if python3 "$PACKAGE_ROOT/safety/install-safety.py" --vault "$VAULT_LOCATION" --assistant "$ASSISTANT" 2>&1 | tee "$SAFETY_OUT"; then
   step_ok safety
+  # (v0.9) ChatGPT runs a hook only once its owner has trusted it, and only the
+  # owner can do that. The safety installer says when the step is due; it is
+  # passed on at once, so it is not lost if a later step stops, and the closing
+  # summary spells the step out.
+  if grep -q '^@@moblee-trust-needed chatgpt' "$SAFETY_OUT"; then
+    TRUST_NEEDED=1
+    diary "    ChatGPT's delete guard is in place and waits for the owner to trust it in ChatGPT's settings"
+    emit_trust
+  fi
 else
   step_fail safety safety-layer
   diary_tail "$SAFETY_OUT"
@@ -372,14 +490,14 @@ fi
 
 # ----- starting memories (v0.5) -----------------------------------------------
 step_start skills
-python3 "$PACKAGE_ROOT/scripts/seed-memory.py" --vault "$VAULT_LOCATION" \
-  || { echo "  (starting memories not seeded; harmless, Claude builds its own)"; diary "    starting memories not seeded (harmless)"; }
+python3 "$PACKAGE_ROOT/scripts/seed-memory.py" --vault "$VAULT_LOCATION" --assistant "$ASSISTANT" \
+  || { echo "  (starting memories not seeded; harmless, $ASSISTANT_LABEL builds its own)"; diary "    starting memories not seeded (harmless)"; }
 
 # ----- the core skills (v0.6: installed here, no longer a separate step) -----
 echo ""
 echo "Installing the core skills (brain, capture, interview, PDF, galaxy and more)..."
 SKILLS_OUT="$(mktemp)"
-if bash "$SCRIPT_DIR/install-skills.sh" --quiet 2>&1 | tee "$SKILLS_OUT"; then
+if bash "$SCRIPT_DIR/install-skills.sh" --quiet --assistant "$ASSISTANT" 2>&1 | tee "$SKILLS_OUT"; then
   step_ok skills
 else
   if grep -q "was NOT installed" "$SKILLS_OUT"; then
@@ -406,9 +524,25 @@ echo ""
 echo "Moblee can also connect your wiki to your Mac's Calendar, Mail and"
 echo "Reminders, Google, GitHub and Chrome, and add tools for videos, documents"
 echo "and editing. Rather than tick through a long list now, the easier way is"
-echo "to open Claude in your new wiki and say: get me started"
-echo "Claude asks how you use your Mac and what you read, watch and make, then"
-echo "suggests only what fits and gives you one command to install it."
+case "$ASSISTANT" in
+  chatgpt)
+    echo "to open ChatGPT, choose Work, add your new wiki folder as a project, and"
+    echo "say: get me started"
+    echo "ChatGPT asks how you use your Mac and what you read, watch and make, then"
+    echo "suggests only what fits and gives you one command to install it."
+    ;;
+  both)
+    echo "to open Claude or ChatGPT in your new wiki and say: get me started"
+    echo "(in ChatGPT, choose Work and add your new wiki folder as a project first)."
+    echo "It asks how you use your Mac and what you read, watch and make, then"
+    echo "suggests only what fits and gives you one command to install it."
+    ;;
+  *)
+    echo "to open Claude in your new wiki and say: get me started"
+    echo "Claude asks how you use your Mac and what you read, watch and make, then"
+    echo "suggests only what fits and gives you one command to install it."
+    ;;
+esac
 echo ""
 if [[ -t 0 ]]; then
   read -r -p "Would you rather choose from the full checklist yourself now? [y/N]: " OPEN_SETUP || OPEN_SETUP="n"  # no answer: do not open
@@ -425,8 +559,11 @@ step_start finish
 (
   cd "$VAULT_LOCATION"
   # one path per git add: a missing path makes git stage nothing at all
-  for p in .claude .gitignore VERSION CLAUDE.md scripts wiki/Index.md "wiki/Wiki Operations/Moblee Learning Path.md"; do
-    if [[ -e "$p" ]]; then git add -A -- "$p" 2>/dev/null || true; fi
+  # (v0.9) AGENTS.md sits beside CLAUDE.md: whichever of the two exists is
+  # staged (-L as well, since AGENTS.md may be a link), and the page the
+  # starting memories are written to for ChatGPT goes in with them.
+  for p in .claude .gitignore VERSION CLAUDE.md AGENTS.md scripts wiki/Index.md "wiki/Wiki Operations/Moblee Learning Path.md" "wiki/Wiki Operations/Assistant Memory.md"; do
+    if [[ -e "$p" || -L "$p" ]]; then git add -A -- "$p" 2>/dev/null || true; fi
   done
   if ! git diff --cached --quiet 2>/dev/null; then
     git commit --quiet -m "moblee: safety layer, settings and chosen options" 2>/dev/null || true
@@ -466,18 +603,55 @@ echo "Next steps:"
 echo "  1. Open Obsidian, choose \"Open folder as vault\", and point it at:"
 echo "       $VAULT_LOCATION"
 echo ""
-echo "  2. Open Claude in your wiki and say \"get me started\":"
-echo "       cd \"$VAULT_LOCATION\""
-echo "       claude"
+case "$ASSISTANT" in
+  chatgpt)
+    echo "  2. Open ChatGPT, choose Work, add your wiki folder as a project, and say"
+    echo "     \"get me started\". The folder to add is:"
+    echo "       $VAULT_LOCATION"
+    ;;
+  both)
+    echo "  2. Open either assistant in your wiki and say \"get me started\"."
+    echo "     Claude:"
+    echo "       cd \"$VAULT_LOCATION\""
+    echo "       claude"
+    echo "     ChatGPT: open ChatGPT, choose Work, and add your wiki folder as a project:"
+    echo "       $VAULT_LOCATION"
+    ;;
+  *)
+    echo "  2. Open Claude in your wiki and say \"get me started\":"
+    echo "       cd \"$VAULT_LOCATION\""
+    echo "       claude"
+    ;;
+esac
 echo ""
 echo "  3. Whenever you like, from this Moblee folder:"
 echo "       Choose extras yourself:  python3 scripts/moblee-setup.py"
 echo "       Test that it all works:  python3 scripts/moblee-setup.py --check"
 echo "       Dashboard:  python3 \"$VAULT_LOCATION/dashboard/server.py\"   (then open the printed URL)"
-echo "       Galaxy:     say \"galaxy\" to Claude in your vault"
+echo "       Galaxy:     say \"galaxy\" to $ASSISTANT_LABEL in your vault"
 echo ""
-echo "  Safety: the delete guard is on. Claude cannot delete files in this vault"
-echo "  at all; if something must go, Claude tells you what and you remove it"
-echo "  yourself. Routine work no longer asks permission."
+if [[ "$ASSISTANT" == "claude" || "$ASSISTANT" == "both" ]]; then
+  echo "  Safety: the delete guard is on. Claude cannot delete files in this vault"
+  echo "  at all; if something must go, Claude tells you what and you remove it"
+  echo "  yourself. Routine work no longer asks permission."
+fi
+if [[ "$ASSISTANT" == "chatgpt" || "$ASSISTANT" == "both" ]]; then
+  if [[ "$ASSISTANT" == "both" ]]; then echo ""; fi
+  echo "  Safety in ChatGPT: the delete guard is installed, and ChatGPT runs it only"
+  echo "  once you have trusted it in ChatGPT's settings. From then on ChatGPT cannot"
+  echo "  delete files in this vault at all; if something must go, ChatGPT tells you"
+  echo "  what and you remove it yourself."
+  if [[ $TRUST_NEEDED -eq 1 ]]; then
+    echo ""
+    echo "  One step is yours alone. Until it is done, the delete guard does not run"
+    echo "  in ChatGPT:"
+    echo "    1. In ChatGPT, open the ChatGPT menu and choose Settings."
+    echo "    2. Choose Hooks (under Coding) and open \"User config\"."
+    echo "    3. Press Trust beside the hook whose command ends bash-guard.py."
+    echo "    4. Turn its switch on."
+    echo "  ChatGPT asks for this again whenever Moblee updates the guard."
+    echo ""
+  fi
+fi
 echo "  To update later: download the new Moblee and run  bash scripts/update.sh"
 echo ""

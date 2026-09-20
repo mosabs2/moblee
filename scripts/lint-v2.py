@@ -3,7 +3,8 @@
 lint-v2: structural-conventions verifier for a Moblee wiki vault.
 
 Reads the vault, checks the structural schema conventions codified in the
-vault's CLAUDE.md, and writes a markdown report to
+vault's instruction file (CLAUDE.md, or AGENTS.md where that is the one in
+use), and writes a markdown report to
 outputs/lint/lint-v2-YYYY-MM-DD.md inside the vault.
 
 Companion to the qualitative lint (which reads for contradictions, stale
@@ -90,6 +91,18 @@ def find_vault_root() -> Path:
         file=sys.stderr,
     )
     sys.exit(1)
+
+
+def instruction_file(vault: Path) -> Path:
+    """The vault's instruction file: CLAUDE.md if it is a regular file, else
+    AGENTS.md if it is a regular file, else CLAUDE.md. Where both assistants
+    are in use CLAUDE.md is the real file and AGENTS.md is a symlink to it, so
+    the symlink is never taken for a second file."""
+    for name in ("CLAUDE.md", "AGENTS.md"):
+        p = vault / name
+        if p.is_file() and not p.is_symlink():
+            return p
+    return vault / "CLAUDE.md"
 
 
 # Known-accepted append-only-protected log entries. The log is append-only by
@@ -711,7 +724,7 @@ def check_outputs_size(vault: Path, findings: list[str]) -> tuple[int, int]:
 CHARS_PER_TOKEN = 4
 CONTEXT_TOKEN_CAP = 12_000     # wiki/_context.md — loaded in full at every session start
 INDEX_TOKEN_CAP = 8_000        # wiki/Index.md — a one-line-per-page catalogue by design
-CLAUDE_MD_TOKEN_CAP = 10_000   # CLAUDE.md — schema, loaded every session
+CLAUDE_MD_TOKEN_CAP = 10_000   # the instruction file (CLAUDE.md or AGENTS.md) — schema, loaded every session
 PAGE_TOKEN_FLAG = 25_000       # wiki pages — extraction-candidate threshold
 
 
@@ -744,7 +757,8 @@ def check_vault_weight(vault: Path, findings: list[str]) -> tuple[int, int]:
     capped = [
         ("wiki/_context.md", CONTEXT_TOKEN_CAP, "loaded in full at every session start"),
         ("wiki/Index.md", INDEX_TOKEN_CAP, "one-line-per-page catalogue by design"),
-        ("CLAUDE.md", CLAUDE_MD_TOKEN_CAP, "schema, loaded every session"),
+        # the instruction file under the name in use (CLAUDE.md or AGENTS.md); counted once
+        (instruction_file(vault).name, CLAUDE_MD_TOKEN_CAP, "schema, loaded every session"),
     ]
     passed = 0
     total = 0
@@ -1860,6 +1874,7 @@ TRANSITION_OPENER_RE = re.compile(
 # the very phrases it hunts.
 PROSE_GUARD_SKIP = {
     "CLAUDE.md",
+    "AGENTS.md",
     "wiki/_context.md",
 }
 PROSE_GUARD_SKIP_DIRS = ("/outputs/lint/", "/Ghost Reconstructions/")
@@ -2131,7 +2146,7 @@ def main() -> int:
     findings.append(f"# Lint v2 — Structural Conventions Check, {today.isoformat()}")
     findings.append("")
     findings.append(
-        f"Programmatic verifier of the structural schema conventions codified in the vault's `CLAUDE.md`. Runs alongside the qualitative lint, not in place of it. Vault root: `{vault}`."
+        f"Programmatic verifier of the structural schema conventions codified in the vault's `{instruction_file(vault).name}`. Runs alongside the qualitative lint, not in place of it. Vault root: `{vault}`."
     )
     findings.append("")
     findings.append("## Checks")
