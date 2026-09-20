@@ -90,6 +90,12 @@ enum SelfDrive {
         click(bigButton)                     // the button is greyed out until a name is typed
         await pause(0.8)
         await expect("a greyed-out Next does nothing") { flow.step == .name }
+        // Typed letters go to whichever app has the keyboard. If the person at
+        // the Mac clicked elsewhere while this was running, they never arrive
+        // (seen once, 20 September 2026), so the keyboard is taken back first.
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        await pause(0.4)
         for ch in "Tom & Sam" { key(String(ch)); await pause(0.05) }
         await expect("typing reaches the name box") { flow.ownerName == "Tom & Sam" }
         flow.back(); say("back to check-up"); await pause(4)
