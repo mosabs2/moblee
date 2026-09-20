@@ -4,7 +4,7 @@ This document walks through the step-by-step install of the Moblee starter pack 
 
 ## The app route
 
-From v0.8.0 there is a second way to install: the Moblee app, a small Mac app. It is offered on the Releases page of the GitHub repository when a signed build is available. If none is offered yet, use the Terminal steps below, which always work.
+From v0.8.1 there is a second way to install: the Moblee app, a small Mac app. It is offered on the Releases page of the GitHub repository when a signed build is available. If none is offered yet, use the Terminal steps below, which always work.
 
 You double-click the app and follow its screens. Each screen has one picture, one sentence and one button. If you opened it from Downloads, its first screen offers to move it to Applications, so that you can always find it again; press "Move it there" and it reopens by itself. After the welcome, it checks what the Mac needs: Apple's developer tools and Claude's app, with a Get button beside anything missing, and Obsidian, marked "Can wait". It asks one typed question, "What should Claude call you?". Before anything is made it says plainly what it is about to put on the Mac and where: the wiki's folder, the guard, and Claude's skills. It then builds the wiki, shown as six pictures that light up in turn: the wiki, its tools, its history, the guard, Claude's skills, and finishing. The last screen shows three numbered pictures: click Code in Claude's app, pick the wiki's folder, and say "get me started". The Open Claude button copies those words for you to paste, and "What did Moblee make?" lists everything that was put on the Mac. Every screen has a small speaker button that reads its sentence aloud; nothing is sent anywhere to do this. If a build stops, the big button is Try again, which finishes the same wiki and never starts a second one; the same is true if you close the app and open it again later. The Code tab in Claude's app needs a paid Claude plan.
 
@@ -108,7 +108,7 @@ A quick checklist to confirm everything is in place:
 - The vault folder exists at the location you chose.
 - `~/.claude/skills/` contains the eight core skills: `brain/`, `compact/`, `companion/`, `galaxy/`, `wiki-capture/`, `wiki-interview/`, `wiki-to-pdf/`, `design-your-brand/` (plus any extras you ticked).
 - `~/.claude/hooks/bash-guard.py` exists, and the vault's `.claude/settings.local.json` lists the permission rules (the installer printed the counts).
-- The vault's `VERSION` file reads `0.8.0` for this release.
+- The vault's `VERSION` file reads `0.8.1` for this release.
 - `python3 scripts/moblee-doctor.py`, run from the Moblee folder, changes nothing and marks each finding `OK`, `LOOK` or `PROBLEM`.
 - `python3 scripts/moblee-setup.py --check`, run from the Moblee folder, shows `WORKING` for each item you ticked.
 - If you added the `vault` shortcut: typing `vault` in a new Terminal window takes you into the vault and prints the ready signal.

@@ -152,12 +152,12 @@ enum Snapshots {
         var google = HomeModel.Tile(kind: .item, key: "google", title: "Gmail, Google Calendar and Google Drive",
                                     why: "Your calendar lives in Google.", detail: "About 3 min · free",
                                     how: .clicks, paid: false)
-        google.steps = [["Connectors", "The page opens. If not: in Claude, Settings, then Connectors"],
+        google.steps = [["Connectors", "The page opens. If it says moved: Customise, then Connectors"],
                         ["Switch on three", "Gmail, Google Calendar, Google Drive. Connect, then sign in"],
                         ["Check it worked", "Ask Claude: what is on my calendar today?"]]
         func homeScene(_ configure: (Flow) -> Void) -> Flow {
             let f = Flow(); f.mode = .home; f.homeModel.loaded = true
-            f.homeModel.wikiVersion = "0.8.0"; f.homeModel.packVersion = "0.8.0"
+            f.homeModel.wikiVersion = "0.8.1"; f.homeModel.packVersion = "0.8.1"
             configure(f); return f
         }
         draw(homeScene { $0.homeModel.tiles = sample }, "08-home-waiting", to: folder)

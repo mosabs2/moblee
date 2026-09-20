@@ -1,6 +1,6 @@
 # 11. The app and the companion
 
-From v0.8.0 Moblee has two parts that work as a pair. The companion is a skill: it is how Claude gets to know you, in conversation, inside your wiki. The Moblee app is where anything is added to your Mac or to Claude, by you, with a button on your own screen. Claude prepares and explains; you add.
+From v0.8.1 Moblee has two parts that work as a pair. The companion is a skill: it is how Claude gets to know you, in conversation, inside your wiki. The Moblee app is where anything is added to your Mac or to Claude, by you, with a button on your own screen. Claude prepares and explains; you add.
 
 The app is offered on the Releases page of the GitHub repository when a signed build is available. Everything it does can also be done in Terminal; the install, updating and connections docs give the commands.
 

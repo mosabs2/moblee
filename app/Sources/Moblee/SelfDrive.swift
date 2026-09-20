@@ -197,6 +197,12 @@ enum SelfDrive {
         try? fm.createSymbolicLink(at: drafts.appendingPathComponent("sneaky"), withDestinationURL: outside)
         let brainBefore = try? Data(contentsOf: flow.home.appendingPathComponent(".claude/skills/brain/SKILL.md"))
 
+        // The note that tells Claude and the check-up where the Moblee folder is,
+        // left pointing somewhere stale, as it was on a fresh account after a
+        // newer build was opened: the app must put it right by itself.
+        let pointer = flow.home.appendingPathComponent(".config/moblee/package-path")
+        try? "/somewhere/an/older/moblee/was\n".write(to: pointer, atomically: true, encoding: .utf8)
+
         flow.homeModel.load(home: flow.home, bundledPack: flow.bundledPack)
         flow.mode = .home
         say("home")
@@ -288,6 +294,31 @@ enum SelfDrive {
         while skill("gym-log")?.state != .done && Date() < by { await pause(0.3) }
         say("skill gym-log ended: \(String(describing: skill("gym-log")?.state))")
 
+        let pointsAt = ((try? String(contentsOf: pointer, encoding: .utf8)) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let pointerRight = pointsAt.contains("Application Support/Moblee/pack-")
+            && fm.fileExists(atPath: pointsAt + "/scripts/moblee-doctor.py")
+        say("the note of where Moblee is was put right: \(pointerRight)")
+
+        // A guard that is switched on but is an older copy than this Moblee's:
+        // the app must say so, and its Repair button, really pressed, must bring
+        // it level (the old one is kept in the backups folder by the pack).
+        let installedGuard = flow.home.appendingPathComponent(".claude/hooks/bash-guard.py")
+        let packGuard = URL(fileURLWithPath: pointsAt + "/safety/bash-guard.py")
+        if let h = try? FileHandle(forWritingTo: installedGuard) {
+            h.seekToEndOfFile(); h.write("\n# an older guard\n".data(using: .utf8)!); try? h.close()
+        }
+        flow.homeModel.checkSafety()
+        await expect("a guard that is on but older than this Moblee's is noticed") {
+            flow.homeModel.guardStale && flow.homeModel.needsRepair
+        }
+        await pause(1.0)
+        click(bigButton)                      // "Repair"
+        await expect("pressing Repair brings the guard level", within: 60) {
+            !flow.homeModel.needsRepair && (try? Data(contentsOf: installedGuard)) == (try? Data(contentsOf: packGuard))
+        }
+        let guardLevel = !flow.homeModel.needsRepair
+        say("stale guard repaired: \(guardLevel)")
+
         let skills = flow.home.appendingPathComponent(".claude/skills", isDirectory: true)
         let tripsThere = fm.fileExists(atPath: skills.appendingPathComponent("trips/SKILL.md").path)
         let gymThere = fm.fileExists(atPath: skills.appendingPathComponent("gym-log/.made-for-you").path)
@@ -295,7 +326,7 @@ enum SelfDrive {
         let brainSame = (try? Data(contentsOf: skills.appendingPathComponent("brain/SKILL.md"))) == brainBefore
         let noSmuggle = !fm.fileExists(atPath: "/tmp/moblee-pwned")
             && !flow.homeModel.tiles.contains { $0.key.contains("/") || $0.key.contains(";") }
-        let ok = tripsState == .done && videosState == .handedOver && tripsThere && googleState == .done
+        let ok = tripsState == .done && videosState == .handedOver && tripsThere && googleState == .done && pointerRight && guardLevel
             && skill("gym-log")?.state == .done && gymThere
             && skill("sneaky")?.state == .blocked && sneakyKept
             && skill("brain")?.state == .blocked && brainSame && noSmuggle

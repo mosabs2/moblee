@@ -55,6 +55,7 @@ final class HomeModel: ObservableObject {
     @Published var needsRepair = false
     @Published var repairFailed = false
     @Published var safetyOff = false
+    @Published var guardStale = false      // on, but an older copy than this Moblee's
     @Published var listUnreadable = false
     @Published var updateSetAside = false
     @Published var loaded = false
@@ -115,7 +116,8 @@ final class HomeModel: ObservableObject {
 
     private func packSettled(_ settled: URL?) {
         pack = settled
-        checkSafety()      // now that the pack is known, the skills can be compared too
+        pointAtPack()
+        checkSafety()      // now that the pack is known, the guard and the skills can be compared too
         guard let pack else { listUnreadable = true; loaded = true; return }
         EngineTask.output(of: "/usr/bin/python3",
                           [pack.appendingPathComponent("scripts/moblee-setup.py").path, "--list", "--json"],
@@ -184,7 +186,33 @@ final class HomeModel: ObservableObject {
         safetyOff = !(guardThere && switchedOn && rules >= 10)
         // While an update is pending the skills are expected to differ; the update brings them level.
         let versionsLevel = !Self.isNewer(packVersion, than: wikiVersion)
-        needsRepair = safetyOff || (versionsLevel && !skillsAreMoblees())
+        guardStale = !safetyOff && versionsLevel && !guardIsMoblees()
+        needsRepair = safetyOff || guardStale || (versionsLevel && !skillsAreMoblees())
+    }
+
+    /// `~/.config/moblee/package-path` is how Claude and the check-up find the
+    /// Moblee folder. The app is what brings a newer folder to the Mac, so the
+    /// app keeps that note pointing at the folder it is using. Left pointing at
+    /// an older one, the check-up compared the guard and the skills with stale
+    /// copies and raised two false alarms (second run on a fresh account,
+    /// 20 September 2026). The older folder stays where it is; nothing is deleted.
+    private func pointAtPack() {
+        guard let pack else { return }
+        let note = home.appendingPathComponent(".config/moblee/package-path")
+        if Self.read(note) == pack.path { return }
+        try? FileManager.default.createDirectory(at: note.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? (pack.path + "\n").write(to: note, atomically: true, encoding: .utf8)
+    }
+
+    /// The guard on the Mac must be this Moblee's guard, as the check-up also
+    /// asks: an older copy does not know the newer pack's own scripts and would
+    /// refuse Claude the pack's tools. Repair puts it level and keeps the old one.
+    private func guardIsMoblees() -> Bool {
+        guard let pack else { return true }      // not known yet; looked at again once the pack is settled
+        let ours = try? Data(contentsOf: pack.appendingPathComponent("safety/bash-guard.py"))
+        let theirs = try? Data(contentsOf: home.appendingPathComponent(".claude/hooks/bash-guard.py"))
+        guard let ours else { return true }
+        return ours == theirs
     }
 
     /// Each of Moblee's skills must be there, and be Moblee's: a folder of the

@@ -8,7 +8,7 @@ python3 scripts/moblee-setup.py
 
 ## How items are usually added now
 
-From v0.8.0 the usual way to add an item is to agree it with Claude and then add it in the Moblee app. In your wiki, say "guide me" (or "get me started" the first time). Claude proposes an item only for a reason you gave or your wiki shows, and writes what you agree on the `Habits and Tools` page and in a small file the app reads. Open Moblee, and the item is waiting as a tile with its reason, its time, space and cost, and an Add button. The Terminal commands on this page still work, and they are the way to add items if you have no app.
+From v0.8.1 the usual way to add an item is to agree it with Claude and then add it in the Moblee app. In your wiki, say "guide me" (or "get me started" the first time). Claude proposes an item only for a reason you gave or your wiki shows, and writes what you agree on the `Habits and Tools` page and in a small file the app reads. Open Moblee, and the item is waiting as a tile with its reason, its time, space and cost, and an Add button. The Terminal commands on this page still work, and they are the way to add items if you have no app.
 
 The tiles are of three sorts.
 
@@ -34,7 +34,7 @@ Each line of the checklist says what the item does, roughly how long it takes, h
 python3 scripts/moblee-setup.py --check
 ```
 
-tests every item, changes nothing, prints `WORKING` or `NOT WORKING` with a reason for each, and saves the result to `outputs/setup/` in your vault.
+tests every item, changes nothing, prints `WORKING`, `NOT WORKING` or `CANNOT SEE` (a connection made inside the Claude app, which only Claude can see; not a fault) with a reason for each, and saves the result to `outputs/setup/` in your vault.
 
 ```
 python3 scripts/moblee-setup.py --list
@@ -80,7 +80,7 @@ If you click Don't Allow by mistake: open System Settings, then Privacy & Securi
 
 **What you will be asked to do.** Google connects in the browser.
 
-1. A page opens: claude.ai, Settings, Connectors. If it asks you to log in, use the same Claude account as Claude Code.
+1. A page opens: claude.ai, Settings, Connectors. If the page says "Connectors has moved to Customise" (seen in September 2026), click Customise, then Connectors, and carry on. If it asks you to log in, use the same Claude account as Claude Code.
 2. Find Gmail and click Connect. Sign in with your Google account and allow what Google asks.
 3. Do the same for Google Calendar, then Google Drive.
 4. Come back to the checklist window.
@@ -152,7 +152,7 @@ These items install tools rather than connect accounts, so there is nothing to s
 **What you will be asked to do.**
 
 1. If you do not have an ElevenLabs account, make one at elevenlabs.io.
-2. A page opens: claude.ai, Settings, Connectors.
+2. A page opens: claude.ai, Settings, Connectors. If the page says "Connectors has moved to Customise", click Customise, then Connectors.
 3. Find ElevenLabs, click Connect, and sign in with your ElevenLabs account.
 4. Come back to the checklist window.
 
@@ -178,7 +178,7 @@ Run `python3 scripts/moblee-setup.py --check` first; it tells you which item is 
 - **"not connected yet: Gmail, ..."** or **"ElevenLabs is not connected"**: the sign-in on claude.ai did not finish, or has expired. Open claude.ai, Settings, Connectors, and connect or reconnect the named service; then quit and reopen Claude Code and check again.
 - **"the Mac apps link is not installed"** or **"installed, but not connected to Claude"**: run `--only mac-apps` again. If macOS is older than 14 (Sonoma), update it first.
 - **"installed, but its setup step has not been run"** or **"registered with Claude, but it does not start"**: run `--only mac-apps` again and follow the steps; if it says Swift is missing, the checklist installs Apple's developer tools first.
-- **"CANNOT SEE"**, with "connections made in the Claude app only show inside Claude": not a fault. Google and ElevenLabs are connected to your Claude account, and the check asks the `claude` command in Terminal, which signs in separately from the Claude app. If you only ever use the Claude app, the check cannot see your connections either way, and says so. The proof is to use it: ask Claude "what is on my calendar today?". If it answers, it is connected; in the Moblee app, press Done on the tile. If you do use Claude Code in Terminal, typing `/login` there and choosing your Claude account lets the check see them as well. (Before v0.8.0 this was wrongly reported as "not working".)
+- **"CANNOT SEE"**, with "connections made in the Claude app only show inside Claude": not a fault. Google and ElevenLabs are connected to your Claude account, and the check asks the `claude` command in Terminal, which signs in separately from the Claude app. If you only ever use the Claude app, the check cannot see your connections either way, and says so. The proof is to use it: ask Claude "what is on my calendar today?". If it answers, it is connected; in the Moblee app, press Done on the tile. If you do use Claude Code in Terminal, typing `/login` there and choosing your Claude account lets the check see them as well. (Before v0.8.1 this was wrongly reported as "not working".)
 - **"the ... skill is an older version"**: run that item again; the old copy is kept in `~/.config/moblee/backups/`.
 - **"a skill of your own called ... is in the way"**: you already have a skill with that name. Rename your folder in `~/.claude/skills/` if you want Moblee's instead.
 - **"connected, but its delete tools are not blocked"**: run `--only mac-apps` again; it adds the block rules. If it says `~/.claude/settings.json` could not be read, that file has a typing error in it; ask Claude to show you where, and fix it before running again.

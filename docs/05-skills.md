@@ -4,7 +4,7 @@ Moblee ships with its Claude skills installed by `scripts/install-skills.sh` int
 
 ## companion
 
-**What it does.** Your standing guide to the wiki. From v0.8.0 it replaces the `get-started` skill, and the old phrases still work.
+**What it does.** Your standing guide to the wiki. From v0.8.1 it replaces the `get-started` skill, and the old phrases still work.
 
 In a new wiki it holds the first conversation, one question at a time. It asks what you imagine putting in the wiki first, whether there is anything you want Claude to hold you to, and how you work: where your mail, calendar, notes and reminders live, what you read, watch and make, what you do over and over, and whether you would rather listen than read. It writes your answers on the `Habits and Tools` page, then helps you make your first page, which comes before any talk of extras. Only then does it propose one or two checklist items that clearly fit, each with its reason, time, space and cost. "Nothing extra for now" is a good answer and is recorded like any other.
 
