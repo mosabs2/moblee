@@ -28,6 +28,7 @@ final class HomeModel: ObservableObject {
         var state: TileState = .waiting
         var note: String = ""          // why it failed or cannot be added, in the engine's own words
         var files: [String] = []       // for a made-to-measure skill: what is in it
+        var body: String = ""          // and the whole of what Claude would be told to do
         var id: String { kind.rawValue + ":" + key }
 
         var symbol: String {
@@ -50,6 +51,7 @@ final class HomeModel: ObservableObject {
     @Published var packVersion: String = ""
     @Published var needsRepair = false
     @Published var repairFailed = false
+    @Published var safetyOff = false
     @Published var listUnreadable = false
     @Published var updateSetAside = false
     @Published var loaded = false
@@ -110,6 +112,7 @@ final class HomeModel: ObservableObject {
 
     private func packSettled(_ settled: URL?) {
         pack = settled
+        checkSafety()      // now that the pack is known, the skills can be compared too
         guard let pack else { listUnreadable = true; loaded = true; return }
         EngineTask.output(of: "/usr/bin/python3",
                           [pack.appendingPathComponent("scripts/moblee-setup.py").path, "--list", "--json"],
@@ -175,7 +178,27 @@ final class HomeModel: ObservableObject {
             if let s = Self.json(vault.appendingPathComponent(".claude/\(name)")),
                let allow = (s["permissions"] as? [String: Any])?["allow"] as? [Any] { rules += allow.count }
         }
-        needsRepair = !(guardThere && switchedOn && rules >= 10)
+        safetyOff = !(guardThere && switchedOn && rules >= 10)
+        // While an update is pending the skills are expected to differ; the update brings them level.
+        let versionsLevel = !Self.isNewer(packVersion, than: wikiVersion)
+        needsRepair = safetyOff || (versionsLevel && !skillsAreMoblees())
+    }
+
+    /// Each of Moblee's skills must be there, and be Moblee's: a folder of the
+    /// right name holding something else (an older copy, or the owner's own
+    /// skill) means the companion is missing without anyone being told.
+    private func skillsAreMoblees() -> Bool {
+        guard let pack else { return true }      // not known yet; looked at again once the pack is settled
+        let fm = FileManager.default
+        let source = pack.appendingPathComponent("skills", isDirectory: true)
+        guard let names = try? fm.contentsOfDirectory(atPath: source.path) else { return true }
+        for name in names {
+            let ours = source.appendingPathComponent("\(name)/SKILL.md")
+            guard fm.fileExists(atPath: ours.path) else { continue }
+            let theirs = home.appendingPathComponent(".claude/skills/\(name)/SKILL.md")
+            guard let a = try? Data(contentsOf: ours), let b = try? Data(contentsOf: theirs), a == b else { return false }
+        }
+        return true
     }
 
     /// Plain words only on a tile: a request cannot put anything else there.
@@ -228,7 +251,7 @@ final class HomeModel: ObservableObject {
             seen.insert(t.id)
             if let old = tiles.first(where: { $0.id == t.id }) {      // keep what is already known
                 t.state = old.state; t.note = old.note
-                if t.kind == .skill { t.detail = old.detail; t.files = old.files }
+                if t.kind == .skill { t.detail = old.detail; t.files = old.files; t.body = old.body }
             }
             made.append(t)
         }
@@ -239,7 +262,7 @@ final class HomeModel: ObservableObject {
 
     /// Ask the pack's own script what a drafted skill says it does, what is in
     /// it, and whether there is any reason not to add it.
-    private func describe(_ tile: Tile) {
+    private func describe(_ tile: Tile, then: (@MainActor () -> Void)? = nil) {
         guard let pack, let vault, !describing.contains(tile.id) else { return }
         describing.insert(tile.id)
         EngineTask.output(of: "/usr/bin/python3",
@@ -257,12 +280,36 @@ final class HomeModel: ObservableObject {
             let problems = info["problems"] as? [String] ?? []
             self.tiles[i].detail = Self.plain(info["description"] as? String ?? "", limit: 400)
             self.tiles[i].files = (info["files"] as? [[String: Any]] ?? []).compactMap { $0["path"] as? String }
+            self.tiles[i].body = info["body"] as? String ?? ""
             if let first = problems.first {
                 self.tiles[i].state = .blocked
                 self.tiles[i].note = first
             }
+            then?()
         }
     }
+
+    // MARK: things only the owner can say are done
+
+    private var doneFile: URL { home.appendingPathComponent(".config/moblee/app-state.json") }
+
+    private func ownerSaidDone() -> Set<String> {
+        Set((Self.json(doneFile)?["done"] as? [String]) ?? [])
+    }
+
+    /// A connection is made by clicks inside Claude, where Moblee cannot see.
+    /// So the owner says when it is done, and the tile gets out of the way.
+    func markDone(_ tile: Tile) {
+        var all = ownerSaidDone(); all.insert(tile.id)
+        if let data = try? JSONSerialization.data(withJSONObject: ["done": Array(all).sorted()], options: [.prettyPrinted]) {
+            try? FileManager.default.createDirectory(at: doneFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? data.write(to: doneFile, options: .atomic)
+        }
+        setState(tile.id, .done)
+    }
+
+    /// The tile the big button acts on: the first one that can simply be added.
+    var nextTile: Tile? { tiles.first { $0.state == .waiting || $0.state == .failed } }
 
     /// An item added in a Terminal window finishes out of the app's sight, so
     /// the saved state is looked at every few seconds.
@@ -282,7 +329,8 @@ final class HomeModel: ObservableObject {
                    tiles[i].state != .done {
                     tiles[i].state = .done
                 }
-            case .connection: break
+            case .connection:
+                if tiles[i].state != .done, ownerSaidDone().contains(tiles[i].id) { tiles[i].state = .done }
             }
         }
     }
@@ -301,7 +349,15 @@ final class HomeModel: ObservableObject {
     func press(_ tile: Tile) {
         switch (tile.kind, tile.how) {
         case (.item, .silent): addSilently(tile)
-        default: explaining = tile        // a skill, a Terminal window or clicks: show it first
+        case (.skill, _):
+            // Look at the draft again at this moment, so that what the owner is
+            // shown is what would be added, even if the draft changed since.
+            describe(tile) { [weak self] in
+                guard let self, let fresh = self.tiles.first(where: { $0.id == tile.id }),
+                      fresh.state != .blocked else { return }
+                self.explaining = fresh
+            }
+        default: explaining = tile        // a Terminal window or clicks: explain first
         }
     }
 
@@ -384,13 +440,20 @@ final class HomeModel: ObservableObject {
 
     func repair(then: @escaping @MainActor () -> Void) {
         guard let pack, let vault else { repairFailed = true; then(); return }
+        // The safety layer first, then Moblee's own skills (whatever was sitting
+        // under one of their names is moved to the backups folder, never deleted).
         EngineTask.output(of: "/usr/bin/python3",
                           [pack.appendingPathComponent("safety/install-safety.py").path, "--vault", vault.path],
                           home: home) { [weak self] code, _ in
             guard let self else { return }
-            self.checkSafety()
-            self.repairFailed = code != 0 || self.needsRepair
-            then()
+            EngineTask.output(of: "/bin/bash",
+                              [pack.appendingPathComponent("scripts/install-skills.sh").path, "--update"],
+                              home: self.home) { [weak self] code2, _ in
+                guard let self else { return }
+                self.checkSafety()
+                self.repairFailed = code != 0 || code2 != 0 || self.needsRepair
+                then()
+            }
         }
     }
 }

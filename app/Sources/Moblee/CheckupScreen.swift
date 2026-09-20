@@ -28,7 +28,7 @@ final class Checkup: ObservableObject {
 
     /// Practice runs can pretend something is missing: `--pretend-missing tools,claude`.
     private let pretendMissing: Set<String> = {
-        let args = CommandLine.arguments
+        let args = Practice.args
         guard let i = args.firstIndex(of: "--pretend-missing"), i + 1 < args.count else { return [] }
         return Set(args[i + 1].split(separator: ",").map(String.init))
     }()
@@ -83,7 +83,17 @@ final class Checkup: ObservableObject {
         }
     }
 
+    /// When each Get was pressed. If the thing is still missing a while later
+    /// (Apple's window was cancelled, there was no internet, the download page
+    /// was closed), the Get button comes back, so nobody is left at a dead end.
+    private var askedAt: [String: Date] = [:]
+    private let patience: TimeInterval = 75
+
     private func apply() {
+        for (name, when) in askedAt where present[name] != true && Date().timeIntervalSince(when) > patience {
+            askedAt[name] = nil
+            asked.remove(name)
+        }
         for need in needs {
             let found: Bool
             switch need.kind {
@@ -105,6 +115,7 @@ final class Checkup: ObservableObject {
 
     func fix(_ need: Need) {
         asked.insert(need.name)
+        askedAt[need.name] = Date()
         switch need.kind {
         case .developerTools:
             // Apple's own dialogue does the download; this only asks for it.
@@ -120,15 +131,29 @@ final class Checkup: ObservableObject {
     }
 
     /// Never call this on the main thread: it waits for a program to finish.
+    ///
+    /// `xcode-select -p` alone is not enough: after a macOS upgrade it can
+    /// still name a tools folder whose programs have gone, and the build would
+    /// then stop with no cause given. So the folder it names must really hold
+    /// git and python3. The files are looked for directly and never run, since
+    /// running the stand-in `/usr/bin/git` on a Mac without the tools pops up
+    /// Apple's install window, and this check repeats every few seconds.
     nonisolated static func developerToolsInstalled() -> Bool {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/xcode-select")
         p.arguments = ["-p"]
-        p.standardOutput = Pipe()
+        let out = Pipe()
+        p.standardOutput = out
         p.standardError = Pipe()
         do { try p.run() } catch { return false }
+        let data = out.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
-        return p.terminationStatus == 0
+        guard p.terminationStatus == 0,
+              let folder = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !folder.isEmpty else { return false }
+        let fm = FileManager.default
+        return fm.isExecutableFile(atPath: folder + "/usr/bin/git")
+            && fm.isExecutableFile(atPath: folder + "/usr/bin/python3")
     }
 
     static func appInstalled(_ bundleID: String) -> Bool {
@@ -144,7 +169,9 @@ struct CheckupScreen: View {
         ScreenFrame(
             sentence: checkup.readyToGoOn
                 ? "Your Mac is ready."
-                : "Your Mac needs these first. Tap Get.",
+                : (checkup.asked.isEmpty
+                   ? "Your Mac needs these first. Tap Get."
+                   : "Say yes in the window that opened. It takes a few minutes."),
             buttonTitle: "Next",
             buttonEnabled: checkup.readyToGoOn,
             action: flow.next
@@ -170,7 +197,7 @@ struct NeedTile: View {
     let asked: Bool
     let fix: () -> Void
 
-    @State private var spin = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 12) {
@@ -182,13 +209,14 @@ struct NeedTile: View {
                 badge
                     .offset(x: 6, y: 6)
             }
+            .accessibilityHidden(true)
             Text(need.name)
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
             Group {
                 if present == true {
-                    Text("Here").foregroundStyle(Theme.good)
+                    Text("Here").foregroundStyle(Theme.goodText)
                 } else if asked {
-                    Text("Waiting…").foregroundStyle(Theme.waiting)
+                    Text("Downloading…").foregroundStyle(Theme.waitingText)
                 } else {
                     Button(need.fixTitle, action: fix)
                         .buttonStyle(.borderedProminent)
@@ -199,14 +227,14 @@ struct NeedTile: View {
             .font(.system(size: 15, weight: .semibold, design: .rounded))
             .frame(height: 32)
             Text(need.optional ? "Can wait" : " ")
-                .font(.caption)
+                .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
         }
         .frame(width: 170, height: 236)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-                .shadow(color: .black.opacity(0.10), radius: 10, y: 4))
+        .background(CardBackground())
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(need.name + (need.optional ? ", can wait" : ""))
+        .accessibilityValue(present == true ? "here" : (asked ? "downloading" : "missing"))
     }
 
     @ViewBuilder private var badge: some View {
@@ -219,12 +247,7 @@ struct NeedTile: View {
             Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
                 .font(.system(size: 30))
                 .foregroundStyle(.white, Theme.waiting)
-                .rotationEffect(.degrees(spin ? 360 : 0))
-                .onAppear {
-                    withAnimation(.linear(duration: 1.6).repeatForever(autoreverses: false)) {
-                        spin = true
-                    }
-                }
+                .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
         } else if present == false {
             Image(systemName: "arrow.down.circle.fill")
                 .font(.system(size: 30))

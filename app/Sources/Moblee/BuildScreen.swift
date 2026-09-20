@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The build itself: six pictures that light up as the engine reports each step.
+/// The build itself: pictures that light up as the engine reports each step.
 struct BuildScreen: View {
     @EnvironmentObject var flow: Flow
     @EnvironmentObject var install: InstallRun
@@ -11,19 +11,28 @@ struct BuildScreen: View {
             sentence: sentence,
             buttonTitle: buttonTitle,
             buttonEnabled: install.phase != .running && install.phase != .idle,
-            showsBack: isFailed,
+            showsBack: false,
+            quietTitle: isFailed ? "Show what happened" : nil,
+            quietAction: isFailed ? { install.showDiary() } : nil,
             action: act
         ) {
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(150), spacing: 18), count: 3),
-                      spacing: 18) {
-                ForEach(install.items) { item in
-                    BuildTile(item: item)
+            VStack(spacing: 12) {
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(150), spacing: 16), count: 3),
+                          spacing: install.items.count > 6 ? 8 : 16) {
+                    ForEach(install.items) { item in
+                        BuildTile(item: item, small: install.items.count > 6)
+                    }
+                }
+                if install.phase == .running {
+                    Text("\(install.items.filter { $0.state == .done }.count) of \(install.items.count)")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .contentTransition(.numericText())
                 }
             }
         }
         .onAppear {
-            // Coming back here after a failure tries again.
-            guard !still, install.phase == .idle || isFailed else { return }
+            guard !still, install.phase == .idle else { return }
             begin()
         }
     }
@@ -33,34 +42,47 @@ struct BuildScreen: View {
         return false
     }
 
+    private var why: String {
+        if case .failed(let w) = install.phase { return w }
+        return ""
+    }
+
     private var sentence: String {
         switch install.phase {
         case .idle, .running: return "Building your wiki…"
         case .finished:
             // a step the engine carries on past (Claude's skills) can fail without stopping the build
             return install.items.contains { $0.state == .failed }
-                ? "Your wiki is ready. One part did not finish; tell Claude: run a check-up."
+                ? "Your wiki is ready. One part needs a repair: open Moblee again later and press Repair."
                 : "Your wiki is ready."
         case .failed(let why):
             switch why {
-            case "place-taken": return "That name is taken. Go back and change it."
-            case "safety-layer": return "The guard could not switch on, so the build stopped."
+            case "place-taken": return "There is already a folder with that name. Nothing was changed."
+            case "no-room": return "This Mac is almost full, so nothing was started. Make some room, then try again."
+            case "safety-layer": return "The guard could not switch on, so the build stopped. Nothing of yours was changed."
             case "no-pack", "pack-copy": return "This copy of Moblee is incomplete. Download it again."
-            default: return "Something stopped the build."
+            default: return "Something stopped the build. Nothing of yours was changed."
             }
         }
     }
 
     private var buttonTitle: String {
         switch install.phase {
-        case .failed: return "Show what happened"
+        case .failed: return why == "place-taken" ? "Change the name" : "Try again"
         default: return "Next"
         }
     }
 
     private func act() {
         switch install.phase {
-        case .failed: install.showDiary()
+        case .failed:
+            if why == "place-taken" {
+                install.phase = .idle
+                flow.chosenPlace = nil
+                flow.step = .name
+            } else {
+                begin()       // into the same folder: the installer finishes what it started
+            }
         default: flow.next()
         }
     }
@@ -72,7 +94,7 @@ struct BuildScreen: View {
         }
         // A second try goes into the same folder as the first: the installer
         // finishes a half-built wiki and never makes a second one beside it.
-        let place = flow.chosenPlace ?? flow.freeLocation()
+        let place = flow.resumePlace ?? flow.chosenPlace ?? flow.freeLocation()
         flow.chosenPlace = place
         install.start(home: flow.home, ownerName: flow.trimmedName,
                       wikiName: place.name, location: place.url, bundledPack: pack)
@@ -81,40 +103,49 @@ struct BuildScreen: View {
 
 struct BuildTile: View {
     let item: InstallRun.Item
-    @State private var pulse = false
+    var small = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: small ? 4 : 8) {
             ZStack(alignment: .bottomTrailing) {
                 Image(systemName: item.symbol)
-                    .font(.system(size: 34, weight: .medium))
+                    .font(.system(size: small ? 24 : 34, weight: .medium))
                     .foregroundStyle(colour)
-                    .frame(width: 64, height: 64)
-                    .scaleEffect(item.state == .running && pulse ? 1.12 : 1)
+                    .frame(width: small ? 44 : 64, height: small ? 40 : 64)
+                    .symbolEffect(.pulse, options: .repeating, isActive: item.state == .running && !reduceMotion)
+                    .symbolEffect(.bounce, value: item.state == .done && !reduceMotion)
                 if item.state == .done {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 22))
+                        .font(.system(size: small ? 16 : 22))
                         .foregroundStyle(.white, Theme.good)
                         .transition(.scale.combined(with: .opacity))
                 } else if item.state == .failed {
                     Image(systemName: "exclamationmark.circle.fill")
-                        .font(.system(size: 22))
+                        .font(.system(size: small ? 16 : 22))
                         .foregroundStyle(.white, .red)
                         .transition(.scale.combined(with: .opacity))
                 }
             }
+            .accessibilityHidden(true)
             Text(item.label)
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .font(.system(size: small ? 13 : 15, weight: .semibold, design: .rounded))
                 .foregroundStyle(item.state == .waiting ? .secondary : .primary)
         }
-        .frame(width: 150, height: 118)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-                .shadow(color: .black.opacity(item.state == .waiting ? 0.04 : 0.10), radius: 8, y: 3))
-        .opacity(item.state == .waiting ? 0.55 : 1)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { pulse = true }
+        .frame(width: 150, height: small ? 76 : 118)
+        .background(CardBackground(corner: small ? 16 : 20, dimmed: item.state == .waiting))
+        .opacity(item.state == .waiting ? 0.6 : 1)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(item.label)
+        .accessibilityValue(stateWord)
+    }
+
+    private var stateWord: String {
+        switch item.state {
+        case .waiting: return "waiting"
+        case .running: return "being made now"
+        case .done: return "done"
+        case .failed: return "did not work"
         }
     }
 

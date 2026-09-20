@@ -91,3 +91,7 @@ What goes wrong with a Moblee wiki, how to confirm it, what fixes it and who doe
 ## F22. git printed a notice about a name and email being "configured automatically"
 
 **Fix:** harmless, and only on wikis made by very old versions. Claude sets a name and email for this vault only: `git config user.name "<name>"` and `git config user.email "<name>@<mac>.local"`.
+
+## F23. One of Moblee's skills is missing, or a different skill is sitting under its name
+
+**What the owner sees:** the install ended with "One part did not finish", or Claude does not seem to know "guide me", or behaves oddly when asked for one of Moblee's skills. **Confirms it:** the check-up names the skills. **Why:** Moblee's skill names are ordinary words (`brain`, `companion`, `compact`, `galaxy`), and a folder of the same name was already among Claude's skills: an older Moblee's copy, or something the owner put there. The installer never overwrites a skill it did not recognise, so it left it alone and said so. **Fix, owner:** open Moblee and press Repair, or in Terminal run `bash "<moblee folder>/scripts/install-skills.sh" --update`. Moblee's copies go in, and whatever was there before is moved to `~/.config/moblee/backups/`, never deleted. If what was there was the owner's own skill, tell them where it has gone and offer to bring it back under a different name (the move back is theirs to make).

@@ -253,10 +253,19 @@ def check_skills(f: Findings, pack: Path | None) -> None:
     if pack and (pack / "skills").is_dir():
         core = {p.name for p in (pack / "skills").iterdir() if p.is_dir()}
         missing = sorted(core - have)
+        # A folder of the right name is not enough: it has to be Moblee's skill.
+        different = sorted(n for n in core & have
+                           if not (SKILLS / n / "SKILL.md").is_file()
+                           or sha(SKILLS / n / "SKILL.md") != sha(pack / "skills" / n / "SKILL.md"))
         if missing:
-            f.add(LOOK, "Core skills not installed: " + ", ".join(missing) + ".", "F11")
-        else:
-            f.add(OK, f"All {len(core)} core skills are installed.")
+            f.add(PROBLEM if "companion" in missing else LOOK,
+                  "Core skills not installed: " + ", ".join(missing) + ".", "F23")
+        if different:
+            f.add(PROBLEM if "companion" in different else LOOK,
+                  "These skills are installed under Moblee's names but are not this Moblee's copies "
+                  "(an older version, or something of the owner's own): " + ", ".join(different) + ".", "F23")
+        if not missing and not different:
+            f.add(OK, f"All {len(core)} core skills are installed, and each is this Moblee's copy.")
     if "get-started" in have and "companion" in have:
         f.add(LOOK, "An old get-started skill sits beside the companion.", "F19")
 
