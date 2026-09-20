@@ -34,6 +34,13 @@ if [ -n "$(git -C "$pack_root" status --porcelain)" ]; then
     echo "Commit them (or put them aside), then run this again. Nothing was built."
     exit 1
 fi
+plist_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$(dirname "$here")/Info.plist")"
+pack_version="$(cat "$pack_root/VERSION")"
+if [ "$plist_version" != "$pack_version" ]; then
+    echo "The app says it is $plist_version and the pack says it is $pack_version. They must agree:"
+    echo "the app compares the two to decide whether to offer an update. Nothing was built."
+    exit 1
+fi
 if ! ( cd "$pack_root" && python3 safety/release-hashes.py --check ); then
     echo "The guard's hashes are out of date. Run:  python3 safety/release-hashes.py"
     echo "then commit safety/bash-guard.py and run this again. Nothing was built."

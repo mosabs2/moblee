@@ -184,11 +184,27 @@ final class HomeModel: ObservableObject {
                let allow = (s["permissions"] as? [String: Any])?["allow"] as? [Any] { rules += allow.count }
         }
         safetyOff = !(guardThere && switchedOn && rules >= 10)
-        // While an update is pending the skills are expected to differ; the update brings them level.
-        let versionsLevel = !Self.isNewer(packVersion, than: wikiVersion)
-        guardStale = !safetyOff && versionsLevel && !guardIsMoblees()
-        needsRepair = safetyOff || guardStale || (versionsLevel && !skillsAreMoblees())
+        // The guard and the skills are compared with this app's pack only when
+        // the wiki and the pack are the SAME version. While an update is pending
+        // they are expected to differ, and the update brings them level. And when
+        // the wiki is NEWER than this app (the owner updated another way, then
+        // opened an old copy of Moblee), this app's copies are the older ones:
+        // offering to "repair" with them would put an older guard and older
+        // skills over newer ones and call it bringing them up to date.
+        let versionsLevel = wikiVersion == packVersion
+            || (!Self.isNewer(packVersion, than: wikiVersion) && !Self.isNewer(wikiVersion, than: packVersion))
+        guardStale = !safetyOff && versionsLevel && !guardIsMoblees() && !repairSetAside
+        needsRepair = safetyOff || guardStale || (versionsLevel && !skillsAreMoblees() && !repairSetAside)
     }
+
+    /// The owner said "Not now" to a Repair that is about copies differing, not
+    /// about the guard being off (that one is never set aside). For this opening
+    /// of the app only. An owner who changed their guard on purpose can then
+    /// still reach their tiles.
+    @Published var repairSetAside = false { didSet { if repairSetAside != oldValue { checkSafety() } } }
+
+    /// True when the wiki was made or updated by a newer Moblee than this app.
+    var wikiIsNewerThanApp: Bool { Self.isNewer(wikiVersion, than: packVersion) }
 
     /// `~/.config/moblee/package-path` is how Claude and the check-up find the
     /// Moblee folder. The app is what brings a newer folder to the Mac, so the
@@ -197,7 +213,9 @@ final class HomeModel: ObservableObject {
     /// copies and raised two false alarms (second run on a fresh account,
     /// 20 September 2026). The older folder stays where it is; nothing is deleted.
     private func pointAtPack() {
-        guard let pack else { return }
+        // Never towards an older folder: a wiki newer than this app keeps the
+        // note its own, newer, Moblee wrote.
+        guard let pack, !wikiIsNewerThanApp else { return }
         let note = home.appendingPathComponent(".config/moblee/package-path")
         if Self.read(note) == pack.path { return }
         try? FileManager.default.createDirectory(at: note.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -287,7 +305,9 @@ final class HomeModel: ObservableObject {
             guard var t = tile, !seen.contains(t.id) else { continue }
             t.asked = Self.plain(r["asked"] as? String ?? "", limit: 20)
             seen.insert(t.id)
-            if let old = tiles.first(where: { $0.id == t.id }) {      // keep what is already known
+            // keep what is already known about this asking; the same thing asked again on a
+            // later date is a new asking and starts as waiting, even while the app is open
+            if let old = tiles.first(where: { $0.id == t.id && $0.asked == t.asked }) {
                 t.state = old.state; t.note = old.note
                 if t.kind == .skill { t.detail = old.detail; t.files = old.files; t.body = old.body }
             }

@@ -118,6 +118,17 @@ enum Placement {
     }
     static func identifier(of app: URL) -> String? { info(of: app)?["CFBundleIdentifier"] as? String }
     static func version(of app: URL) -> String { (info(of: app)?["CFBundleShortVersionString"] as? String) ?? "0" }
+    /// The version, then the build number: two builds that carry the same
+    /// version are told apart by their build, so a later build of the same
+    /// version still replaces an earlier one (they did share a number once,
+    /// in testing, and the older build was silently kept).
+    static func fullVersion(of app: URL) -> String {
+        version(of: app) + "." + ((info(of: app)?["CFBundleVersion"] as? String) ?? "0")
+    }
+    static var ourFullVersion: String {
+        let i = Bundle.main.infoDictionary
+        return ((i?["CFBundleShortVersionString"] as? String) ?? "0") + "." + ((i?["CFBundleVersion"] as? String) ?? "0")
+    }
 
     /// 0.10.0 is newer than 0.9.2: compared number by number, not as text.
     static func newer(_ a: String, than b: String) -> Bool {
@@ -156,7 +167,7 @@ enum Placement {
             guard identifier(of: to) == mine else { throw Failure.somethingElseThere }
             // The same Moblee or a newer one is already in place (an old zip
             // opened again): that one is used, and nothing is copied over it.
-            if !newer(ourVersion, than: version(of: to)) { return .alreadyThere(to) }
+            if !newer(ourFullVersion, than: fullVersion(of: to)) { return .alreadyThere(to) }
             // An older one that is open right now cannot be moved from under itself.
             let me = ProcessInfo.processInfo.processIdentifier
             let others = NSRunningApplication.runningApplications(withBundleIdentifier: mine ?? "")
@@ -165,6 +176,11 @@ enum Placement {
         }
 
         try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+        // A half-made copy from an earlier try that was cut short (the window
+        // closed mid-move) is our own, hidden, and of no use: cleared first.
+        for name in (try? fm.contentsOfDirectory(atPath: folder.path)) ?? [] where name.hasPrefix(".Moblee-incoming-") {
+            try? fm.removeItem(at: folder.appendingPathComponent(name))
+        }
         let incoming = folder.appendingPathComponent(".Moblee-incoming-\(UUID().uuidString.prefix(8)).app", isDirectory: true)
         do {
             try fm.copyItem(at: from, to: incoming)
@@ -189,7 +205,8 @@ enum Placement {
             if fm.fileExists(atPath: old.path) {
                 old = folder.appendingPathComponent("Moblee older \(version(of: to)) \(UUID().uuidString.prefix(4)).app", isDirectory: true)
             }
-            try fm.moveItem(at: to, to: old)
+            do { try fm.moveItem(at: to, to: old) }     // locked in Finder, or not ours to rename: nothing has changed yet
+            catch { try? fm.removeItem(at: incoming); throw error }
             do { try fm.moveItem(at: incoming, to: to) }
             catch {
                 try? fm.moveItem(at: old, to: to)       // put back exactly as it was
@@ -228,6 +245,17 @@ enum Placement {
     /// Opens the app in Applications and only then closes this one. If it
     /// will not open, this one stays, and says where Moblee now is.
     static func reopen(_ app: URL, failed: @escaping @MainActor () -> Void) {
+        // If the Moblee in Applications is already open (the owner opened an old
+        // copy from Downloads while it was running), that one is brought to the
+        // front; a second Moblee is never started beside it.
+        let me = ProcessInfo.processInfo.processIdentifier
+        let there = app.resolvingSymlinksInPath().path
+        if let open = NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "")
+            .first(where: { $0.processIdentifier != me && $0.bundleURL?.resolvingSymlinksInPath().path == there }) {
+            open.activate(options: [.activateAllWindows])
+            DispatchQueue.main.async { NSApp.terminate(nil) }
+            return
+        }
         let config = NSWorkspace.OpenConfiguration()
         config.createsNewApplicationInstance = true
         NSWorkspace.shared.openApplication(at: app, configuration: config) { opened, error in
@@ -245,11 +273,20 @@ struct PlacementScreen: View {
     @EnvironmentObject var flow: Flow
     enum Stage { case asking, moving, failed, movedButNotOpened }
     @State private var stage: Stage = .asking
+    @State private var why: Placement.Failure?
 
     private var sentence: String {
         switch stage {
         case .asking, .moving: return "Moblee should live in Applications, so you can always find it."
-        case .failed: return "Moblee could not move itself. Nothing was changed. Drag it into Applications in Finder."
+        case .failed:
+            // One sentence per reason: the general advice, given for the wrong
+            // reason, would have told an owner to drag Moblee over some other
+            // app that merely shares its name.
+            switch why {
+            case .anotherMobleeIsOpen: return "Another Moblee is open. Close it, then open this one again."
+            case .somethingElseThere: return "Something else called Moblee is already in Applications. Moblee will work from here."
+            default: return "Moblee could not move itself. Nothing was changed. Drag it into Applications in Finder."
+            }
         case .movedButNotOpened: return "Moblee is now in Applications. Open it from there next time."
         }
     }
@@ -263,6 +300,7 @@ struct PlacementScreen: View {
                     action: {
                         guard stage == .asking else { flow.moveSettled(); return }
                         stage = .moving
+                        AppDelegate.moving = true      // quitting half-way through would leave a half-made copy
                         let plan = Placement.plan()
                         DispatchQueue.global(qos: .userInitiated).async {
                             let result = Result { try Placement.move(plan) }
@@ -287,9 +325,12 @@ struct PlacementScreen: View {
 
     private func finished(_ result: Result<Placement.Outcome, Error>, _ plan: Placement.Plan) {
         switch result {
-        case .failure:
+        case .failure(let error):
+            AppDelegate.moving = false
+            why = error as? Placement.Failure
             stage = .failed
         case .success(let outcome):
+            AppDelegate.moving = false
             let app: URL
             switch outcome { case .moved(let u), .alreadyThere(let u): app = u }
             flow.moveOutcome = outcome

@@ -10,11 +10,11 @@ From v0.8.1 the skills step also moves an old `get-started` skill aside. That sk
 
 ## The easy route: the Moblee app
 
-If you have the Moblee app, download the newer app from the Releases page of the GitHub repository when a signed build is offered there, and open it. When the app carries a newer Moblee than your wiki has, it opens with the sentence "A newer Moblee is ready for your wiki.", the two version numbers, and the line "Your pages are not touched." Press Update. The update is shown as nine pictures that light up in turn: tools, the gate, skills, the guard, the rules, new pages, the weekly check, lessons, and finishing. When it says "Your wiki is up to date.", press Done.
+If you have the Moblee app, download the newer app from the Releases page of the GitHub repository and open it. It offers to take the place of the older one in Applications. When the app carries a newer Moblee than your wiki has, it opens with the sentence "A newer Moblee is ready for your wiki.", the two version numbers, and the line "Your pages are not touched." Press Update. The update is shown as nine pictures that light up in turn: tools, the gate, skills, the guard, the rules, new pages, the weekly check, lessons, and finishing. When it says "Your wiki is up to date.", press Done.
 
 The app runs the pack's own `scripts/update.sh` underneath, so everything in the section above holds for it. It asks no questions. If you already have the weekly health check or the learning path, they are refreshed; if you do not, an update run this way does not add them, and each can be added later (`docs/10-connections.md`). If the update stops, the app says "The update stopped. Nothing of yours was changed." The updater is safe to run again, and running it in Terminal, as described below, prints the message that says why it stopped.
 
-If no signed app is offered yet, use the Terminal route below. It always works.
+The Terminal route below does the same update and always works.
 
 ## The Terminal route
 

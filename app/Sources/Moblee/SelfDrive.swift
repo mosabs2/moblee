@@ -311,6 +311,12 @@ enum SelfDrive {
         await expect("a guard that is on but older than this Moblee's is noticed") {
             flow.homeModel.guardStale && flow.homeModel.needsRepair
         }
+        // "Not now" sets such a repair aside for this opening of the app, so an
+        // owner who changed their guard on purpose can still reach their tiles.
+        flow.homeModel.repairSetAside = true
+        await expect("Not now sets a repair about differing copies aside") { !flow.homeModel.needsRepair }
+        flow.homeModel.repairSetAside = false
+        await expect("and it is offered again when not set aside") { flow.homeModel.needsRepair }
         await pause(1.0)
         click(bigButton)                      // "Repair"
         await expect("pressing Repair brings the guard level", within: 60) {
@@ -319,6 +325,25 @@ enum SelfDrive {
         let guardLevel = !flow.homeModel.needsRepair
         say("stale guard repaired: \(guardLevel)")
 
+        // The other way round: the wiki was updated by a NEWER Moblee than this
+        // app, and this app is an old copy the owner happened to open. Its guard
+        // and skills are the older ones. It must not offer to "repair" with them,
+        // and must not point the note of where Moblee is at its own, older folder.
+        try? "9.9.9\n".write(to: vaultURL.appendingPathComponent("VERSION"), atomically: true, encoding: .utf8)
+        try? "/where/the/newer/moblee/lives\n".write(to: pointer, atomically: true, encoding: .utf8)
+        if let h = try? FileHandle(forWritingTo: installedGuard) {
+            h.seekToEndOfFile(); h.write("\n# a newer guard than this app carries\n".data(using: .utf8)!); try? h.close()
+        }
+        flow.homeModel.load(home: flow.home, bundledPack: flow.bundledPack)
+        await pause(5)
+        let newerLeftAlone = !flow.homeModel.needsRepair && !flow.homeModel.guardStale && !flow.homeModel.updateAvailable
+            && ((try? String(contentsOf: pointer, encoding: .utf8)) ?? "").contains("/where/the/newer/moblee/lives")
+        say("a wiki newer than this app is left alone (no repair with older copies, note not re-pointed): \(newerLeftAlone)")
+        // the practice home put back as it was, for the checks the test script makes afterwards
+        try? (flow.homeModel.packVersion + "\n").write(to: vaultURL.appendingPathComponent("VERSION"), atomically: true, encoding: .utf8)
+        try? (pointsAt + "\n").write(to: pointer, atomically: true, encoding: .utf8)
+        if let level = try? Data(contentsOf: packGuard) { try? level.write(to: installedGuard) }
+
         let skills = flow.home.appendingPathComponent(".claude/skills", isDirectory: true)
         let tripsThere = fm.fileExists(atPath: skills.appendingPathComponent("trips/SKILL.md").path)
         let gymThere = fm.fileExists(atPath: skills.appendingPathComponent("gym-log/.made-for-you").path)
@@ -326,7 +351,7 @@ enum SelfDrive {
         let brainSame = (try? Data(contentsOf: skills.appendingPathComponent("brain/SKILL.md"))) == brainBefore
         let noSmuggle = !fm.fileExists(atPath: "/tmp/moblee-pwned")
             && !flow.homeModel.tiles.contains { $0.key.contains("/") || $0.key.contains(";") }
-        let ok = tripsState == .done && videosState == .handedOver && tripsThere && googleState == .done && pointerRight && guardLevel
+        let ok = tripsState == .done && videosState == .handedOver && tripsThere && googleState == .done && pointerRight && guardLevel && newerLeftAlone
             && skill("gym-log")?.state == .done && gymThere
             && skill("sneaky")?.state == .blocked && sneakyKept
             && skill("brain")?.state == .blocked && brainSame && noSmuggle

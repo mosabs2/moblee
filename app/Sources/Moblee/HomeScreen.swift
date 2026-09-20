@@ -116,6 +116,11 @@ struct HomeScreen: View {
                                              : "One of Moblee's skills is missing. Put it back.")),
                     buttonTitle: home.repairFailed ? "Open Claude" : "Repair",
                     buttonEnabled: !repairing, showsBack: false,
+                    // A guard that is OFF is never waved through. Copies that merely
+                    // differ can be: an owner who changed theirs on purpose, or a repair
+                    // that cannot finish, must not be shut out of their tiles.
+                    quietTitle: (!home.safetyOff && !repairing) ? "Not now" : nil,
+                    quietAction: (!home.safetyOff && !repairing) ? { home.repairFailed = false; home.repairSetAside = true } : nil,
                     action: {
                         if home.repairFailed { openClaude(); return }
                         repairing = true
