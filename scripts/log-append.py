@@ -88,7 +88,11 @@ def find_vault_root() -> Path:
 
 def header_now(entry_type: str, title: str) -> str:
     now = datetime.datetime.now().astimezone()
-    offset = now.strftime("%z")[:3]  # +0100 -> +01
+    # The house form is the short one the vault's rules show: +0100 -> +01.
+    # A zone that is not a whole number of hours keeps its minutes (+0530),
+    # since cutting them would put the entry in the wrong hour.
+    z = now.strftime("%z")
+    offset = z[:3] if z[3:5] in ("", "00") else z[:5]
     return f"## [{now.strftime('%Y-%m-%d %H:%M')} {offset}] {entry_type} | {title}"
 
 

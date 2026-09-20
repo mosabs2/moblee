@@ -304,7 +304,10 @@ def inbox_files():
     rawdir = os.path.join(VAULT, "raw")
     for f in sorted(os.listdir(rawdir)) if os.path.isdir(rawdir) else []:
         p = os.path.join(rawdir, f)
-        if os.path.isfile(p) and not f.startswith("."):
+        # The starter's own note on how to add things (HOW-TO-ADD-CONTENT.md)
+        # lives in raw/ and is never ingested, so counting it shows "1 pending"
+        # on an empty inbox for ever (install test, 20 September 2026).
+        if os.path.isfile(p) and not f.startswith(".") and not f.upper().startswith("HOW-TO"):
             out.append({"name": f, "folder": "raw", "size": os.path.getsize(p)})
     clip = os.path.join(VAULT, "Clippings")
     for f in sorted(os.listdir(clip)) if os.path.isdir(clip) else []:

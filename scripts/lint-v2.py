@@ -1747,7 +1747,10 @@ def _item_installed(key: str) -> bool | None:
     state = Path.home() / ".config" / "moblee" / "setup-state.json"
     try:
         import json
-        status = json.loads(state.read_text()).get("status", {})
+        saved = json.loads(state.read_text())
+        if key in saved.get("unseen", []):
+            return None  # a connection made inside the Claude app: the checklist could not see it either way
+        status = saved.get("status", {})
         if key in status:
             return bool(status[key])
     except Exception:
@@ -2108,6 +2111,19 @@ def check_duplicate_frontmatter(vault: Path, findings: list[str]) -> tuple[int, 
 
 
 def main() -> int:
+    # Asking for help, or a mistyped switch, must never run a lint and write a
+    # report: only no arguments, or --out <path>, does that.
+    args = sys.argv[1:]
+    known = args == [] or (len(args) == 2 and args[0] == "--out")
+    if not known:
+        asked = any(a in ("-h", "--help") for a in args)
+        print("usage: python3 scripts/lint-v2.py [--out <path>]\n\n"
+              "Checks the wiki's structure (log headers, links, attribution, file weights)\n"
+              "and writes a report to outputs/lint/lint-v2-YYYY-MM-DD.md, or to --out <path>.\n"
+              "It reads the wiki and changes nothing in it.",
+              file=sys.stdout if asked else sys.stderr)
+        return 0 if asked else 2
+
     vault = find_vault_root()
     today = datetime.date.today()
     findings: list[str] = []

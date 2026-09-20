@@ -395,7 +395,13 @@ def install_skill(name: str) -> bool:
 
 
 def connector_status(name: str, _cache: dict = {}) -> str:
-    """'connected', 'needs-login', 'absent', or 'no-claude-ai' for a claude.ai connector."""
+    """'connected', 'needs-login', 'absent', or 'no-claude-ai' for a claude.ai connector.
+
+    'no-claude-ai' means this script cannot see the owner's connections at all:
+    the `claude` command is missing, or is not signed in with a Claude account.
+    That is the ordinary state of an owner who uses the Claude desktop app,
+    which signs in separately, so it is reported as "cannot be seen from here"
+    and never as "not working"."""
     if "out" not in _cache:
         say("  Asking Claude Code which connections it can see (this can take a minute or two)...")
         _cache["out"] = run(["claude", "mcp", "list"], timeout=240)[1] if claude_ok() else ""
@@ -408,8 +414,29 @@ def connector_status(name: str, _cache: dict = {}) -> str:
     return "absent"
 
 
-NO_CLAUDE_AI = ("Claude Code shows no claude.ai connections at all: it must be signed in with "
-                "your Claude account (type /login in Claude Code), not an API key")
+NO_CLAUDE_AI = ("connections made in the Claude app only show inside Claude, so this check cannot "
+                "see them. Ask Claude to use it (\"what is on my calendar today?\"); if it answers, "
+                "it is connected. (In Terminal's Claude Code, /login with your Claude account lets "
+                "this check see them too)")
+
+APP_STATE = CONFIG_DIR / "app-state.json"
+
+
+def owner_said_done(key: str) -> bool:
+    """The owner pressed Done on this item's tile in the Moblee app."""
+    try:
+        return f"item:{key}" in json.loads(APP_STATE.read_text()).get("done", [])
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
+def unseen(key: str):
+    """What a check returns when it cannot see the thing it is asked about.
+    None is neither working nor broken. The owner's own word, given in the
+    Moblee app, is reported as exactly that and no more."""
+    if owner_said_done(key):
+        return None, "you marked this as connected in Moblee; " + NO_CLAUDE_AI
+    return None, NO_CLAUDE_AI
 
 
 def forget_connector_cache() -> None:
@@ -590,7 +617,7 @@ def install_mac_apps():
 def check_google():
     states = {n: connector_status(n) for n in ("Gmail", "Google Calendar", "Google Drive")}
     if "no-claude-ai" in states.values():
-        return False, NO_CLAUDE_AI
+        return unseen("google")
     good = [n for n, s in states.items() if s == "connected"]
     if len(good) == 3:
         return True, "Gmail, Google Calendar and Google Drive are connected"
@@ -607,7 +634,8 @@ def install_google():
     say("  2. Find Gmail and click Connect. Sign in with your Google account and")
     say("     allow what Google asks.")
     say("  3. Do the same for Google Calendar, then Google Drive.")
-    say("  4. Come back to this window.")
+    say("  4. To tell that it worked, ask Claude: what is on my calendar today?")
+    say("  5. Come back to this window.")
     say("")
     open_url(CONNECTORS_URL)
     if not wait_for_return():
@@ -894,7 +922,7 @@ def install_voice():
 def check_generation():
     s = connector_status("ElevenLabs")
     if s == "no-claude-ai":
-        return False, NO_CLAUDE_AI
+        return unseen("generation")
     if s == "connected":
         return True, "ElevenLabs is connected: images, video, voices, music and sound effects"
     return False, "ElevenLabs is not connected"
@@ -1112,6 +1140,26 @@ def how(key: str) -> str:
     return HOW.get(key, "terminal")
 
 
+# For a "clicks" item, the three cards the Moblee app shows before it sends the
+# owner into Claude: where to go, what to press, and how to tell it worked. An
+# owner sent to another app with no picture of what to look for cannot tell
+# whether they arrived (the install test of 20 September 2026). Each line is
+# short enough for a card: a title of two or three words, a detail under
+# seventy characters.
+CLICKS = {
+    "google": [
+        ["Connectors", "The page opens. If not: in Claude, Settings, then Connectors"],
+        ["Switch on three", "Gmail, Google Calendar, Google Drive. Connect, then sign in"],
+        ["Check it worked", "Ask Claude: what is on my calendar today?"],
+    ],
+    "generation": [
+        ["Connectors", "The page opens. If not: in Claude, Settings, then Connectors"],
+        ["ElevenLabs", "Press Connect and sign in. Paying is your choice, on their site"],
+        ["Check it worked", "Ask Claude: can you see ElevenLabs?"],
+    ],
+}
+
+
 PROGRESS = False
 
 
@@ -1132,7 +1180,8 @@ def summarise(chosen: list, foundations: list, assume_yes: bool = False) -> bool
     for it in chosen:
         say(f"  - {it.title}")
     say("")
-    say(f"Expect about {minutes} minutes and {space / 1000:.1f} GB of space,")
+    room = f"{space / 1000:.1f} GB" if space >= 1000 else (f"{space} MB" if space else "almost no")
+    say(f"Expect about {minutes} minutes and {room} of space,")
     say("most of it waiting for downloads. Keep the Mac plugged in and awake.")
     signins = [it for it in chosen if it.signin]
     if signins or "homebrew" in foundations:
@@ -1157,7 +1206,8 @@ def summarise(chosen: list, foundations: list, assume_yes: bool = False) -> bool
 def write_report(results: list, vault: Path | None) -> Path:
     lines = [f"# Moblee setup check, {datetime.datetime.now().strftime('%-d %B %Y, %H:%M')}", ""]
     for it, ok, detail in results:
-        lines.append(f"- {'Working' if ok else 'Not working'}: **{it.title}**. {detail}.")
+        word = "Cannot be seen from here (not a fault)" if ok is None else ("Working" if ok else "Not working")
+        lines.append(f"- {word}: **{it.title}**. {detail}.")
     lines += ["", "Run `python3 scripts/moblee-setup.py` from the Moblee folder to add or repair anything above.", ""]
     target_dir = (vault / "outputs" / "setup") if vault else CONFIG_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -1176,8 +1226,33 @@ def final_check(items: list, only: set | None = None) -> list:
             continue
         ok, detail = it.check()
         results.append((it, ok, detail))
-        say(f"  {'WORKING    ' if ok else 'NOT WORKING'}  {it.title}: {detail}")
+        word = "CANNOT SEE " if ok is None else ("WORKING    " if ok else "NOT WORKING")
+        say(f"  {word}  {it.title}: {detail}")
     return results
+
+
+def save_state(status: dict, results: list, **extra) -> None:
+    """The saved record of the last look at each item. `status` holds every
+    item, true or false; `unseen` names the ones this script could not see
+    either way (a connection made inside the Claude app), so that nothing
+    reading the record takes "could not see" for "not working"; `working` is
+    the whole list of what works, not only what the last run touched."""
+    try:
+        state = json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else {}
+    except (OSError, ValueError):
+        state = {}
+    if not isinstance(state, dict):
+        state = {}
+    for old in ("chosen",):  # held only the last run's items, under a name that read as the full list
+        state.pop(old, None)
+    seen_now = {it.key for it, _, _ in results}
+    blind = {it.key for it, ok, _ in results if ok is None}
+    state["unseen"] = sorted((set(state.get("unseen", [])) - seen_now) | blind)
+    state["status"] = {k: bool(v) for k, v in status.items()}
+    state["working"] = sorted(k for k, v in state["status"].items() if v)
+    state.update(extra)
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    STATE_FILE.write_text(json.dumps(state, indent=2) + "\n")
 
 
 def main() -> int:
@@ -1209,7 +1284,8 @@ def main() -> int:
     if args.list and args.json:
         print(json.dumps([{"key": it.key, "title": it.title, "what": it.what, "minutes": it.minutes,
                            "space_mb": it.space_mb, "cost": it.cost, "paid": it.cost.startswith("PAID"),
-                           "needs": it.needs, "signin": it.signin, "how": how(it.key)}
+                           "needs": it.needs, "signin": it.signin, "how": how(it.key),
+                           "steps": CLICKS.get(it.key, [])}
                           for it in items], indent=2))
         return 0
     if args.list:
@@ -1234,15 +1310,12 @@ def main() -> int:
         path = write_report(results, vault_path())
         # keep the saved state current, so the weekly check reads what is true now
         try:
-            state = json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else {}
-            state["status"] = {it.key: ok for it, ok, _ in results}
-            state["last_check"] = STAMP
-            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-            STATE_FILE.write_text(json.dumps(state, indent=2) + "\n")
-        except (OSError, ValueError):
+            save_state({it.key: ok for it, ok, _ in results}, results, last_check=STAMP)
+        except OSError:
             pass  # a state file that cannot be written never fails the check
         say(f"\nThe result is saved at {path}")
-        return 0 if all(ok for _, ok, _ in results) else 1
+        # "cannot see" is not a failure: only something seen to be broken is
+        return 0 if all(ok is not False for _, ok, _ in results) else 1
 
     # so skills and the owner's Claude can find the pack to point back at it
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -1311,30 +1384,37 @@ def main() -> int:
         status[it.key] = ok
         # the check's own plain sentence travels with a failure, so the app can
         # say why ("it needs the Chrome item first") and not only that it failed
-        emit(it.key, "ok" if ok else "fail", detail=str(detail).replace(str(HOME), "~"))
-    state = {"last_run": STAMP, "chosen": [it.key for it in chosen],
-             "working": [it.key for it, ok, _ in results if ok],
-             "status": status}
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    STATE_FILE.write_text(json.dumps(state, indent=2) + "\n")
+        emit(it.key, "unseen" if ok is None else ("ok" if ok else "fail"),
+             detail=str(detail).replace(str(HOME), "~"))
+    save_state(status, results, last_run=STAMP, last_run_items=[it.key for it in chosen])
 
-    failed = [it for it, ok, _ in results if not ok]
+    failed = [it for it, ok, _ in results if ok is False]
+    blind = [it for it, ok, _ in results if ok is None]
     say("")
+    if blind:
+        say("Cannot be seen from here: " + ", ".join(it.title for it in blind) + ".")
+        say("That is not a fault. Ask Claude to use it; if it answers, it is connected.")
     if failed:
         say("Some items are not working yet (listed above). Nothing else is affected.")
         keys = [it.key for it in failed]
         if "x-capture" in keys and "chrome" not in keys and not check_chrome()[0]:
             keys.insert(0, "chrome")  # x-capture works through Chrome
         say("To try them again:  python3 scripts/moblee-setup.py --only " + ",".join(keys))
+    elif blind:
+        say("Everything else you ticked is working.")
     else:
         say("Everything you ticked is working.")
     say(f"This result is saved at {path}")
-    restart = any(it.key in ("mac-apps", "google", "chrome", "generation", "videos", "film", "documents",
-                             "skill-maker", "obsidian-extras") for it in chosen)
+    connections = {"mac-apps", "google", "chrome", "generation"}
+    skills_or_tools = {"videos", "film", "documents", "skill-maker", "obsidian-extras"}
+    has_conn = any(it.key in connections for it in chosen)
+    has_skill = any(it.key in skills_or_tools for it in chosen)
+    restart = has_conn or has_skill
     emit("done", "ok", restart=restart)
     if restart:
+        new = "connections and skills" if has_conn and has_skill else ("connections" if has_conn else "skills")
         say("")
-        say("Quit Claude Code and open it again so it sees the new connections.")
+        say(f"Quit Claude and open it again so it sees the new {new}.")
         if any(it.key == "chrome" for it in chosen):
             say("Then type /chrome inside Claude Code and switch it on.")
     return 0

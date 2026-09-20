@@ -33,9 +33,9 @@ mkdir -p "$WORK/home-draw" "$WORK/home-rehearse" "$WORK/home-drive"
 export MOBLEE_PRACTICE=1
 
 "$BIN" --home "$WORK/home-draw" --snapshot "$WORK/screens" > "$WORK/draw.txt" 2>&1
-[[ "$(ls "$WORK/screens" 2>/dev/null | grep -c '\.png$')" == "20" ]] && ok "twenty screens drawn to picture files ($WORK/screens)" || bad "twenty screens drawn (see $WORK/draw.txt)"
+[[ "$(ls "$WORK/screens" 2>/dev/null | grep -c '\.png$')" == "23" ]] && ok "twenty-three screens drawn to picture files ($WORK/screens)" || bad "twenty-three screens drawn (see $WORK/draw.txt)"
 "$BIN" --dark --home "$WORK/home-draw" --snapshot "$WORK/screens-dark" > "$WORK/draw-dark.txt" 2>&1
-[[ "$(ls "$WORK/screens-dark" 2>/dev/null | grep -c '\.png$')" == "20" ]] && ok "and the same twenty in dark mode ($WORK/screens-dark)" || bad "twenty dark screens drawn (see $WORK/draw-dark.txt)"
+[[ "$(ls "$WORK/screens-dark" 2>/dev/null | grep -c '\.png$')" == "23" ]] && ok "and the same twenty-three in dark mode ($WORK/screens-dark)" || bad "twenty-three dark screens drawn (see $WORK/draw-dark.txt)"
 [[ ! -e "$WORK/home-draw/.claude" ]] && ok "drawing screens installs nothing" || bad "drawing screens installs nothing"
 
 "$BIN" --home "$WORK/home-rehearse" --owner "Tom & Sam" --rehearse "$WORK/screens" > "$WORK/rehearse.txt" 2>&1
@@ -51,16 +51,29 @@ grep -q "Tom & Sam" "$V/CLAUDE.md" 2>/dev/null && ok "the owner's name arrives a
 "$BIN" --rehearse "$WORK/screens" > "$WORK/refuse.txt" 2>&1
 [[ $? -eq 2 ]] && ok "a rehearsal without a practice home is refused" || bad "a rehearsal without a practice home is refused"
 
-"$BIN" --home "$WORK/home-drive" --self-drive > "$WORK/drive.txt" 2>&1
+# The download mark macOS puts on a downloaded app, put here on one file of
+# this build, so the move to Applications can be seen to clear it from the copy.
+xattr -w com.apple.quarantine "0081;00000000;Safari;" "$APP/Contents/Info.plist" 2>/dev/null
+
+"$BIN" --home "$WORK/home-drive" --move-to "$WORK/applications" --self-drive > "$WORK/drive.txt" 2>&1
 RC=$?
 [[ $RC -eq 0 ]] && ok "the real window opens every screen and finishes an install" || bad "the real window opens every screen and finishes an install (exit $RC; see $WORK/drive.txt)"
-for s in welcome check-up name build hand-off home; do
+MOVED="$WORK/applications/Moblee.app"
+grep -q "^self-drive: ok: clicking Move it there makes a whole copy" "$WORK/drive.txt" && [[ -x "$MOVED/Contents/MacOS/Moblee" ]] && ok "opened outside Applications, the app offers to move itself, and the button makes the copy" || bad "the app moves itself to Applications"
+codesign --verify --strict "$MOVED" 2>/dev/null && ok "the moved copy's signature is intact" || bad "the moved copy's signature is intact"
+xattr "$APP/Contents/Info.plist" | grep -q quarantine && ! xattr -r "$MOVED" 2>/dev/null | grep -q quarantine && ok "the download mark is cleared from the copy (so macOS runs it from where it is)" || bad "the download mark is cleared from the copy"
+[[ -x "$BIN" ]] && ok "a practice move leaves the original where it is" || bad "a practice move leaves the original where it is"
+for s in "move to Applications" welcome check-up name build hand-off home; do
   grep -q "^self-drive: $s" "$WORK/drive.txt" && ok "  reached: $s" || bad "  reached: $s"
 done
 grep -q "^self-drive: tiles waiting: trips, videos" "$WORK/drive.txt" && ok "home screen shows the two things agreed with Claude" || bad "home screen shows the two things agreed with Claude"
 grep -q "^self-drive: trips ended: .*done" "$WORK/drive.txt" && [[ -f "$WORK/home-drive/.claude/skills/trips/SKILL.md" ]] && ok "pressing Add on a quiet item adds it (the skill is really there)" || bad "pressing Add on a quiet item adds it"
 grep -q "^self-drive: videos ended: .*handedOver" "$WORK/drive.txt" && [[ -x "$WORK/home-drive/Library/Application Support/Moblee/run/add-videos.command" ]] && ok "a Terminal item is explained, then handed over as a command file" || bad "a Terminal item is explained, then handed over as a command file"
-grep -q "^python3 scripts/moblee-setup.py --only videos$" "$WORK/home-drive/Library/Application Support/Moblee/run/add-videos.command" && ok "the command file runs the pack's own checklist for that one item" || bad "the command file runs the pack's own checklist for that one item"
+CMD="$WORK/home-drive/Library/Application Support/Moblee/run/add-videos.command"
+grep -q "^python3 scripts/moblee-setup.py --only videos --yes$" "$CMD" && ok "the command file runs the pack's own checklist for that one item, without asking 'Start now?' a third time" || bad "the command file runs the pack's own checklist for that one item"
+bash -n "$CMD" 2>/dev/null && grep -q 'kill -9 "\$PPID"' "$CMD" && grep -q 'Apple_Terminal' "$CMD" && ok "the command file is sound, and ends Terminal's own shell before it can print 'Deleting expired sessions'" || bad "the command file is sound and silences Terminal's closing lines"
+grep -q "^self-drive: ok: the three cards are the pack's own" "$WORK/drive.txt" && ok "the Google tile says where to go, what to switch on by name, and how to tell it worked" || bad "the Google tile's three cards"
+grep -q "^self-drive: google ended: .*done" "$WORK/drive.txt" && grep -q '"item:google"' "$WORK/home-drive/.config/moblee/app-state.json" 2>/dev/null && ok "clicks inside Claude are finished by the owner pressing Done, and it stays done" || bad "a clicks item can be marked done"
 [[ "$(ls "$WORK/home-drive/Library/Application Support/Moblee/run/" | wc -l | tr -d " ")" == "1" ]] && ok "no other command file was written" || bad "no other command file was written"
 grep -q "^self-drive: skill gym-log ended: .*done" "$WORK/drive.txt" && [[ -f "$WORK/home-drive/.claude/skills/gym-log/.made-for-you" && ! -L "$WORK/home-drive/.claude/skills/gym-log" ]] && ok "a skill Claude drafted is shown, then added as ordinary files" || bad "a skill Claude drafted is shown, then added as ordinary files"
 grep -q "^self-drive: skill sneaky: .*blocked" "$WORK/drive.txt" && [[ ! -e "$WORK/home-drive/.claude/skills/sneaky" ]] && ok "a drafted skill that is a link to outside the wiki is refused" || bad "a drafted skill that is a link to outside the wiki is refused"

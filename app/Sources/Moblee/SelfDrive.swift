@@ -63,6 +63,23 @@ enum SelfDrive {
             say("ok: \(what)")
         }
 
+        // Started with --move-to <practice folder>, the app first offers to move
+        // itself to Applications, as it does when opened from Downloads. The
+        // real button is pressed; the copy must be whole; and nothing else may
+        // have started meanwhile. (A practice move leaves the original where it
+        // is and does not reopen the app; those two lines are the system's own.)
+        if let folder = Placement.practiceFolder {
+            await expect("opened outside Applications, the app offers to move itself first") { flow.offerMove }
+            say("move to Applications"); await pause(1.0)
+            click(bigButton)
+            await expect("clicking Move it there makes a whole copy and carries on", within: 60) {
+                !flow.offerMove
+                    && FileManager.default.isExecutableFile(atPath: folder.appendingPathComponent("Moblee.app/Contents/MacOS/Moblee").path)
+                    && FileManager.default.fileExists(atPath: folder.appendingPathComponent("Moblee.app/Contents/Resources/pack/scripts/install.sh").path)
+            }
+            await expect("the welcome screen is what follows, untouched") { flow.step == .welcome && flow.mode == .install }
+        }
+
         say("welcome"); await pause(1.5)
         click(bigButton)
         await expect("clicking Start opens the check-up") { flow.step == .checkup }
@@ -110,6 +127,7 @@ enum SelfDrive {
         {"requests": [
           {"kind": "item", "key": "trips", "why": "You said you travel most months.", "asked": "2026-09-19", "status": "waiting"},
           {"kind": "item", "key": "videos", "why": "You save videos to watch later.", "asked": "2026-09-19", "status": "waiting"},
+          {"kind": "item", "key": "google", "why": "Your calendar lives in Google.", "asked": "2026-09-20", "status": "waiting"},
           {"kind": "item", "key": "trips; touch /tmp/moblee-pwned", "why": "x", "status": "waiting"},
           {"kind": "skill", "key": "gym-log", "why": "You asked to log gym sets by saying log gym.", "status": "waiting"},
           {"kind": "skill", "key": "sneaky", "why": "Trust me.", "status": "waiting"},
@@ -172,6 +190,28 @@ enum SelfDrive {
         let videosState = flow.homeModel.tiles.first(where: { $0.key == "videos" })?.state
         say("videos ended: \(String(describing: videosState))")
 
+        // Clicks inside Claude (Google): the owner must be shown where to go,
+        // what to switch on by name and how to tell it worked, and must be able
+        // to say Done afterwards, since nothing outside Claude can see those
+        // connections. On the first stranger's run the tile said none of this
+        // and could never finish. (Done is pressed through the model here: the
+        // small button's place on the tile is not fixed.)
+        await expect("the big button moves on to Google") { flow.homeModel.nextTile?.key == "google" }
+        click(bigButton); say("explaining the clicks inside Claude")
+        await expect("the three cards are the pack's own: where, what by name, how to tell it worked") {
+            guard let t = flow.homeModel.explaining, t.key == "google", t.steps.count == 3 else { return false }
+            return t.steps[1][1].contains("Gmail") && t.steps[2][1].contains("calendar")
+        }
+        await pause(1.0)
+        click(bigButton)                      // "Show me"
+        await expect("Show me hands the item over") {
+            flow.homeModel.tiles.first(where: { $0.key == "google" })?.state == .handedOver
+        }
+        if let g = flow.homeModel.tiles.first(where: { $0.key == "google" }) { flow.homeModel.markDone(g) }
+        await pause(5)                        // longer than one re-read of the requests, which must not undo it
+        let googleState = flow.homeModel.tiles.first(where: { $0.key == "google" })?.state
+        say("google ended: \(String(describing: googleState))")
+
         // the drafted skills: wait for the pack's script to have looked at each
         let lookedBy = Date().addingTimeInterval(30)
         func skill(_ k: String) -> HomeModel.Tile? { flow.homeModel.tiles.first { $0.kind == .skill && $0.key == k } }
@@ -204,7 +244,7 @@ enum SelfDrive {
         let brainSame = (try? Data(contentsOf: skills.appendingPathComponent("brain/SKILL.md"))) == brainBefore
         let noSmuggle = !fm.fileExists(atPath: "/tmp/moblee-pwned")
             && !flow.homeModel.tiles.contains { $0.key.contains("/") || $0.key.contains(";") }
-        let ok = tripsState == .done && videosState == .handedOver && tripsThere
+        let ok = tripsState == .done && videosState == .handedOver && tripsThere && googleState == .done
             && skill("gym-log")?.state == .done && gymThere
             && skill("sneaky")?.state == .blocked && sneakyKept
             && skill("brain")?.state == .blocked && brainSame && noSmuggle
