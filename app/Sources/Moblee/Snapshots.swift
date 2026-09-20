@@ -146,11 +146,11 @@ enum Snapshots {
                   why: "You save YouTube videos to watch later.", detail: "About 4 min · 200 MB · free",
                   how: .terminal, paid: false),
             .init(kind: .item, key: "generation", title: "Create new images, video, voices and music",
-                  why: "You want a voice for your podcast.", detail: "About 5 min · 0 MB · can cost money",
+                  why: "You want a voice for your podcast.", detail: "About 5 min · can cost money",
                   how: .clicks, paid: true),
         ]
         var google = HomeModel.Tile(kind: .item, key: "google", title: "Gmail, Google Calendar and Google Drive",
-                                    why: "Your calendar lives in Google.", detail: "About 3 min · 0 MB · free",
+                                    why: "Your calendar lives in Google.", detail: "About 3 min · free",
                                     how: .clicks, paid: false)
         google.steps = [["Connectors", "The page opens. If not: in Claude, Settings, then Connectors"],
                         ["Switch on three", "Gmail, Google Calendar, Google Drive. Connect, then sign in"],

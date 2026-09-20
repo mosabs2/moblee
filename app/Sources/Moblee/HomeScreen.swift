@@ -52,7 +52,10 @@ struct HomeScreen: View {
             } else {
                 // The big button does the job the screen is for: it adds the next
                 // thing. Going back to Claude is the quiet one underneath.
-                ScreenFrame(sentence: home.nextTile == nil ? "Finish these where they opened, then tell Claude."
+                ScreenFrame(sentence: home.nextTile == nil
+                                ? (waiting.contains { $0.state == .handedOver && $0.how == .clicks }
+                                   ? "Finish these where they opened. Then press Done here."
+                                   : "Finish these where they opened, then tell Claude.")
                                                            : "Claude has these ready for you.",
                             buttonTitle: home.nextTile.map { $0.kind == .skill ? "Look at the first one" : "Add the first one" } ?? "Open Claude",
                             showsBack: false,

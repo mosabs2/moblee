@@ -235,7 +235,9 @@ final class HomeModel: ObservableObject {
                 let mb = c["space_mb"] as? Int ?? 0
                 let size = mb >= 1000 ? String(format: "%.1f GB", Double(mb) / 1000) : "\(mb) MB"
                 let paid = c["paid"] as? Bool ?? false
-                let detail = "About \(c["minutes"] as? Int ?? 1) min · \(size) · " + (paid ? "can cost money" : "free")
+                // Something that takes no room (a connection) says nothing about room: "0 MB" is noise.
+                let detail = "About \(c["minutes"] as? Int ?? 1) min · " + (mb > 0 ? "\(size) · " : "")
+                    + (paid ? "can cost money" : "free")
                 tile = Tile(kind: .item, key: key, title: c["title"] as? String ?? key,
                             why: why, detail: detail, how: how, paid: paid)
                 // The pack's own words for the three cards; a list of any other shape is ignored.

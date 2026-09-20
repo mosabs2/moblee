@@ -22,6 +22,23 @@ The app and companion release. v0.7.0 made the owner the one who installs, which
 - **The updater moves an old installed `get-started` skill to the backups folder** (`scripts/install-skills.sh`), once `companion` is installed. Left in place, it would answer to the same phrases.
 - `README.md`, `START_HERE.md`, `skills/README.md` and the install, skills, updating, safety and connections docs updated for all of the above.
 
+### Fixed before release, from the first run on a fresh account (20 September 2026)
+
+The signed app was run end to end on a new macOS account with nothing on it, and the owner's Claude there wrote up what it met. Every finding was acted on.
+
+- **The app moves itself to Applications.** Opened from Downloads it stayed there, twice over, and macOS ran it from a temporary copy: it could not be found by name, could not be replaced by a newer one, and would go when Downloads was tidied. It now offers the move on opening (one button; "Not now" asks again next time), clears the download mark from the copy so that the copy is run from where it is, puts the original in the Bin, and reopens. An account that may not write to `/Applications` gets `~/Applications`. The check-up reports an app that is not in either place (field guide F24).
+- **A connection the check cannot see is reported as "cannot see", never as "not working".** Google and ElevenLabs are connected to the owner's Claude account; the check asks Terminal's `claude`, which signs in separately, so an owner on the Claude app with all three Google connections working was told none worked and the tile could never finish. `--check` now prints `CANNOT SEE` with the question to ask Claude that proves it, exits 0 when nothing is seen to be broken, and records such items under `unseen` in `setup-state.json`; the weekly health check reads that as "cannot tell". The companion proves a `clicks` item by one small read-only call through the connection, and the owner finishes the tile with Done (field guide F25).
+- **The Google tile says where to go, what to switch on and how to tell it worked.** It used to open Claude and say nothing more. The three cards come from the pack (`steps` in `--list --json`), so Terminal owners read the same words.
+- **The starter's dates are filled in.** The log's first entry was headed `[YYYY-MM-DD HH:MM ±TZ]` for ever, and the dashboard showed it so. `scripts/stamp-starter-dates.py` stamps the log, the working-state page and the index at install; the updater runs it on older wikis, dating them from their first commit and touching only lines that still hold the placeholder.
+- **The Terminal window no longer asks "Start now?"** after the owner has pressed Add and then Open it, and no longer ends on Terminal's own "truncating history files" and "Deleting expired sessions", which read badly beside a promise that nothing is deleted: the window's throwaway shell is ended before it can print them.
+- **Wording.** "0.0 GB of space" for a 5 MB item is now "5 MB"; a tile that takes no room says nothing about room; "Quit Claude and open it again so it sees the new skills" (or connections) says which.
+- **The dashboard's inbox count** no longer counts the starter's own `HOW-TO-ADD-CONTENT.md` as pending. Its README says plainly that a browser which closes a tab without letting the page say goodbye leaves the server running for up to thirty minutes.
+- **`lint-v2.py --help`** prints help and runs nothing; a mistyped switch is refused. It used to run a full lint and write a report.
+- **The galaxy** leaves the blank daily-note template out of the picture and calls its count "pages with no links in or out", which is what it is; it was never the health check's "orphans", and the two are now not confused.
+- **`log-append.py` keeps the minutes of a zone that has them** (`+0530`); it used to cut every zone to the hour, which would have put entries in the wrong hour for India, Iran, Nepal and others. The vault rules show the form by example.
+- **`setup-state.json`** holds the whole list of what works under `working`, where it held only the last run's; the misleading `chosen` is gone (`last_run_items` says what it is).
+- **Housekeeping commits leave an un-ingested source alone**: the companion commits only the two files its request touches, and the vault rules say the same for any commit that is not an ingest.
+
 ### Verified
 
 Verification is recorded at release.

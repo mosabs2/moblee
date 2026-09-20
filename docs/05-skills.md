@@ -60,7 +60,7 @@ The analytical and ghost patterns are read-only; save-back routes through `wiki-
 
 **What it does.** Rebuilds the offline 3D view of your knowledge graph (`scripts/wiki-galaxy/build.py`, output in `outputs/galaxy/`) fresh from the wiki, then opens it in your default browser. Pages are nodes, wikilinks are edges, folders become colour groups automatically. Read-only on `wiki/`.
 
-**When to use.** Whenever you want to see the shape of what you have built, or to spot pages nothing links to (the build line counts orphans, which are lint fodder). Worth waiting until there are a few dozen pages; a five-page galaxy is not much to look at.
+**When to use.** Whenever you want to see the shape of what you have built, or to spot pages nothing links to (the build line counts pages with no links in or out; the health check's "orphans", pages nothing links to, are a different and stricter count). Worth waiting until there are a few dozen pages; a five-page galaxy is not much to look at.
 
 **Trigger phrases.** "Galaxy." / "Open the galaxy." / "Show me my brain in 3D."
 
