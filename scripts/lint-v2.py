@@ -855,9 +855,10 @@ SKILL_TOKEN_FLAG = 12_000
 def check_skill_weight(vault: Path, findings: list[str]) -> tuple[int, int]:
     """Report the token weight of every installed `SKILL.md` (informational).
 
-    Looks in two places: `skills/` inside the vault (for owners who keep their
-    skills under the vault so they travel with it) and `~/.claude/skills/`
-    (where the Moblee skills installer puts them). A skill loads only when it
+    Looks in three places: `skills/` inside the vault (for owners who keep their
+    skills under the vault so they travel with it), `~/.claude/skills/` (where
+    the Moblee skills installer puts them for Claude) and `~/.agents/skills/`
+    (where it puts them for ChatGPT). A skill loads only when it
     is invoked, so this is not part of the always-loaded tax, but a heavy skill
     on a daily pattern is a daily cost. Never trims, never blocks; both
     locations missing means a silent skip.
@@ -865,6 +866,7 @@ def check_skill_weight(vault: Path, findings: list[str]) -> tuple[int, int]:
     locations = [
         (vault / "skills", "skills/"),
         (Path.home() / ".claude" / "skills", "~/.claude/skills/"),
+        (Path.home() / ".agents" / "skills", "~/.agents/skills/"),
     ]
     weights: list[tuple[int, str]] = []
     for folder, label in locations:
@@ -1748,7 +1750,8 @@ def _installed_now(key: str) -> bool | None:
     if key == "videos":
         return any(Path(d, "yt-dlp").exists() for d in ("/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"))
     if key == "x-capture":
-        return (Path.home() / ".claude" / "skills" / "x-capture").is_dir()
+        return any((Path.home() / d / "skills" / "x-capture").is_dir()
+                   for d in (".claude", ".agents"))
     return None
 
 
