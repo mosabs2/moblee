@@ -1515,12 +1515,12 @@ def scan_patch(text):
 
 
 BLOCK_MSG = (
-    "Blocked by the vault safety gate (~/.claude/hooks/bash-guard.py): %s. "
+    "Blocked by the vault safety gate (bash-guard.py): %s. "
     "This is on the never-list (delete, overwrite, move out of the vault, "
     "force-push, history rewrite). Do not look for another spelling of the "
     "same action. Keep moves and copies inside the vault (raw/processed/, "
     "archive/, outputs/), append rather than overwrite, and write new files "
-    "with the Write tool; deleting is allowed only for throwaway files under "
+    "with your file-writing tool; deleting is allowed only for throwaway files under "
     "/tmp, $TMPDIR or the caches, named by a resolvable path. If something "
     "else genuinely needs deleting, restoring or rewriting, tell the owner "
     "exactly what and why and let them do it themselves in Finder or "
