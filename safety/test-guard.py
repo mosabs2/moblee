@@ -131,6 +131,12 @@ def build_fixture():
     # a symlink from the throwaway area back into the vault (must still block)
     os.symlink(os.path.join(vault, "wiki"), os.path.join(tmpdir, "link"))
     os.makedirs(os.path.join(root, ".cache", "recall"), exist_ok=True)
+    # a second wiki, recognised by AGENTS.md alone (a ChatGPT-only install)
+    other = os.path.join(root, "AgentsVault")
+    write(os.path.join(other, "AGENTS.md"), "# AGENTS.md\n")
+    write(os.path.join(other, "wiki", "P.md"), "# P\n")
+    os.makedirs(os.path.join(other, "outputs"))
+    write(os.path.join(tmpdir, "scratch.txt"), "scratch\n")
     return root, vault, tmpdir
 
 
@@ -582,6 +588,51 @@ CONTRACT = [
 ]
 
 
+def patch(*lines):
+    return "*** Begin Patch\n" + "\n".join(lines) + "\n*** End Patch"
+
+
+# ChatGPT's agent (Codex) edits files through apply_patch, and a patch can
+# delete, move and write over. (label, tool_name, command, cwd, expected);
+# cwd is "vault", "agents-wiki" (the AGENTS.md wiki's wiki/ folder) or None.
+PATCH = [
+    ("patch: delete a page", "apply_patch", patch("*** Delete File: wiki/A.md"), "vault", 2),
+    ("patch: delete a page by absolute path", "apply_patch", patch("*** Delete File: {VAULT}/wiki/A.md"), "vault", 2),
+    ("patch: delete CLAUDE.md", "apply_patch", patch("*** Delete File: CLAUDE.md"), "vault", 2),
+    ("patch: delete a script", "apply_patch", patch("*** Delete File: scripts/ok.py"), "vault", 2),
+    ("patch: delete with no cwd", "apply_patch", patch("*** Delete File: wiki/A.md"), None, 2),
+    ("patch: delete hidden after an ordinary edit", "apply_patch",
+     patch("*** Update File: wiki/A.md", "@@", "-# A", "+# A, edited", "*** Delete File: wiki/Index.md"), "vault", 2),
+    ("patch: delete through the throwaway symlink", "apply_patch", patch("*** Delete File: {TMPDIR}/link/A.md"), "vault", 2),
+    ("patch: delete a throwaway file", "apply_patch", patch("*** Delete File: {TMPDIR}/scratch.txt"), "vault", 0),
+    ("patch: add over an existing page", "apply_patch", patch("*** Add File: wiki/A.md", "+# emptied"), "vault", 2),
+    ("patch: add over CLAUDE.md", "apply_patch", patch("*** Add File: CLAUDE.md", "+# new rules"), "vault", 2),
+    ("patch: add a new page", "apply_patch", patch("*** Add File: wiki/New Page.md", "+# New"), "vault", 0),
+    ("patch: ordinary edit", "apply_patch", patch("*** Update File: wiki/A.md", "@@", "-# A", "+# A, edited"), "vault", 0),
+    ("patch: a page whose text quotes a delete line", "apply_patch",
+     patch("*** Add File: wiki/About patches.md", "+A patch deletes with a line reading:", "+*** Delete File: wiki/A.md"), "vault", 0),
+    ("patch: move a page inside the wiki", "apply_patch",
+     patch("*** Update File: wiki/A.md", "*** Move to: raw/processed/A.md"), "vault", 0),
+    ("patch: move a page out of the wiki", "apply_patch",
+     patch("*** Update File: wiki/A.md", "*** Move to: ../A.md"), "vault", 2),
+    ("patch: move a page to /tmp", "apply_patch",
+     patch("*** Update File: wiki/A.md", "*** Move to: /tmp/A.md"), "vault", 2),
+    ("patch: move a page over another page", "apply_patch",
+     patch("*** Update File: wiki/A.md", "*** Move to: wiki/Index.md"), "vault", 2),
+    ("patch: move a page out, no cwd", "apply_patch",
+     patch("*** Update File: wiki/A.md", "*** Move to: elsewhere/A.md"), None, 2),
+    ("patch through the shell: heredoc delete", "Bash",
+     "apply_patch <<'EOF'\n" + patch("*** Delete File: wiki/A.md") + "\nEOF", "vault", 2),
+    ("patch through the shell: ordinary edit", "Bash",
+     "apply_patch <<'EOF'\n" + patch("*** Update File: wiki/A.md", "@@", "-# A", "+# A, edited") + "\nEOF", "vault", 0),
+    ("AGENTS.md wiki: move within it from a subfolder", "Bash", "mv P.md ../outputs/P.md", "agents-wiki", 0),
+    ("AGENTS.md wiki: move out of it from a subfolder", "Bash", "mv P.md ../../P.md", "agents-wiki", 2),
+    ("AGENTS.md wiki: patch deletes its page", "apply_patch", patch("*** Delete File: P.md"), "agents-wiki", 2),
+    ("AGENTS.md wiki: write over AGENTS.md", "Bash", "echo x > ../AGENTS.md", "agents-wiki", 2),
+    ("other tools still pass", "update_plan", "anything", "vault", 0),
+]
+
+
 # ------------------------------------------------------------------ runner
 def run(payload, cwd, env):
     if isinstance(payload, str):
@@ -647,6 +698,20 @@ def main():
         else:
             failures += 1
         rows.append(("PASS" if ok else "FAIL", "contract", label, rc, expect, ""))
+
+    agents_wiki = os.path.join(root, "AgentsVault", "wiki")
+    for label, tool, command, where, expect in PATCH:
+        command = command.replace("{VAULT}", vault).replace("{TMPDIR}", tmpdir)
+        cwd = {"vault": vault, "agents-wiki": agents_wiki}.get(where)
+        rc, err = run({"tool_name": tool, "tool_input": {"command": command}}, cwd, env)
+        ok = rc == expect
+        if ok and expect == 2:
+            blocked_ok += 1
+        elif ok:
+            allowed_ok += 1
+        else:
+            failures += 1
+        rows.append(("PASS" if ok else "FAIL", "patch", label, rc, expect, ""))
 
     # Block message shape: one paragraph, fixed opening.
     rc, err = run({"tool_name": "Bash", "tool_input": {"command": "rm -rf wiki"}}, vault, env)

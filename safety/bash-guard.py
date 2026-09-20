@@ -57,11 +57,23 @@ Design contract:
 Hook payload: {"tool_name": "Bash", "tool_input": {"command": "…"}, "cwd": "…"}
 (cwd may be absent — the vault-relative rules then degrade to name checks).
 
-Per-machine: lives in ~/.claude/hooks/ on the Mac that runs Claude Code
-against the vault, wired in ~/.claude/settings.json as a PreToolUse hook
-matching Bash by safety/install-safety.py. Part of Moblee from v0.5
-(September 2026); ported from the maintainer's vault. v4 (16 September 2026)
-followed an adversarial review of v3; safety/test-guard.py is the suite.
+Two assistants send that payload, in the same shape. Claude Code sends it
+for the shell only, and has no other tool that removes a file. ChatGPT's
+agent (Codex) sends it for the shell and ALSO for its file-editing tool,
+as {"tool_name": "apply_patch", "tool_input": {"command": "<patch text>"}},
+and a patch can delete a file ("*** Delete File:"), move one ("*** Move
+to:") or write over one ("*** Add File:" on a path that exists). scan_patch
+reads those three lines and nothing else: an ordinary edit ("*** Update
+File:" with hunks) is never refused, as an Edit is never refused on Claude.
+(Payload shape and patch grammar confirmed by a live Codex run and from
+codex-rs/apply-patch/src/parser.rs, 20 September 2026.)
+
+Per-machine: lives in ~/.claude/hooks/ (Claude Code) or ~/.codex/hooks/
+(ChatGPT), wired as a PreToolUse hook by safety/install-safety.py, matching
+Bash on Claude Code and Bash|apply_patch on ChatGPT. Part of Moblee from
+v0.5 (September 2026); ported from the maintainer's vault. v4 (16 September
+2026) followed an adversarial review of v3; safety/test-guard.py is the
+suite. A wiki is recognised by CLAUDE.md or AGENTS.md beside a wiki/ folder.
 """
 import hashlib
 import json
@@ -124,7 +136,8 @@ OTHER_INTERP = {"deno", "bun", "lua", "tclsh", "expect"}
 DELETERS = {"rm", "rmdir", "unlink"}
 HARD_DELETERS = {"trash", "truncate", "shred", "srm", "ditto", "rimraf"}
 CONTENT_DIRS = ("wiki", "raw", "Clippings", "Daily Notes")
-CONTENT_FILES = ("CLAUDE.md", "VERSION")
+INSTRUCTION_FILES = ("CLAUDE.md", "AGENTS.md")
+CONTENT_FILES = INSTRUCTION_FILES + ("VERSION",)
 ASSIGN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 VAR_HEAD_RE = re.compile(r"^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$")
 VAR_REF_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)")
@@ -267,7 +280,7 @@ def find_vault(cwd):
     p = os.path.abspath(cwd)
     git_root = None
     while True:
-        if (os.path.isfile(os.path.join(p, "CLAUDE.md"))
+        if (any(os.path.isfile(os.path.join(p, f)) for f in INSTRUCTION_FILES)
                 and os.path.isdir(os.path.join(p, "wiki"))):
             return p
         if git_root is None and os.path.exists(os.path.join(p, ".git")):
@@ -1449,6 +1462,58 @@ def scan_command(command, depth=0):
     return None
 
 
+# ---------------------------------------------------------------- patches
+PATCH_OP_RE = re.compile(
+    r"^\*\*\* (Delete File|Move to|Add File|Update File): (.+?)[ \t]*$", re.M)
+
+
+def scan_patch(text):
+    """Reason string if an apply_patch body deletes a file, moves one out of
+    the vault or over another, or adds a file where one already exists.
+    Operation lines start at column 0; a page's own text inside a patch is
+    prefixed with '+', '-' or a space, so it can never be read as one."""
+    moving = None
+    for m in PATCH_OP_RE.finditer(text):
+        op, path = m.group(1), m.group(2).strip()
+        if op == "Update File":
+            moving = path
+            continue
+        if op == "Delete File":
+            moving = None
+            if throwaway_target(path):
+                continue
+            return "deletes a file (apply_patch, Delete File: %s)" % path
+        if op == "Add File":
+            moving = None
+            target = resolve(path)
+            if target and os.path.exists(target):
+                return ("writes over an existing file (apply_patch, "
+                        "Add File: %s)" % path)
+            continue
+        # Move to: the destination of the Update File named just above.
+        sink = forbidden_destination(path)
+        if sink:
+            return "apply_patch move %s" % sink
+        src, dest = resolve(moving or ""), resolve(path)
+        vault = STATE["vault"]
+        if vault and (src is None or inside(src, vault)):
+            if dest is None or not inside(dest, vault):
+                return ("moves vault material out of the vault "
+                        "(apply_patch, Move to: %s)" % path)
+        if dest and os.path.exists(dest):
+            return ("moves over an existing file (apply_patch, "
+                    "Move to: %s)" % path)
+        if not vault and is_content_path(moving or ""):
+            # No cwd, so nothing resolves: a content page may move only to
+            # another content location, judged by name.
+            text_dest = os.path.normpath(path).lstrip("./")
+            if not any(text_dest.startswith(d + "/") for d in CONTENT_DIRS):
+                return ("moves vault material out of the vault "
+                        "(apply_patch, Move to: %s)" % path)
+        moving = None
+    return None
+
+
 BLOCK_MSG = (
     "Blocked by the vault safety gate (~/.claude/hooks/bash-guard.py): %s. "
     "This is on the never-list (delete, overwrite, move out of the vault, "
@@ -1466,7 +1531,8 @@ BLOCK_MSG = (
 def main():
     try:
         data = json.load(sys.stdin)
-        if data.get("tool_name") != "Bash":
+        tool = data.get("tool_name")
+        if tool not in ("Bash", "apply_patch"):
             sys.exit(0)
         command = (data.get("tool_input") or {}).get("command", "")
         if not command or not isinstance(command, str):
@@ -1480,9 +1546,16 @@ def main():
     except Exception:
         sys.exit(0)  # fail open only on a malformed payload
     try:
-        reason = scan_command(command)
+        if tool == "apply_patch":
+            reason = scan_patch(command)
+        else:
+            reason = scan_command(command)
+            # A patch can also arrive through the shell, as a heredoc fed to
+            # an apply_patch command; its operation lines are read the same.
+            if not reason and "*** Begin Patch" in command:
+                reason = scan_patch(command)
     except Exception:
-        reason = None  # framework bug: never freeze Claude Code
+        reason = None  # framework bug: never freeze the assistant
     if reason:
         sys.stderr.write(BLOCK_MSG % reason)
         sys.exit(2)
