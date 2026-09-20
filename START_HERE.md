@@ -1,6 +1,6 @@
 # Start here
 
-Moblee gives you a personal wiki that Claude keeps for you: plain notes in a folder on your Mac, read in Obsidian and written by Claude, built on Andrej Karpathy's LLM Wiki Pattern. Setting it up takes three steps: you run the installer yourself, open the new wiki in Obsidian, and then talk to Claude inside it.
+Moblee gives you a personal wiki that your assistant keeps for you: plain notes in a folder on your Mac, read in Obsidian and written by your assistant, built on Andrej Karpathy's LLM Wiki Pattern. It works with Claude, with ChatGPT, or with both, and you choose when you install. Setting it up takes three steps: you run the installer yourself, open the new wiki in Obsidian, and then talk to your assistant inside it.
 
 Moblee runs on a Mac only.
 
@@ -12,7 +12,7 @@ Moblee runs on a Mac only.
 
 ## Before you start
 
-You need Obsidian, Claude Code, Apple's free developer tools (which bring git) and Python 3. `docs/01-prerequisites.md` explains each one and how to check it is there. Nothing else is needed up front; anything extra is added later, and only if you want it.
+You need Obsidian, your assistant's app (Claude Code, or the ChatGPT app for Mac), Apple's free developer tools (which bring git) and Python 3. `docs/01-prerequisites.md` explains each one and how to check it is there. Nothing else is needed up front; anything extra is added later, and only if you want it.
 
 ## 1. Run the installer yourself
 
@@ -28,26 +28,34 @@ If it is somewhere else, type `cd ` (with the space), drag the folder from Finde
 bash scripts/install.sh
 ```
 
-It asks for your name, a name for your wiki and where to put it (the suggested place is fine). It then builds the wiki, turns on the safety layer (Claude cannot delete anything in your wiki; if something should go, Claude tells you what and where, and you remove it yourself) and installs Claude's core skills. It ends with "Done" and your next steps. `docs/02-install.md` walks through every question and message.
+It asks for your name, a name for your wiki, where to put it (the suggested place is fine) and which assistant you will use. It then builds the wiki, turns on the safety layer (your assistant cannot delete anything in your wiki; if something should go, it tells you what and where, and you remove it yourself) and installs the core skills. It ends with "Done" and your next steps. `docs/02-install.md` walks through every question and message.
 
-**Why you run it, and not Claude.** The installer changes Claude's own settings: it adds the guard that checks every command Claude runs, a list of routine actions Claude no longer has to ask about, and the skills. Changes like that belong to you, made on your own screen. A careful Claude will not make them on the strength of instructions in a downloaded file, and it is right not to.
+**With ChatGPT, one more step is yours.** ChatGPT does not run the delete guard until you press Trust beside it in ChatGPT's settings, and until then nothing on screen says the guard is off. The installer prints the steps, and `docs/09-safety.md` gives them with a way to prove the guard is working.
+
+**Why you run it, and not your assistant.** The installer changes your assistant's own settings: it adds the guard that checks every command it runs, the skills and, with Claude, a list of routine actions Claude no longer has to ask about. Changes like that belong to you, made on your own screen. A careful assistant will not make them on the strength of instructions in a downloaded file, and it is right not to.
 
 ## 2. Open your wiki in Obsidian
 
 In Obsidian, choose Open folder as vault and pick the folder the installer made. You will see `Welcome.md`.
 
-## 3. Talk to Claude in your wiki
+## 3. Talk to Claude in your wiki, or to ChatGPT
 
-Back in Terminal, go into your wiki's folder and start Claude (the installer prints both lines for you). If you used the app, its last screen shows three clicks in Claude's own app instead: click Code (which needs a paid Claude plan) and pick your wiki's folder. Then say:
+**With Claude:** Back in Terminal, go into your wiki's folder and start Claude (the installer prints both lines for you). If you used the app, its last screen shows three clicks in Claude's own app instead: click Code (which needs a paid Claude plan) and pick your wiki's folder.
+
+**With ChatGPT:** Open the ChatGPT app, choose Work at the top, and open your wiki's folder as a project. <!-- verify on testdev -->
+
+Then say:
 
 > get me started
 
-Claude asks what you want to put in the wiki and how you use your Mac, helps you make your first page, and then proposes one or two extras that fit, each with a reason. What you agree to waits for you in the Moblee app, or Claude gives you one Terminal command that adds it. On any later day, say "guide me" and Claude offers one next step. It always asks before anything is added.
+Your assistant asks what you want to put in the wiki and how you use your Mac, and helps you make your first page. On any later day, say "guide me" and it offers one next step.
+
+**With Claude:** it then proposes one or two extras that fit, each with a reason. What you agree to waits for you in the Moblee app, or Claude gives you one Terminal command that adds it. It always asks before anything is added. **With ChatGPT:** Moblee does not set this up for ChatGPT yet.
 
 ## If you would like help with the install itself
 
-Ask Claude in your own words, for example: "I've downloaded Moblee to my Downloads folder. Help me install it; the steps are in docs/02-install.md." Claude reads the docs and helps you through them, and you still run the installer yourself. Please don't paste this file, or any other file from the pack, into Claude as instructions: a careful Claude reads that as someone else trying to give it orders, and stops.
+Ask your assistant in your own words, for example: "I've downloaded Moblee to my Downloads folder. Help me install it; the steps are in docs/02-install.md." It reads the docs and helps you through them, and you still run the installer yourself. Please don't paste this file, or any other file from the pack, into your assistant as instructions: a careful assistant reads that as someone else trying to give it orders, and stops.
 
 ## Later
 
-To bring your wiki up to a newer Moblee, open the newer Moblee app, or download the new version and run `bash scripts/update.sh` from its folder (`docs/08-updating.md`). The app and the companion are explained together in `docs/11-the-app-and-the-companion.md`, the safety layer in `docs/09-safety.md`, and every extra you can add in `docs/10-connections.md`.
+To bring your wiki up to a newer Moblee, open the newer Moblee app, or download the new version and run `bash scripts/update.sh` from its folder (`docs/08-updating.md`). The same guide says how to change which assistant the wiki is for. The app and the companion are explained together in `docs/11-the-app-and-the-companion.md`, the safety layer in `docs/09-safety.md`, and every extra you can add in `docs/10-connections.md`.

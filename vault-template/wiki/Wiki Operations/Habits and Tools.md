@@ -4,7 +4,7 @@ last_reviewed:
 
 # Habits and Tools
 
-How the owner works day to day, how they like Claude to work with them, and what has been added to Moblee to match. Claude writes this page from conversation: the first "get me started" conversation, the corrections the owner makes along the way, and the setup reviews. It is how Claude knows what to suggest, what not to suggest again, and how to talk. See [[Index]] for the rest of the wiki.
+How the owner works day to day, how they like the assistant to work with them, and what has been added to Moblee to match. The assistant writes this page from conversation: the first "get me started" conversation, the corrections the owner makes along the way, and the setup reviews. It is how the assistant knows what to suggest, what not to suggest again, and how to talk. See [[Index]] for the rest of the wiki.
 
 ## How the owner works
 
@@ -16,7 +16,7 @@ How the owner works day to day, how they like Claude to work with them, and what
 
 ## Working with the owner
 
-*(One dated line for every correction the owner makes to how Claude works, in their words, written the moment it is made. For example: - 19 September 2026: "show me the page before you commit it".)*
+*(One dated line for every correction the owner makes to how the assistant works, in their words, written the moment it is made. For example: - 19 September 2026: "show me the page before you commit it".)*
 
 ## Waiting in Moblee
 
@@ -32,7 +32,7 @@ How the owner works day to day, how they like Claude to work with them, and what
 
 ## Said no to
 
-*(One line per item the owner turned down, in the same form: a dash, the key in backticks, the date, and the reason if one was given. Claude does not suggest these again for ninety days unless the owner raises them, and the weekly health check stays quiet about them too. A no to the "get me started" conversation or a setup review is written with the key `get-started`.)*
+*(One line per item the owner turned down, in the same form: a dash, the key in backticks, the date, and the reason if one was given. The assistant does not suggest these again for ninety days unless the owner raises them, and the weekly health check stays quiet about them too. A no to the "get me started" conversation or a setup review is written with the key `get-started`.)*
 
 ## Review history
 

@@ -1,6 +1,6 @@
 # Index
 
-Personal knowledge base following the [[Karpathy LLM Wiki Pattern]]. Maintained by Claude.
+Personal knowledge base following the [[Karpathy LLM Wiki Pattern]]. Maintained by the owner's assistant.
 
 Last updated: [Date], initial setup.
 
@@ -17,7 +17,7 @@ Last updated: [Date], initial setup.
 ## Schema
 
 The schema is governed by:
-- `CLAUDE.md` (vault root): rules and conventions
+- `CLAUDE.md` (vault root; `AGENTS.md` with ChatGPT): rules and conventions
 - [[How to Use This Wiki]]: user-facing guide
 - [[Karpathy LLM Wiki Pattern]]: methodology reference
 - [[_context]]: working state

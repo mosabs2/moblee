@@ -521,21 +521,28 @@ echo "==================================================================="
 echo "  Your wiki is ready."
 echo "==================================================================="
 echo ""
-echo "Moblee can also connect your wiki to your Mac's Calendar, Mail and"
-echo "Reminders, Google, GitHub and Chrome, and add tools for videos, documents"
-echo "and editing. Rather than tick through a long list now, the easier way is"
+if [[ "$ASSISTANT" != "chatgpt" ]]; then
+  echo "Moblee can also connect your wiki to your Mac's Calendar, Mail and"
+  echo "Reminders, Google, GitHub and Chrome, and add tools for videos, documents"
+  echo "and editing. Rather than tick through a long list now, the easier way is"
+fi
 case "$ASSISTANT" in
   chatgpt)
-    echo "to open ChatGPT, choose Work, add your new wiki folder as a project, and"
+    echo "Open ChatGPT, choose Work, add your new wiki folder as a project, and"
     echo "say: get me started"
-    echo "ChatGPT asks how you use your Mac and what you read, watch and make, then"
-    echo "suggests only what fits and gives you one command to install it."
+    echo "ChatGPT asks how you work and what you read, watch and make, and helps"
+    echo "you put your first pages in."
+    echo ""
+    echo "Moblee's optional extras (Calendar, Mail, Google, videos and the rest)"
+    echo "are set up for Claude. Moblee does not set them up for ChatGPT yet."
     ;;
   both)
     echo "to open Claude or ChatGPT in your new wiki and say: get me started"
     echo "(in ChatGPT, choose Work and add your new wiki folder as a project first)."
     echo "It asks how you use your Mac and what you read, watch and make, then"
     echo "suggests only what fits and gives you one command to install it."
+    echo "The extras it installs are set up for Claude; Moblee does not set them"
+    echo "up for ChatGPT yet."
     ;;
   *)
     echo "to open Claude in your new wiki and say: get me started"

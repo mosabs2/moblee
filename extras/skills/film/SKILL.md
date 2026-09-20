@@ -1,11 +1,11 @@
 ---
 name: film
-description: Make or edit a video from a plain-words description, end to end, with Claude doing every step and the owner only watching finished drafts. Covers cutting, trimming and splicing clips, crossfades, title cards, moving text, captions and subtitles, music and narration under picture, and colour. Simple cuts run through ffmpeg; composed pieces are built as a Remotion project in the studio folder <vault>/outputs/film/<project>/. Trigger when the owner says "make a film", "make a video", "edit this video", "cut these clips together", "trim this clip", "join these videos", "add a title", "add captions", "add subtitles", "put music under this", "add narration", "colour grade this", "make it brighter", "re-cut", "try another version", or hands over a video file with an instruction about how it should look. Do not trigger on watching or summarising a video (the watch plugin does that), on audio-only work (the audio skill), on still pictures (the pictures skill), or on PDF renders (wiki-to-pdf).
+description: Make or edit a video from a plain-words description, end to end, with the assistant doing every step and the owner only watching finished drafts. Covers cutting, trimming and splicing clips, crossfades, title cards, moving text, captions and subtitles, music and narration under picture, and colour. Simple cuts run through ffmpeg; composed pieces are built as a Remotion project in the studio folder <vault>/outputs/film/<project>/. Trigger when the owner says "make a film", "make a video", "edit this video", "cut these clips together", "trim this clip", "join these videos", "add a title", "add captions", "add subtitles", "put music under this", "add narration", "colour grade this", "make it brighter", "re-cut", "try another version", or hands over a video file with an instruction about how it should look. Do not trigger on watching or summarising a video (the watch plugin does that), on audio-only work (the audio skill), on still pictures (the pictures skill), or on PDF renders (wiki-to-pdf).
 ---
 
 # film
 
-The owner describes the film; Claude makes it and shows a finished draft. The owner never opens an editor, drags a clip or types a command. Every step below is Claude's, and the only thing the owner does is watch a draft and say, in ordinary words, what should change.
+The owner describes the film; the assistant makes it and shows a finished draft. The owner never opens an editor, drags a clip or types a command. Every step below is the assistant's, and the only thing the owner does is watch a draft and say, in ordinary words, what should change.
 
 ## Before starting: check the tools
 
@@ -20,7 +20,7 @@ grep -c "remotion@remotion" ~/.claude/plugins/installed_plugins.json
 grep -c "watch@" ~/.claude/plugins/installed_plugins.json
 ```
 
-If ffmpeg is missing, nothing in this skill can run: say so plainly and tell the owner that the Moblee setup adds it, by running `python3 scripts/moblee-setup.py` from the Moblee pack folder, whose location is recorded in `~/.config/moblee/package-path`. If only Node or the Remotion plugin is missing, simple cuts still work through ffmpeg, but titles with movement and designed captions do not; say which part is unavailable and point to the same setup command. The Remotion plugin supplies the `remotion-*` skills (best practice for compositions, captions, rendering); read the relevant one before writing any composition.
+If ffmpeg is missing, nothing in this skill can run: say so plainly and tell the owner that the Moblee setup adds it, by running `python3 scripts/moblee-setup.py` from the Moblee pack folder, whose location is recorded in `~/.config/moblee/package-path`. If only Node or the Remotion plugin is missing, simple cuts still work through ffmpeg, but titles with movement and designed captions do not; say which part is unavailable and point to the same setup command. The Remotion plugin supplies the `remotion-*` skills (best practice for compositions, captions, rendering); read the relevant one before writing any composition. The Remotion and watch plugins are Claude plugins. Moblee does not set them up for ChatGPT yet.
 
 ## The studio folder
 
@@ -34,7 +34,7 @@ Every film gets its own folder inside the vault, created on first use:
   remotion/    the Remotion project, only when the film needs one
 ```
 
-`<vault>` is the vault root (the folder holding `CLAUDE.md` and `wiki/`). Name `<project>` from the owner's description in a few plain words ("Garden Party", "Lisbon Trip"). Create it with `mkdir -p "outputs/film/Garden Party/sources"`, run from the vault root, and the same for `work` and `out`. Quote every path: the folder name has spaces. The studio sits inside the vault because the vault's delete guard refuses to copy vault material out of the vault, and because drafts belong with the wiki that describes them.
+`<vault>` is the vault root (the folder holding `wiki/` and the rules file, `CLAUDE.md` or `AGENTS.md`). Name `<project>` from the owner's description in a few plain words ("Garden Party", "Lisbon Trip"). Create it with `mkdir -p "outputs/film/Garden Party/sources"`, run from the vault root, and the same for `work` and `out`. Quote every path: the folder name has spaces. The studio sits inside the vault because the vault's delete guard refuses to copy vault material out of the vault, and because drafts belong with the wiki that describes them.
 
 **Originals are never touched.** A source already inside the vault (in `raw/`, say) is read where it is, with `ffmpeg -i "raw/<file>"`, which never writes to it. A source from anywhere else (the Desktop, Downloads, Photos exports) is copied in first with `cp -n "<original>" "outputs/film/<project>/sources/"`, and only the copy is used. Nothing is ever deleted or overwritten: every ffmpeg command carries `-n` (refuse to overwrite), every new version gets a new filename, and a rejected draft stays in `out/` beside the next one. If a folder fills up, move old work into `work/old/`; never remove it.
 
@@ -105,7 +105,7 @@ Titles: the font path must exist; `/System/Library/Fonts/Supplemental/Arial.ttf`
 
 Words on screen are claims, so they are never guessed. There are three routes, in this order:
 
-1. **The owner supplies the words** (a script, a lyric sheet, a speech they wrote). Claude times them against the sound.
+1. **The owner supplies the words** (a script, a lyric sheet, a speech they wrote). The assistant times them against the sound.
 2. **Transcription**, only if a transcription key exists. The watch plugin transcribes a local file from its own captions or, failing that, through a Whisper service (Groq or OpenAI) using a key kept in `~/.config/watch/.env`. Check for a key without revealing it: `grep -c -E "^(GROQ|OPENAI)_API_KEY=." ~/.config/watch/.env` (a count of 1 or 2 means a key is set). Transcription sends the extracted sound, not the video, to that service.
 3. **No key**: ask. The owner can supply the words, set up a key through the watch plugin's own setup, or go without captions. Do not transcribe by ear from frames.
 

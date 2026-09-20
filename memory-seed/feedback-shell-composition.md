@@ -5,6 +5,8 @@ metadata:
   type: feedback
 ---
 
+This note applies with Claude.
+
 Write shell commands plainly. No `$(...)`, no backticks, no heredocs, no `VAR=value cmd` prefixes. Anything that needs logic goes into a file under `scripts/` (written with the file tools) and the file is run.
 
 **Why:** Claude Code's own safety check prompts the owner on those shapes whatever the allow list says. A vault that prompts constantly trains its owner to click yes without reading, which defeats every other safeguard.

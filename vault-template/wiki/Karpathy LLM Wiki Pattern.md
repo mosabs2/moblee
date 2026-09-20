@@ -4,7 +4,7 @@ A methodology for building personal knowledge bases using LLMs, originated by An
 
 ## Core Idea
 
-Instead of retrieving raw documents from scratch on every question (the way RAG systems, NotebookLM, and ChatGPT file uploads work), the LLM incrementally builds and maintains a persistent wiki, a structured, interlinked collection of markdown files. When a new source is added, the LLM reads it, extracts key information, and integrates it into the existing wiki. The knowledge is compiled once and kept current, not re-derived on every query.
+Instead of retrieving raw documents from scratch on every question (the way RAG systems, NotebookLM, and file uploads to a chat work), the LLM incrementally builds and maintains a persistent wiki, a structured, interlinked collection of markdown files. When a new source is added, the LLM reads it, extracts key information, and integrates it into the existing wiki. The knowledge is compiled once and kept current, not re-derived on every query.
 
 The wiki is a persistent, compounding artifact. Cross-references are already in place. Contradictions have been flagged. Synthesis reflects everything ingested to date.
 
@@ -12,7 +12,7 @@ The wiki is a persistent, compounding artifact. Cross-references are already in 
 
 1. **Raw sources**: a curated collection of source documents (articles, papers, images, data files). Immutable, the LLM reads from them but never modifies them.
 2. **The wiki**: a directory of LLM-generated markdown files: summaries, entity pages, concept pages, comparisons, an index, a synthesis. The LLM owns this layer entirely.
-3. **The schema**: a configuration document (e.g., `CLAUDE.md`) that tells the LLM how the wiki is structured, what the conventions are, and what workflows to follow. The human and LLM co-evolve this over time.
+3. **The schema**: a configuration document (e.g., `CLAUDE.md` or `AGENTS.md`) that tells the LLM how the wiki is structured, what the conventions are, and what workflows to follow. The human and LLM co-evolve this over time.
 
 ## Core Operations
 
@@ -34,7 +34,7 @@ Karpathy also introduced the concept of the "idea file": in the era of LLM agent
 
 ## This Wiki's Implementation
 
-This vault follows the Karpathy pattern using Obsidian as the reader and Claude (via Cowork or Claude Code) as the LLM maintainer. See [[How to Use This Wiki]] for practical usage and `CLAUDE.md` (at the vault root) for the full schema.
+This vault follows the Karpathy pattern using Obsidian as the reader and the owner's assistant as the LLM maintainer: Claude (via Cowork or Claude Code), ChatGPT (via the ChatGPT app), or both. See [[How to Use This Wiki]] for practical usage and `CLAUDE.md` (`AGENTS.md` with ChatGPT) at the vault root for the full schema.
 
 ## Source
 

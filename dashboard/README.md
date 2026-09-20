@@ -28,6 +28,13 @@ until it has heard nothing for thirty minutes, and then it stops by itself.
 Requirements: Python 3.8+ (standard library only, nothing to install) and the
 `claude` CLI on your PATH for the Ask tab.
 
+**With Claude:** Every ask, every quick action and the History tab run on
+Claude Code.
+
+**With ChatGPT:** Moblee does not set this up for ChatGPT yet. The state, log
+and chart views and the Galaxy button read the wiki's files, so they work
+whichever assistant you use.
+
 ## The tabs
 
 - **Ask the wiki** — type or speak a question; it runs `claude -p` inside the
@@ -103,9 +110,9 @@ charts, the tab says so and nothing breaks.
 
 ## Adding a chart the easy way
 
-You do not need to edit any of this by hand. In the Ask tab (or any Claude
-Code session in the vault), just say something like *"add a chart of my
-weekly running distance to my dashboard"* — Claude can create or extend a
-CSV in the vault, add the matching entry to `dashboard-charts.json`, and the
+You do not need to edit any of this by hand. In the Ask tab (or any session
+with your assistant in the vault), just say something like *"add a chart of my
+weekly running distance to my dashboard"*. Your assistant can create or extend
+a CSV in the vault, add the matching entry to `dashboard-charts.json`, and the
 chart appears the next time you open the Visuals tab. The config file is
 re-read on every request, so there is nothing to restart.

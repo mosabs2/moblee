@@ -6,6 +6,6 @@ Chronological append-only record of every substantive change to the wiki. Each e
 
 ## [YYYY-MM-DD HH:MM ±TZ] initialised | [Your Vault Name] wiki created from the Moblee starter
 
-Wiki initialised from the Moblee starter pack. Schema files in place: `CLAUDE.md`, [[Karpathy LLM Wiki Pattern]], [[How to Use This Wiki]], [[_context]], [[Index]], [[log]]. No ingests yet.
+Wiki initialised from the Moblee starter pack. Schema files in place: the rules file at the vault root, [[Karpathy LLM Wiki Pattern]], [[How to Use This Wiki]], [[_context]], [[Index]], [[log]]. No ingests yet.
 
-**Pages touched**: `CLAUDE.md` (initialised); `wiki/` (initialised); [[log]] (this entry).
+**Pages touched**: the rules file (initialised); `wiki/` (initialised); [[log]] (this entry).

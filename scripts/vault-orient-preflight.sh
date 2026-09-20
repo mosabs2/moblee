@@ -76,7 +76,7 @@ echo ""
 if pgrep -x "Obsidian" >/dev/null 2>&1; then
   echo "[OK] Obsidian process running"
 else
-  echo "[INFO] Obsidian process NOT running — fine if you work through Claude only; if you use Obsidian Sync or edit in Obsidian, restart it before trusting current state."
+  echo "[INFO] Obsidian process NOT running — fine if you work through your assistant only; if you use Obsidian Sync or edit in Obsidian, restart it before trusting current state."
 fi
 
 # --- B. File freshness for the two orientation-critical files ---

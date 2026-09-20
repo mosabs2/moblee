@@ -28,10 +28,10 @@ At the next setup review, or a month on, check whether it is still used and stil
 
 ## Sizes of build, smallest first
 
-1. **A page and a phrase.** A template page and a sentence the owner says ("log my session"). Claude fills the page from the conversation. So that any later session knows the phrase, register it in one line under "Domain-specific patterns" in the vault's `CLAUDE.md` (the phrase, and the page it fills).
+1. **A page and a phrase.** A template page and a sentence the owner says ("log my session"). The assistant fills the page from the conversation. So that any later session knows the phrase, register it in one line under "Domain-specific patterns" in the vault's `CLAUDE.md` (`AGENTS.md` with ChatGPT), giving the phrase and the page it fills.
 2. **A data file and a page.** A CSV under `wiki/data/` that grows, and a page that reads it.
-3. **A script the owner starts by asking.** Under `scripts/`, run by Claude when asked. Fetches, converts, tidies.
-4. **A skill.** When a build has its own way of being asked for and its own steps, it becomes a skill. Draft it under `made-for-you/skills/<name>/`, and it reaches Claude through the Moblee app (see the companion's "Building something made to measure").
-5. **Something that runs by itself on a schedule.** The largest step, and the one most likely to fail unseen. Build it only after the by-hand version has been used for a few weeks, follow every scheduled-job rule in `builders-rules.md`, and tell the owner plainly that it will run when they are not looking and how they will know if it stops. The owner switches it on with Terminal lines Claude gives them; Claude never loads it.
+3. **A script the owner starts by asking.** Under `scripts/`, run by the assistant when asked. Fetches, converts, tidies.
+4. **A skill.** When a build has its own way of being asked for and its own steps, it becomes a skill. **With Claude:** draft it under `made-for-you/skills/<name>/`, and it reaches Claude through the Moblee app (see the companion's "Building something made to measure"). **With ChatGPT:** Moblee does not set this up for ChatGPT yet.
+5. **Something that runs by itself on a schedule.** The largest step, and the one most likely to fail unseen. Build it only after the by-hand version has been used for a few weeks, follow every scheduled-job rule in `builders-rules.md`, and tell the owner plainly that it will run when they are not looking and how they will know if it stops. The owner switches it on with Terminal lines the assistant gives them; the assistant never loads it.
 
 Start at the smallest size that works. Move up only when the owner's use has outgrown it.

@@ -549,11 +549,10 @@ fi
 if [[ -f "$SCRIPT_DIR/moblee-setup.py" ]]; then
   case "$ASSISTANT" in
     chatgpt)
-      echo "New in this version: ChatGPT can suggest which extras suit you. Open ChatGPT,"
-      echo "choose Work, add your wiki folder as a project if it is not there yet, and"
-      echo "say: review my setup (or, if you have never done it, get me started). It"
-      echo "asks how you use your Mac, suggests only what fits and gives you one"
-      echo "command to install it."
+      echo "To carry on: open ChatGPT, choose Work, add your wiki folder as a project"
+      echo "if it is not there yet, and say: get me started (if you have never done it)."
+      echo "Moblee's optional extras (Calendar, Mail, Google, videos and the rest) are"
+      echo "set up for Claude. Moblee does not set them up for ChatGPT yet."
       ;;
     both)
       echo "New in this version: your assistant can suggest which extras suit you. Open"
@@ -561,6 +560,8 @@ if [[ -f "$SCRIPT_DIR/moblee-setup.py" ]]; then
       echo "folder as a project if it is not there yet) and say: review my setup (or,"
       echo "if you have never done it, get me started). It asks how you use your Mac,"
       echo "suggests only what fits and gives you one command to install it."
+      echo "The extras it installs are set up for Claude; Moblee does not set them"
+      echo "up for ChatGPT yet."
       ;;
     *)
       echo "New in this version: Claude can suggest which extras suit you. Open Claude"

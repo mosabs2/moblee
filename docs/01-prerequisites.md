@@ -12,7 +12,9 @@ To verify Obsidian is installed and working, open `Applications/` and confirm `O
 
 ## Claude Code
 
-Claude Code is the command-line interface to Claude. It is what you use for the heavier wiki sessions: ingesting batches of sources, running lint passes, doing PDF renders. You can also use Cowork (the desktop app) for casual capture, but Claude Code is the primary tool for serious wiki work.
+You need the app of the assistant you will use: one of the two below, or both.
+
+**With Claude:** Claude Code is the command-line interface to Claude. It is what you use for the heavier wiki sessions: ingesting batches of sources, running lint passes, doing PDF renders. You can also use Cowork (the desktop app) for casual capture, but Claude Code is the primary tool for serious wiki work.
 
 Install instructions live at [claude.ai/code](https://claude.ai/code). At a minimum you'll need an Anthropic account; the install itself is typically a single command in your Terminal.
 
@@ -23,6 +25,8 @@ claude --version
 ```
 
 You should see a version string. If you see "command not found", the installer's PATH step did not complete; see the Claude Code install docs for fixes.
+
+**With ChatGPT:** ChatGPT's file-working agent is called Codex, and it is part of the ChatGPT app for Mac. Download the app from [chatgpt.com/download](https://chatgpt.com/download), open it and sign in with your ChatGPT account. OpenAI's pricing page lists the Free, Go, Plus, Pro, Business, Edu and Enterprise plans as including Codex, with limits that vary by plan. To verify, open `Applications/` and confirm `ChatGPT.app` is there.
 
 ## Apple's developer tools and git
 
@@ -75,10 +79,10 @@ This is optional. You can also save sources by hand: drag PDFs into `raw/`, past
 
 ## Optional: Readwise
 
-If you use [Readwise](https://readwise.io) and have its Obsidian sync set up, the Moblee vault template includes the `Clippings/Readwise/` folder structure and the corresponding rules in `CLAUDE.md`. Readwise will sync your highlights into `Clippings/Readwise/Articles/`, `Clippings/Readwise/Books/`, and `Clippings/Readwise/Tweets/`, and Claude will handle them according to the rules.
+If you use [Readwise](https://readwise.io) and have its Obsidian sync set up, the Moblee vault template includes the `Clippings/Readwise/` folder structure and the corresponding rules in `CLAUDE.md`. Readwise will sync your highlights into `Clippings/Readwise/Articles/`, `Clippings/Readwise/Books/`, and `Clippings/Readwise/Tweets/`, and your assistant will handle them according to the rules.
 
 You can ignore the Readwise paragraph in `CLAUDE.md` if you don't use Readwise; nothing else depends on it.
 
 ## Ready?
 
-When you have Obsidian, Claude Code, Apple's developer tools (with git) and Python 3 installed and verified, move on to [02-install.md](02-install.md).
+When you have Obsidian, Claude Code or the ChatGPT app, Apple's developer tools (with git) and Python 3 installed and verified, move on to [02-install.md](02-install.md).

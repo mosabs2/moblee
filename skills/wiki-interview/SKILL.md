@@ -114,7 +114,7 @@ Whichever the user picks, leave an italicised audit note at the point of change 
 
 Once the page is drafted:
 
-- Place it at the right location in the vault. New top-level pages go to `wiki/<Title>.md` and need the user's explicit approval before creation (the vault's `CLAUDE.md` page-creation rule). Sections that extend an existing page get appended to that page, with a clear H2 header marking the new material as interview-sourced.
+- Place it at the right location in the vault. New top-level pages go to `wiki/<Title>.md` and need the user's explicit approval before creation (the page-creation rule in the vault's `CLAUDE.md`, or `AGENTS.md` with ChatGPT). Sections that extend an existing page get appended to that page, with a clear H2 header marking the new material as interview-sourced.
 - Ensure reciprocal backlinks: walk the new content's outbound wikilinks and make sure the linked pages link back.
 - Append a log entry to `wiki/log.md` in the form `## [YYYY-MM-DD HH:MM ±TZ] interview | <Title>`, with a short body paragraph describing what was interviewed and what the page covers. Verify the time with `date` before stamping.
 - Refresh `wiki/_context.md` if the interview moved an active thread, and bump `wiki/Index.md` if a new top-level page was created.

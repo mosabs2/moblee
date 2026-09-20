@@ -6,6 +6,8 @@ Moblee's wiki works on its own, but it is more useful when Claude can read what 
 python3 scripts/moblee-setup.py
 ```
 
+**With Claude:** everything on this page applies as written. **With ChatGPT:** Moblee does not set this up for ChatGPT yet: the checklist installs into Claude's folders and connects through your Claude account.
+
 ## How items are usually added now
 
 From v0.8.1 the usual way to add an item is to agree it with Claude and then add it in the Moblee app. In your wiki, say "guide me" (or "get me started" the first time). Claude proposes an item only for a reason you gave or your wiki shows, and writes what you agree on the `Habits and Tools` page and in a small file the app reads. Open Moblee, and the item is waiting as a tile with its reason, its time, space and cost, and an Add button. The Terminal commands on this page still work, and they are the way to add items if you have no app.

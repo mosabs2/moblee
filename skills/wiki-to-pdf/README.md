@@ -24,6 +24,8 @@ cp -R ./* ~/.claude/skills/wiki-to-pdf/
 chmod +x ~/.claude/skills/wiki-to-pdf/render.py
 ```
 
+**With Claude:** the paths above. **With ChatGPT:** use `~/.agents/skills/wiki-to-pdf` in place of `~/.claude/skills/wiki-to-pdf`, here and in the smoke test below.
+
 Python dependencies:
 
 ```
@@ -88,7 +90,7 @@ You can also omit `--vault` if you run the script from inside your vault; the sc
 
 ## Calling from Claude
 
-In normal use you do not run the script directly. You say something like "render [Your Domain] as a PDF" or "PDF up the latest session for [Recipient]", and Claude invokes the skill. The skill's `SKILL.md` walks Claude through resolving the page, picking the archetype and variant, and assembling the right command-line invocation.
+In normal use you do not run the script directly. You say something like "render [Your Domain] as a PDF" or "PDF up the latest session for [Recipient]", and your assistant invokes the skill. The skill's `SKILL.md` walks it through resolving the page, picking the archetype and variant, and assembling the right command-line invocation.
 
 ## What it does
 

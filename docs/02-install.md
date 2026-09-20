@@ -4,7 +4,7 @@ This document walks through the step-by-step install of the Moblee starter pack 
 
 ## The app route
 
-From v0.8.1 there is a second way to install: the Moblee app, a small Mac app. It is offered as a zip named `Moblee` and its version number on the Releases page of the GitHub repository, signed and notarised by Apple, so the Mac opens it without a warning. The Terminal steps below always work too.
+From v0.8.1 there is a second way to install: the Moblee app, a small Mac app. It is offered as a zip named `Moblee` and its version number on the Releases page of the GitHub repository, signed and notarised by Apple, so the Mac opens it without a warning. The Terminal steps below always work too. The app does not ask which assistant you use, and sets the wiki up for Claude. For ChatGPT or both, use the Terminal steps, or run the updater afterwards with `--assistant` (`docs/08-updating.md`).
 
 You double-click the app and follow its screens. Each screen has one picture, one sentence and one button. If you opened it from Downloads, its first screen offers to move it to Applications, so that you can always find it again; press "Move it there" and it reopens by itself. After the welcome, it checks what the Mac needs: Apple's developer tools and Claude's app, with a Get button beside anything missing, and Obsidian, marked "Can wait". It asks one typed question, "What should Claude call you?". Before anything is made it says plainly what it is about to put on the Mac and where: the wiki's folder, the guard, and Claude's skills. It then builds the wiki, shown as six pictures that light up in turn: the wiki, its tools, its history, the guard, Claude's skills, and finishing. The last screen shows three numbered pictures: click Code in Claude's app, pick the wiki's folder, and say "get me started". The Open Claude button copies those words for you to paste, and "What did Moblee make?" lists everything that was put on the Mac. Every screen has a small speaker button that reads its sentence aloud; nothing is sent anywhere to do this. If a build stops, the big button is Try again, which finishes the same wiki and never starts a second one; the same is true if you close the app and open it again later. The Code tab in Claude's app needs a paid Claude plan.
 
@@ -39,31 +39,35 @@ From inside the Moblee folder:
 bash scripts/install.sh
 ```
 
-The script will ask you three questions:
+The script will ask you four questions:
 
 1. **Your name**, used in the templates as the author of the vault. Default: `[Your Name]`.
 2. **Vault name**, used as the folder name and substituted into template files. Default: `MyWiki`.
 3. **Vault location**, where to put the vault. Default: `~/Wiki/<vault name>`.
+4. **Which assistant** you will use with the wiki: Claude, ChatGPT or both. Default: Claude. You can change it later with the updater (`docs/08-updating.md`).
 
 You can press Return at each prompt to accept the default.
 
 After that, the script will:
 
 - Copy the `vault-template/` to your chosen location.
+- Lay the rules file down under the name your assistant reads: `CLAUDE.md` for Claude, `AGENTS.md` for ChatGPT. With both, `CLAUDE.md` is the real file and `AGENTS.md` is a link to it. ChatGPT reads only the first 32 KiB of that file by default, so the installer raises the limit in `~/.codex/config.toml`.
 - Substitute `[Your Name]`, `[Your Vault Name]`, and `[Your Vault]` placeholders inside all markdown, CSS, HTML, Python, and other text files.
 - Copy the vault tooling into `scripts/` and `dashboard/`, and record the vault's location at `~/.config/moblee/vault-path` so the tooling can find it.
 - Initialise a git repository in the new vault, make the first commit, and point git at the commit gate in `scripts/hooks/`.
-- Install the safety layer: the delete guard (proved working before it is registered) and the starter permission rules. This step is not optional; if it fails, the installer stops and says why. `docs/09-safety.md` explains what it does.
-- Seed four starting memories for your Claude.
-- Install the eight core skills into `~/.claude/skills/`. There is no separate skills step to run.
+- Install the safety layer: the delete guard (proved working before it is registered) and, for Claude, the starter permission rules. This step is not optional; if it fails, the installer stops and says why. `docs/09-safety.md` explains what it does.
+- Seed four starting memories for your assistant. ChatGPT has no hand-written memory folder, so for ChatGPT they go on a wiki page, `wiki/Wiki Operations/Assistant Memory.md`.
+- Install the eight core skills into `~/.claude/skills/` (for ChatGPT, `~/.agents/skills/`). There is no separate skills step to run.
 - Tell you about the extras (Step 4 below) and ask whether you would rather choose them yourself now. The answer it expects is no: the easier way is to let Claude suggest them.
 - Commit the settings and choices it wrote, so the vault starts clean, and print the next steps.
 
-It takes a few minutes. You run the installer yourself, rather than asking Claude to, because it changes Claude's own settings (the guard, the permission rules and the skills); those changes are yours to make, on your own screen.
+It takes a few minutes. You run the installer yourself, rather than asking your assistant to, because it changes your assistant's own settings (the guard, the skills and, for Claude, the permission rules); those changes are yours to make, on your own screen.
+
+**With ChatGPT: the Trust step.** ChatGPT does not run a newly installed or changed guard until you have reviewed it. Until then the guard is skipped and nothing on screen says so. The installer prints the steps when they are due: open the ChatGPT menu, choose Settings, choose Hooks (under the Coding heading), open "User config", press Trust beside the hook whose command ends `bash-guard.py`, and turn its switch on. `docs/09-safety.md` says how to prove the guard afterwards.
 
 **The install diary.** Every run of the installer, from Terminal or from the app, keeps a plain diary of its steps at `~/.config/moblee/install-diary.txt`: what ran, what passed, what failed and why. It holds no names, and it writes your home folder as `~`, so it is safe to pass to whoever is helping you if an install goes wrong. Each run adds to the end of the file; nothing in it is overwritten.
 
-**Answers up front.** The three questions can also be answered on the command line, which is how the app runs the installer: `bash scripts/install.sh --name "Sam" --vault-name "MyWiki" --location "$HOME/Wiki/MyWiki"`. Adding `--progress` prints one extra line per step for a program to read; you do not need it. A name that contains `&`, `|` or a backslash now arrives in your wiki exactly as you typed it.
+**Answers up front.** The three questions can also be answered on the command line, which is how the app runs the installer: `bash scripts/install.sh --name "Sam" --vault-name "MyWiki" --location "$HOME/Wiki/MyWiki"`. The assistant can be named the same way, with `--assistant claude`, `--assistant chatgpt` or `--assistant both`. Adding `--progress` prints one extra line per step for a program to read; you do not need it. A name that contains `&`, `|` or a backslash now arrives in your wiki exactly as you typed it.
 
 **Updating later.** You never run the installer twice on the same vault; if you point it at an existing Moblee vault, it hands over to the updater instead of overwriting anything. When a new Moblee version comes out, download it and run the updater; see `docs/08-updating.md`.
 
@@ -74,6 +78,8 @@ Launch Obsidian. On the welcome screen (or File, then Open vault), choose **Open
 Click `Welcome.md` and read it.
 
 ## Step 4: choosing the extras
+
+**With Claude:** this step applies as written. **With ChatGPT:** Moblee does not set this up for ChatGPT yet. You can still hold the first conversation: open the ChatGPT app, choose Work at the top, open the vault's folder as a project, and say **get me started**. <!-- verify on testdev -->
 
 **The usual way: ask Claude.** With the vault open in Obsidian, go into the vault's folder in Terminal and type `claude` (or, in Claude's app, click Code and pick the vault's folder), and say **get me started**. Claude asks how you use your Mac, where your mail and calendar live, and what you read, watch and make. It helps you make your first page, then proposes one or two extras that clearly fit, each with its reason, time, space and cost. If you have the Moblee app, what you agree to waits there as a tile with an Add button (`docs/10-connections.md` says which items the app adds by itself and which need you at a Terminal window). If you installed from Terminal, Claude gives you one command to run from the Moblee folder, for example `python3 scripts/moblee-setup.py --tick videos`. That opens the checklist below with those items ticked. Your answers are kept on the wiki's `Habits and Tools` page, and on any later day you can say **guide me** for one next step, or **review my setup** to go over the whole setup. It asks before anything is added, and anything you say no to is not suggested again for ninety days.
 
@@ -106,19 +112,22 @@ python3 scripts/moblee-setup.py --check
 A quick checklist to confirm everything is in place:
 
 - The vault folder exists at the location you chose.
-- `~/.claude/skills/` contains the eight core skills: `brain/`, `compact/`, `companion/`, `galaxy/`, `wiki-capture/`, `wiki-interview/`, `wiki-to-pdf/`, `design-your-brand/` (plus any extras you ticked).
-- `~/.claude/hooks/bash-guard.py` exists, and the vault's `.claude/settings.local.json` lists the permission rules (the installer printed the counts).
+- The rules file is in the vault under the right name: `CLAUDE.md` for Claude, `AGENTS.md` for ChatGPT, and for both, `CLAUDE.md` with `AGENTS.md` as a link to it.
+- `~/.claude/skills/` (for ChatGPT, `~/.agents/skills/`) contains the eight core skills: `brain/`, `compact/`, `companion/`, `galaxy/`, `wiki-capture/`, `wiki-interview/`, `wiki-to-pdf/`, `design-your-brand/` (plus any extras you ticked).
+- With Claude: `~/.claude/hooks/bash-guard.py` exists, and the vault's `.claude/settings.local.json` lists the permission rules (the installer printed the counts).
+- With ChatGPT: `~/.codex/hooks/bash-guard.py` exists, `~/.codex/hooks.json` holds its entry, you have done the Trust step, and `python3 scripts/moblee-doctor.py --prove-guard`, run from the Moblee folder, reports the guard as proved.
 - The vault's `VERSION` file reads `0.8.1` for this release.
 - `python3 scripts/moblee-doctor.py`, run from the Moblee folder, changes nothing and marks each finding `OK`, `LOOK` or `PROBLEM`.
 - `python3 scripts/moblee-setup.py --check`, run from the Moblee folder, shows `WORKING` for each item you ticked.
 - If you added the `vault` shortcut: typing `vault` in a new Terminal window takes you into the vault and prints the ready signal.
 - Obsidian opens the vault and displays `Welcome.md`.
-- Running `claude` in the vault's folder starts a Claude Code session that can see your vault.
+- With Claude: running `claude` in the vault's folder starts a Claude Code session that can see your vault.
+- With ChatGPT: the vault's folder opens as a project in the ChatGPT app (choose Work at the top). <!-- verify on testdev -->
 
 If anything is missing, run the installer again with the same answers (it finishes the job through the updater without touching what is already there), or run the checklist for a single item with `--only` and the item's key (`--list` prints the keys).
 
 ## What's next
 
-You have a working vault. Move on to [03-first-conversation.md](03-first-conversation.md) to learn how to work with Claude in this system, or jump to [04-first-ingest.md](04-first-ingest.md) to walk through ingesting your first piece of content.
+You have a working vault. Move on to [03-first-conversation.md](03-first-conversation.md) to learn how to work with your assistant in this system, or jump to [04-first-ingest.md](04-first-ingest.md) to walk through ingesting your first piece of content.
 
-The fastest path is to open Claude in your vault and say "get me started"; Claude takes it from there.
+The fastest path is to open your assistant in your vault and say "get me started"; it takes it from there.
