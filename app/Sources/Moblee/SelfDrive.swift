@@ -106,9 +106,17 @@ enum SelfDrive {
         // Typed letters go to whichever app has the keyboard. If the person at
         // the Mac clicked elsewhere while this was running, they never arrive
         // (seen once, 20 September 2026), so the keyboard is taken back first.
-        NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
-        await pause(0.4)
+        // Asked for until it is really had: macOS may not hand the keyboard over
+        // at once to an app started from a script, least of all straight after
+        // another copy of it has just quit (seen on the mini the same day).
+        let keyboardBy = Date().addingTimeInterval(10)
+        repeat {
+            NSRunningApplication.current.activate(options: [.activateAllWindows])
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+            await pause(0.5)
+        } while !(NSApp.isActive && window.isKeyWindow) && Date() < keyboardBy
+        say(NSApp.isActive && window.isKeyWindow ? "has the keyboard" : "was not given the keyboard within ten seconds")
         for ch in "Tom & Sam" { key(String(ch)); await pause(0.05) }
         await expect("typing reaches the name box") { flow.ownerName == "Tom & Sam" }
         flow.back(); say("back to check-up"); await pause(4)
