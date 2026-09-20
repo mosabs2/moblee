@@ -88,6 +88,10 @@ struct ScreenFrame<Picture: View>: View {
     var showsBack: Bool = true
     var quietTitle: String? = nil
     var quietAction: (() -> Void)? = nil
+    /// A second large button beside the first, for the one screen that sends
+    /// an owner to either of two apps. Both are then a little narrower.
+    var secondTitle: String? = nil
+    var secondAction: (() -> Void)? = nil
     /// What "Read it to me" says, if it should say more than the sentence.
     var spoken: String? = nil
     let action: () -> Void
@@ -135,12 +139,21 @@ struct ScreenFrame<Picture: View>: View {
                 Button(action: { speaker.stop(); action() }) {
                     Text(buttonTitle)
                         .font(.system(size: 19, weight: .semibold, design: .rounded))
-                        .frame(minWidth: 220, minHeight: 50)
+                        .frame(minWidth: secondTitle == nil ? 220 : 170, minHeight: 50)
                 }
                 .buttonStyle(BigButtonStyle())
                 .disabled(!buttonEnabled)
                 .keyboardShortcut(.defaultAction)
                 .accessibilityIdentifier("main-button")
+                if let secondTitle, let secondAction {
+                    Button(action: { speaker.stop(); secondAction() }) {
+                        Text(secondTitle)
+                            .font(.system(size: 19, weight: .semibold, design: .rounded))
+                            .frame(minWidth: 170, minHeight: 50)
+                    }
+                    .buttonStyle(BigButtonStyle())
+                    .accessibilityIdentifier("second-button")
+                }
                 if showsBack && flow.step != .welcome {
                     // Balances the back arrow so the big button stays centred.
                     Color.clear.frame(width: 44, height: 44)

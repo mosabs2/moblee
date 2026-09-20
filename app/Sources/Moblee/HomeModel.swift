@@ -60,6 +60,18 @@ final class HomeModel: ObservableObject {
     @Published var updateSetAside = false
     @Published var loaded = false
     @Published var explaining: Tile?
+    /// Which assistant this wiki is for, as the pack's scripts will read it:
+    /// the word on record, and Claude when there is none.
+    @Published var assistant: Assistant = .claude
+    /// ChatGPT is still waiting for the owner to trust the guard (see `Trust`).
+    @Published var trustPending = false
+    /// The owner put the proof off ("Later") in this opening of the app.
+    @Published var trustSetAside = false
+
+    func refreshTrust(home: URL) {
+        let now = Trust.pending(home: home)
+        if now != trustPending { trustPending = now }
+    }
 
     private(set) var vault: URL?
     private var home: URL = FileManager.default.homeDirectoryForCurrentUser
@@ -92,7 +104,10 @@ final class HomeModel: ObservableObject {
         guard let text = try? String(contentsOf: record, encoding: .utf8) else { return nil }
         let url = URL(fileURLWithPath: text.trimmingCharacters(in: .whitespacesAndNewlines), isDirectory: true)
         let fm = FileManager.default
-        guard fm.fileExists(atPath: url.appendingPathComponent("CLAUDE.md").path),
+        // A wiki made for ChatGPT alone keeps its rules in AGENTS.md, the name
+        // ChatGPT reads, and has no CLAUDE.md.
+        guard fm.fileExists(atPath: url.appendingPathComponent("CLAUDE.md").path)
+                || fm.fileExists(atPath: url.appendingPathComponent("AGENTS.md").path),
               fm.fileExists(atPath: url.appendingPathComponent("wiki").path) else { return nil }
         return url
     }
@@ -100,6 +115,8 @@ final class HomeModel: ObservableObject {
     func load(home: URL, bundledPack: URL?) {
         self.home = home
         vault = Self.existingVault(home: home)
+        assistant = Assistant.onRecord(home: home)
+        refreshTrust(home: home)
         guard let vault else { loaded = true; return }
 
         wikiVersion = Self.read(vault.appendingPathComponent("VERSION"))
@@ -165,25 +182,53 @@ final class HomeModel: ObservableObject {
     /// The same three tests the check-up makes: the guard is there, it is
     /// switched on in Claude's settings, and Moblee's permission rules are in
     /// the wiki's own settings.
+    ///
+    /// For an owner who uses ChatGPT the same is asked of ChatGPT's own files,
+    /// as the check-up asks it: the guard is there, and it is entered in
+    /// ChatGPT's hooks file for both of the ways ChatGPT can delete. (Whether
+    /// the owner has trusted it there cannot be seen in any file; that is what
+    /// the Trust screen and the proof are for.) Claude's files are looked at
+    /// only when Claude is used, since a wiki for ChatGPT alone has none.
     func checkSafety() {
         guard let vault else { return }
-        let guardThere = FileManager.default.fileExists(
-            atPath: home.appendingPathComponent(".claude/hooks/bash-guard.py").path)
-        var switchedOn = false
-        if let settings = Self.json(home.appendingPathComponent(".claude/settings.json")),
-           let hooks = (settings["hooks"] as? [String: Any])?["PreToolUse"] as? [[String: Any]] {
-            for entry in hooks {
-                for h in (entry["hooks"] as? [[String: Any]] ?? []) {
-                    if (h["command"] as? String ?? "").contains("bash-guard.py") { switchedOn = true }
+        let onRecord = Assistant.onRecord(home: home)
+        if onRecord != assistant { assistant = onRecord }
+        refreshTrust(home: home)
+        var claudeOff = false, chatgptOff = false
+        if assistant.wantsClaude {
+            let guardThere = FileManager.default.fileExists(
+                atPath: home.appendingPathComponent(".claude/hooks/bash-guard.py").path)
+            var switchedOn = false
+            if let settings = Self.json(home.appendingPathComponent(".claude/settings.json")),
+               let hooks = (settings["hooks"] as? [String: Any])?["PreToolUse"] as? [[String: Any]] {
+                for entry in hooks {
+                    for h in (entry["hooks"] as? [[String: Any]] ?? []) {
+                        if (h["command"] as? String ?? "").contains("bash-guard.py") { switchedOn = true }
+                    }
                 }
             }
+            var rules = 0
+            for name in ["settings.local.json", "settings.json"] {
+                if let s = Self.json(vault.appendingPathComponent(".claude/\(name)")),
+                   let allow = (s["permissions"] as? [String: Any])?["allow"] as? [Any] { rules += allow.count }
+            }
+            claudeOff = !(guardThere && switchedOn && rules >= 10)
         }
-        var rules = 0
-        for name in ["settings.local.json", "settings.json"] {
-            if let s = Self.json(vault.appendingPathComponent(".claude/\(name)")),
-               let allow = (s["permissions"] as? [String: Any])?["allow"] as? [Any] { rules += allow.count }
+        if assistant.wantsChatGPT {
+            let guardThere = FileManager.default.fileExists(
+                atPath: home.appendingPathComponent(".codex/hooks/bash-guard.py").path)
+            var entered = false
+            if let file = Self.json(home.appendingPathComponent(".codex/hooks.json")),
+               let hooks = (file["hooks"] as? [String: Any])?["PreToolUse"] as? [[String: Any]] {
+                for entry in hooks where entry["matcher"] as? String == "Bash|apply_patch" {
+                    for h in (entry["hooks"] as? [[String: Any]] ?? []) {
+                        if (h["command"] as? String ?? "").contains(".codex/hooks/bash-guard.py") { entered = true }
+                    }
+                }
+            }
+            chatgptOff = !(guardThere && entered)
         }
-        safetyOff = !(guardThere && switchedOn && rules >= 10)
+        safetyOff = claudeOff || chatgptOff
         // The guard and the skills are compared with this app's pack only when
         // the wiki and the pack are the SAME version. While an update is pending
         // they are expected to differ, and the update brings them level. And when
@@ -227,10 +272,12 @@ final class HomeModel: ObservableObject {
     /// refuse Claude the pack's tools. Repair puts it level and keeps the old one.
     private func guardIsMoblees() -> Bool {
         guard let pack else { return true }      // not known yet; looked at again once the pack is settled
-        let ours = try? Data(contentsOf: pack.appendingPathComponent("safety/bash-guard.py"))
-        let theirs = try? Data(contentsOf: home.appendingPathComponent(".claude/hooks/bash-guard.py"))
-        guard let ours else { return true }
-        return ours == theirs
+        guard let ours = try? Data(contentsOf: pack.appendingPathComponent("safety/bash-guard.py")) else { return true }
+        // One copy for each assistant in use: Claude's, ChatGPT's, or both.
+        var places: [String] = []
+        if assistant.wantsClaude { places.append(".claude/hooks/bash-guard.py") }
+        if assistant.wantsChatGPT { places.append(".codex/hooks/bash-guard.py") }
+        return places.allSatisfy { (try? Data(contentsOf: home.appendingPathComponent($0))) == ours }
     }
 
     /// Each of Moblee's skills must be there, and be Moblee's: a folder of the
@@ -241,11 +288,18 @@ final class HomeModel: ObservableObject {
         let fm = FileManager.default
         let source = pack.appendingPathComponent("skills", isDirectory: true)
         guard let names = try? fm.contentsOfDirectory(atPath: source.path) else { return true }
+        // Claude keeps its skills in ~/.claude/skills and ChatGPT in ~/.agents/skills;
+        // the same files go to each that is in use.
+        var folders: [String] = []
+        if assistant.wantsClaude { folders.append(".claude/skills") }
+        if assistant.wantsChatGPT { folders.append(".agents/skills") }
         for name in names {
             let ours = source.appendingPathComponent("\(name)/SKILL.md")
             guard fm.fileExists(atPath: ours.path) else { continue }
-            let theirs = home.appendingPathComponent(".claude/skills/\(name)/SKILL.md")
-            guard let a = try? Data(contentsOf: ours), let b = try? Data(contentsOf: theirs), a == b else { return false }
+            for folder in folders {
+                let theirs = home.appendingPathComponent("\(folder)/\(name)/SKILL.md")
+                guard let a = try? Data(contentsOf: ours), let b = try? Data(contentsOf: theirs), a == b else { return false }
+            }
         }
         return true
     }
@@ -533,8 +587,15 @@ final class HomeModel: ObservableObject {
         // under one of their names is moved to the backups folder, never deleted).
         EngineTask.output(of: "/usr/bin/python3",
                           [pack.appendingPathComponent("safety/install-safety.py").path, "--vault", vault.path],
-                          home: home) { [weak self] code, _ in
+                          home: home) { [weak self] code, data in
             guard let self else { return }
+            // A repair that put a new guard in place for ChatGPT says, on a line
+            // of its own, that ChatGPT is waiting for the owner's trust again.
+            let said = String(data: data, encoding: .utf8) ?? ""
+            if said.split(separator: "\n").contains(where: { $0.hasPrefix("@@moblee-trust-needed chatgpt") }) {
+                Trust.setPending(true, home: self.home)
+                self.trustSetAside = false
+            }
             EngineTask.output(of: "/bin/bash",
                               [pack.appendingPathComponent("scripts/install-skills.sh").path, "--update"],
                               home: self.home) { [weak self] code2, _ in

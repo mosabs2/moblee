@@ -141,7 +141,23 @@ enum SelfDrive {
         await expect("the name is still there after going back") { flow.ownerName == "Tom & Sam" }
         key("\r", code: 36)                  // Return
         await pause(1.5)
-        await expect("Return moves on exactly one screen") { flow.step == .promise }
+        await expect("Return moves on exactly one screen, to the question of which assistant") { flow.step == .assistant }
+        say("assistant"); await pause(1.0)
+        await expect("nothing is chosen for the owner beforehand") { flow.assistant == nil }
+        click(bigButton)                     // greyed out until one of the three is tapped
+        await pause(0.8)
+        await expect("a greyed-out Next does nothing on the question either") { flow.step == .assistant && flow.assistant == nil }
+        // The three choices are drawn side by side in the middle of the window:
+        // cards 170 wide with 22 between them, so their centres are 192 apart,
+        // Claude's on the left. The middle of the picture area is 269 up from
+        // the bottom when the sentence takes one line; a card is 236 tall, so
+        // there is room to spare either way.
+        let claudeCard = CGPoint(x: window.frame.width / 2 - 192, y: 269)
+        click(claudeCard)
+        await expect("tapping the Claude card answers the question") { flow.assistant == .claude }
+        await pause(0.6)
+        click(bigButton)                     // Next, now that it is live
+        await expect("clicking Next after answering opens the promise") { flow.step == .promise }
         say("promise"); await pause(1.0)
         click(bigButton)
         await expect("clicking Make it starts the build") { flow.step == .build }
@@ -155,6 +171,15 @@ enum SelfDrive {
         await pause(1.5)
         guard flow.install.phase == .finished, let vaultPath = flow.install.vaultPath else {
             say("the install did not finish"); exit(1)
+        }
+        await expect("the answer went to the installer as --assistant claude") {
+            let a = flow.install.lastArguments
+            guard let i = a.firstIndex(of: "--assistant"), i + 1 < a.count else { return false }
+            return a[i + 1] == "claude" && a.contains { $0.hasSuffix("scripts/install.sh") }
+        }
+        await expect("the installer kept the answer on record") { Assistant.stored(home: flow.home) == .claude }
+        await expect("an install for Claude asks for no Trust step") {
+            !flow.install.trustNeeded && !Trust.pending(home: flow.home)
         }
         click(bigButton)
         await expect("clicking Next after the build opens the hand-off") { flow.step == .handoff }
@@ -210,6 +235,9 @@ enum SelfDrive {
         while !flow.homeModel.loaded && Date() < loadBy { await pause(0.2) }
         await pause(1.5)
         say("tiles waiting: \(flow.homeModel.tiles.map(\.key).joined(separator: ", "))")
+        await expect("at home the wiki is known to be for Claude, and an update would ask nothing") {
+            flow.homeModel.assistant == .claude && !Assistant.mustAsk(home: flow.home) && !flow.homeModel.trustPending
+        }
 
         guard flow.homeModel.tiles.contains(where: { $0.key == "trips" }),
               flow.homeModel.tiles.contains(where: { $0.key == "videos" }) else {

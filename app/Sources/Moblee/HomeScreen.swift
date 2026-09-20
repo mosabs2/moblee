@@ -25,6 +25,15 @@ struct HomeScreen: View {
         return Array(home.tiles.sorted { rank($0) < rank($1) }.prefix(3))
     }
 
+    /// The Trust screen is open: because the step is waiting, or because the
+    /// owner pressed "Prove the guard". It stays until the owner leaves it.
+    @State private var trustOpen = false
+
+    private var showsTrust: Bool { (home.trustPending && !home.trustSetAside) || trustOpen }
+    private var showsMain: Bool {
+        home.explaining == nil && !home.updateAvailable && !home.needsRepair && !showsTrust
+    }
+
     var body: some View {
         ZStack {
             if let tile = home.explaining {
@@ -33,6 +42,24 @@ struct HomeScreen: View {
                 updatePrompt
             } else if home.needsRepair {
                 repairPrompt
+            } else if showsTrust {
+                TrustScreen(start: home.trustPending ? .steps : .offer, vault: home.vault?.path) {
+                    trustOpen = false
+                    home.trustSetAside = true
+                }
+                .onAppear { trustOpen = true }
+            } else if home.assistant == .chatgpt {
+                // The tiles are extras that Moblee sets up for Claude only. An
+                // owner who uses ChatGPT alone is told so once, plainly, in
+                // their place, and is never offered something that would do
+                // nothing for them.
+                ScreenFrame(sentence: "Connections and other extras are set up for Claude. "
+                                + "Moblee does not set them up for ChatGPT yet.",
+                            buttonTitle: "Open ChatGPT", showsBack: false, action: openChatGPT) {
+                    Image(systemName: "bubble.left.and.bubble.right.fill")
+                        .font(.system(size: 96)).foregroundStyle(Theme.accent)
+                        .accessibilityHidden(true)
+                }
             } else if home.listUnreadable {
                 ScreenFrame(sentence: "Moblee could not read its list. Tell Claude: run a check-up.",
                             buttonTitle: "Open Claude", showsBack: false, action: openClaude) {
@@ -74,10 +101,20 @@ struct HomeScreen: View {
                                 .font(.system(size: 13, weight: .medium, design: .rounded))
                                 .foregroundStyle(.secondary)
                         }
+                        if home.assistant == .both {
+                            Text("These are set up for Claude. Moblee does not set them up for ChatGPT yet.")
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     .padding(.horizontal, 30)
                 }
             }
+        }
+        // Top right: the bottom of the screen belongs to the big button and the
+        // quiet one under it, and the top left to the window's own buttons.
+        .overlay(alignment: .topTrailing) {
+            if showsMain && !repairing { assistantControl }
         }
         .onAppear {
             guard !still else { return }
@@ -95,7 +132,8 @@ struct HomeScreen: View {
         ScreenFrame(sentence: "A newer Moblee is ready for your wiki. Your pages are not touched.",
                     buttonTitle: "Update", showsBack: false,
                     quietTitle: "Not now", quietAction: { home.updateSetAside = true },
-                    action: { flow.install.phase = .idle; flow.mode = .update }) {
+                    // On a Mac with no choice of assistant on record, the update asks first.
+                    action: { flow.beginUpdate() }) {
             VStack(spacing: 14) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 96)).foregroundStyle(Theme.accent)
@@ -109,12 +147,12 @@ struct HomeScreen: View {
     }
 
     private var repairPrompt: some View {
-        ScreenFrame(sentence: home.repairFailed ? "That did not work. Tell Claude: run a check-up."
+        ScreenFrame(sentence: home.repairFailed ? "That did not work. Tell \(home.assistant.talksTo): run a check-up."
                         : (repairing ? "Putting it right…"
                            : (home.safetyOff ? "The safety guard is off. Switch it back on."
                               : home.guardStale ? "The safety guard is an older one. Bring it up to date."
                                              : "One of Moblee's skills is missing. Put it back.")),
-                    buttonTitle: home.repairFailed ? "Open Claude" : "Repair",
+                    buttonTitle: home.repairFailed ? "Open \(home.assistant.talksTo)" : "Repair",
                     buttonEnabled: !repairing, showsBack: false,
                     // A guard that is OFF is never waved through. Copies that merely
                     // differ can be: an owner who changed theirs on purpose, or a repair
@@ -122,7 +160,10 @@ struct HomeScreen: View {
                     quietTitle: (!home.safetyOff && !repairing) ? "Not now" : nil,
                     quietAction: (!home.safetyOff && !repairing) ? { home.repairFailed = false; home.repairSetAside = true } : nil,
                     action: {
-                        if home.repairFailed { openClaude(); return }
+                        if home.repairFailed {
+                            if home.assistant == .chatgpt { openChatGPT() } else { openClaude() }
+                            return
+                        }
                         repairing = true
                         home.repair { repairing = false }
                     }) {
@@ -137,6 +178,30 @@ struct HomeScreen: View {
            let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.anthropic.claudefordesktop") {
             NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
         }
+    }
+
+    private func openChatGPT() {
+        ChatGPTApp.open(folder: home.vault?.path, practice: flow.isTestMode)
+    }
+
+    /// Small and quiet, in the corner: which assistant the wiki is for, a way
+    /// to change it (the question, then the updater with the answer), and, for
+    /// an owner who uses ChatGPT, a way to put the guard to the test.
+    private var assistantControl: some View {
+        HStack(spacing: 10) {
+            Text("Assistant: \(home.assistant.name)")
+                .foregroundStyle(.secondary)
+            Button("Change") { flow.beginUpdate(changingAssistant: true) }
+                .buttonStyle(.plain).foregroundStyle(Theme.accent)
+                .accessibilityIdentifier("change-assistant")
+            if home.assistant.wantsChatGPT {
+                Button("Prove the guard") { trustOpen = true }
+                    .buttonStyle(.plain).foregroundStyle(Theme.accent)
+                    .accessibilityIdentifier("prove-guard")
+            }
+        }
+        .font(.system(size: 12, weight: .semibold, design: .rounded))
+        .padding(.trailing, 18).padding(.top, 12)
     }
 }
 
@@ -349,7 +414,8 @@ struct UpdateScreen: View {
 
     private func start() {
         guard let vault = home.vault, let pack = flow.bundledPack else { return }
-        install.startUpdate(home: flow.home, vault: vault, bundledPack: pack)
+        // The answer, if this update asked which assistant first; nothing if it did not.
+        install.startUpdate(home: flow.home, vault: vault, bundledPack: pack, answered: flow.updateAssistant)
     }
 
     private func backHome() {

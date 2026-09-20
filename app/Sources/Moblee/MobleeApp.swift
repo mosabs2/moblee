@@ -17,6 +17,10 @@ struct MobleeApp: App {
             // without one, before anything at all has looked at the real home.
             let args = Practice.args
             let practice = Flow.value(after: "--home", in: args) != nil
+            if args.contains("--check-logic") && !practice {
+                print("--check-logic only runs with --home <practice folder>; nothing was done.")
+                exit(2)
+            }
             if (args.contains("--self-drive") || args.contains("--rehearse")) && !practice {
                 print("--self-drive and --rehearse only run with --home <practice folder>; nothing was done.")
                 exit(2)
@@ -38,7 +42,7 @@ struct MobleeApp: App {
 }
 
 /// The practice switches (`--home`, `--pack`, `--pretend-missing`, `--snapshot`,
-/// `--rehearse`, `--self-drive`, `--dark`, `--owner`, `--step`, `--fresh`) exist
+/// `--rehearse`, `--self-drive`, `--check-logic`, `--dark`, `--owner`, `--step`, `--fresh`) exist
 /// for testing. They are read only when the environment says this is a practice
 /// run (MOBLEE_PRACTICE=1, which the test scripts set), so that a released,
 /// signed Moblee cannot be pointed at some other folder of scripts, or at some
@@ -48,7 +52,7 @@ enum Practice {
     static let args: [String] = on ? CommandLine.arguments : []
     static let switches: Set<String> = ["--home", "--pack", "--pretend-missing", "--snapshot", "--rehearse",
                                         "--self-drive", "--dark", "--owner", "--step", "--fresh", "--icon",
-                                        "--move-to", "--move-break"]
+                                        "--move-to", "--move-break", "--check-logic"]
 }
 
 /// Quitting half-way through a build or an update would leave it half done, so
@@ -72,8 +76,10 @@ enum Step: Int, CaseIterable {
     case welcome
     case checkup
     case name
+    case assistant      // which assistant the wiki is for
     case promise
     case build
+    case trust          // only when the run said ChatGPT is waiting for the owner's trust
     case handoff
 }
 
@@ -105,6 +111,36 @@ final class Flow: ObservableObject {
     }
     /// Where this run's wiki goes, fixed at the first try so a second try finishes the same one.
     var chosenPlace: (name: String, url: URL)?
+
+    /// The install's answer to "Which assistant do you use?". Nil until the
+    /// owner has answered; nothing is chosen for them.
+    @Published var assistant: Assistant?
+
+    /// An update that asks the question first: on a Mac with no choice on
+    /// record, and whenever the owner presses Change at home. The answer goes
+    /// to the updater as `--assistant`; with no question asked, nothing goes.
+    @Published var askingAssistant = false
+    @Published var updateAssistant: Assistant?
+
+    /// Where the Trust screen starts. Only the picture-file drawing sets this.
+    var trustStart: TrustScreen.Stage = .steps
+
+    func beginUpdate(changingAssistant: Bool = false) {
+        install.phase = .idle
+        updateAssistant = nil
+        askingAssistant = changingAssistant || Assistant.mustAsk(home: home)
+        mode = .update
+    }
+
+    /// The update screen takes the place of the question, and starts the update as it appears.
+    func updateQuestionAnswered() { askingAssistant = false }
+
+    /// "Not now" on the question: back home, and no update was started.
+    func cancelUpdateQuestion() {
+        mode = .home
+        updateAssistant = nil
+        askingAssistant = false
+    }
     let install = InstallRun()
     let homeModel = HomeModel()
 
@@ -146,6 +182,8 @@ final class Flow: ObservableObject {
                 let url = URL(fileURLWithPath: String(first), isDirectory: true)
                 if FileManager.default.fileExists(atPath: url.path) {
                     resumePlace = (url.lastPathComponent, url)
+                    // The unfinished run had its answer; it is shown already chosen.
+                    assistant = Assistant.stored(home: home)
                 }
             }
         }
@@ -192,7 +230,9 @@ final class Flow: ObservableObject {
     }
 
     func next() {
-        if let s = Step(rawValue: step.rawValue + 1) {
+        if var s = Step(rawValue: step.rawValue + 1) {
+            // The Trust screen is only for a run that said ChatGPT is waiting for it.
+            if s == .trust && !install.trustNeeded { s = .handoff }
             withAnimation(.easeInOut(duration: 0.35)) { step = s }
         }
     }
@@ -215,14 +255,18 @@ struct RootView: View {
                 if flow.offerMove { PlacementScreen() } else {
                 switch flow.mode {
                 case .home: HomeScreen()
-                case .update: UpdateScreen()
+                case .update:
+                    if flow.askingAssistant { AssistantScreen(purpose: .update) } else { UpdateScreen() }
                 case .install:
                     switch flow.step {
                     case .welcome: WelcomeScreen()
                     case .checkup: CheckupScreen()
                     case .name: NameScreen()
+                    case .assistant: AssistantScreen(purpose: .install)
                     case .promise: PromiseScreen()
                     case .build: BuildScreen()
+                    case .trust:
+                        TrustScreen(start: flow.trustStart, vault: flow.install.vaultPath) { flow.next() }
                     case .handoff: HandoffScreen()
                     }
                 }

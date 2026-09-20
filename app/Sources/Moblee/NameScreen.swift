@@ -7,9 +7,20 @@ struct NameScreen: View {
     @FocusState private var focused: Bool
     @Environment(\.stillPicture) private var still
 
+    /// The question of which assistant comes after this one, so the sentence
+    /// names Claude, as it always has, unless the owner has already said
+    /// otherwise (at the check-up, or by coming back from the next screen).
+    private var question: String {
+        switch flow.assistant {
+        case .chatgpt: return "What should ChatGPT call you?"
+        case .both: return "What should your assistant call you?"
+        default: return "What should Claude call you?"
+        }
+    }
+
     var body: some View {
         ScreenFrame(
-            sentence: "What should Claude call you?",
+            sentence: question,
             buttonTitle: "Next",
             buttonEnabled: !flow.trimmedName.isEmpty,
             action: flow.next
@@ -22,7 +33,7 @@ struct NameScreen: View {
                     .frame(width: 380)
                     .background(CardBackground(corner: 16))
                     .focused($focused)
-                    .accessibilityLabel("What should Claude call you?")
+                    .accessibilityLabel(question)
                 HStack(alignment: .bottom, spacing: 14) {
                     Image(systemName: "sparkles")
                         .font(.system(size: 36, weight: .medium))
@@ -68,23 +79,54 @@ struct PromiseScreen: View {
 
     var body: some View {
         let place = flow.resumePlace ?? flow.chosenPlace ?? flow.freeLocation()
+        let words = Self.words(for: flow.assistant ?? .claude)
         ScreenFrame(
             sentence: "Here is what Moblee will make. Nothing else is touched.",
             buttonTitle: flow.resumePlace == nil ? "Make it" : "Finish it",
             spoken: "Here is what Moblee will make. One: a folder for your wiki, called \(place.name). "
-                + "Two: a guard, so Claude can never delete anything in it. "
-                + "Three: the skills Claude needs to keep it. Nothing else on your Mac is touched.",
+                + "Two: a guard, \(words.guardSpoken). "
+                + "Three: \(words.skillsSpoken). Nothing else on your Mac is touched.",
             action: flow.next
         ) {
             HStack(alignment: .top, spacing: 18) {
                 HandoffCard(number: 1, symbol: "folder.fill", title: "Your wiki",
                             detail: "A folder called “\(place.name)” inside “Wiki”, in your home folder")
                 HandoffCard(number: 2, symbol: "lock.shield.fill", title: "A guard",
-                            detail: "So Claude can never delete anything in it")
-                HandoffCard(number: 3, symbol: "graduationcap.fill", title: "Claude's skills",
-                            detail: "What Claude needs to keep your wiki")
+                            detail: words.guardCard)
+                HandoffCard(number: 3, symbol: "graduationcap.fill", title: words.skillsTitle,
+                            detail: words.skillsCard)
             }
             .padding(.horizontal, 30)
+        }
+    }
+
+    struct Words {
+        let guardCard, guardSpoken, skillsTitle, skillsCard, skillsSpoken: String
+    }
+
+    /// Claude's words are as they have always been. With ChatGPT the guard's
+    /// promise holds once the owner has trusted it there, and the card says so:
+    /// the Trust screen after the build is where they do it.
+    static func words(for assistant: Assistant) -> Words {
+        switch assistant {
+        case .claude:
+            return Words(guardCard: "So Claude can never delete anything in it",
+                         guardSpoken: "so Claude can never delete anything in it",
+                         skillsTitle: "Claude's skills",
+                         skillsCard: "What Claude needs to keep your wiki",
+                         skillsSpoken: "the skills Claude needs to keep it")
+        case .chatgpt:
+            return Words(guardCard: "So ChatGPT cannot delete anything in it, once you trust it there",
+                         guardSpoken: "so ChatGPT cannot delete anything in it, once you have trusted it there",
+                         skillsTitle: "ChatGPT's skills",
+                         skillsCard: "What ChatGPT needs to keep your wiki",
+                         skillsSpoken: "the skills ChatGPT needs to keep it")
+        case .both:
+            return Words(guardCard: "So neither can delete anything in it. ChatGPT needs you to trust it first",
+                         guardSpoken: "so neither assistant can delete anything in it. ChatGPT needs you to trust it first",
+                         skillsTitle: "The skills",
+                         skillsCard: "What each assistant needs to keep your wiki",
+                         skillsSpoken: "the skills each assistant needs to keep it")
         }
     }
 }

@@ -27,19 +27,31 @@ final class InstallRun: ObservableObject {
     @Published var items: [Item] = InstallRun.installItems()
     @Published var phase: Phase = .idle
     @Published var vaultPath: String?
+    /// The run said ChatGPT will not use the delete guard until the owner
+    /// trusts it there. The owner is shown how once the run has finished.
+    @Published var trustNeeded = false
 
     /// Steps whose failure the engine itself carries on past.
     private var softSteps: Set<String> = ["skills"]
     private var task: EngineTask?
+    private var home: URL?
     var diaryURL: URL?
+    /// What the last run's script was started with, for the tests to read.
+    private(set) var lastArguments: [String] = []
 
-    static func installItems() -> [Item] {
-        [
+    static func installItems(for assistant: Assistant = .claude) -> [Item] {
+        let skills: String
+        switch assistant {
+        case .claude: skills = "Claude's skills"
+        case .chatgpt: skills = "ChatGPT's skills"
+        case .both: skills = "The skills"
+        }
+        return [
             Item(key: "folder", symbol: "folder.fill", label: "Your wiki"),
             Item(key: "tools", symbol: "wrench.adjustable.fill", label: "Its tools"),
             Item(key: "history", symbol: "clock.arrow.circlepath", label: "Its history"),
             Item(key: "safety", symbol: "lock.shield.fill", label: "The guard"),
-            Item(key: "skills", symbol: "graduationcap.fill", label: "Claude's skills"),
+            Item(key: "skills", symbol: "graduationcap.fill", label: skills),
             Item(key: "finish", symbol: "checkmark.seal.fill", label: "Finishing"),
         ]
     }
@@ -58,23 +70,29 @@ final class InstallRun: ObservableObject {
         ]
     }
 
-    func start(home: URL, ownerName: String, wikiName: String, location: URL, bundledPack: URL) {
+    /// The install always names the assistant: the owner has just answered the question.
+    func start(home: URL, ownerName: String, wikiName: String, location: URL, bundledPack: URL,
+               assistant: Assistant) {
         guard phase != .running else { return }
-        items = InstallRun.installItems()
+        items = InstallRun.installItems(for: assistant)
         softSteps = ["skills"]
         begin(home: home, bundledPack: bundledPack, fallbackVault: location.path) { pack in
             [pack.appendingPathComponent("scripts/install.sh").path,
              "--name", ownerName, "--vault-name", wikiName,
-             "--location", location.path, "--progress"]
+             "--location", location.path, "--assistant", assistant.rawValue, "--progress"]
         }
     }
 
-    func startUpdate(home: URL, vault: URL, bundledPack: URL) {
+    /// `answered` is the owner's answer when this update asked the question
+    /// first, and nil when it did not: then the updater is told nothing, and
+    /// uses the choice already on record.
+    func startUpdate(home: URL, vault: URL, bundledPack: URL, answered: Assistant?) {
         guard phase != .running else { return }
         items = InstallRun.updateItems()
         softSteps = []
         begin(home: home, bundledPack: bundledPack, fallbackVault: vault.path) { pack in
-            [pack.appendingPathComponent("scripts/update.sh").path, vault.path, "--progress"]
+            [pack.appendingPathComponent("scripts/update.sh").path, vault.path]
+                + Assistant.updateOption(answered: answered) + ["--progress"]
         }
     }
 
@@ -82,6 +100,8 @@ final class InstallRun: ObservableObject {
                        arguments: (URL) -> [String]) {
         phase = .running
         vaultPath = nil
+        trustNeeded = false
+        self.home = home
         diaryURL = home.appendingPathComponent(".config/moblee/install-diary.txt")
 
         let pack: URL
@@ -93,7 +113,8 @@ final class InstallRun: ObservableObject {
         }
         let t = EngineTask()
         task = t
-        t.run("/bin/bash", arguments(pack), home: home,
+        lastArguments = arguments(pack)
+        t.run("/bin/bash", lastArguments, home: home,
               onEvent: { [weak self] e in self?.handle(e) },
               onEnd: { [weak self] code in self?.ended(code: code, fallbackVault: fallbackVault) })
     }
@@ -101,7 +122,9 @@ final class InstallRun: ObservableObject {
     /// The pack travels inside the app, but the app may be run from Downloads
     /// and thrown away afterwards, and the wiki's tools need the pack later
     /// (the checklist, the updater). So it is copied once to a lasting place.
-    static func settlePack(_ bundled: URL, home: URL) throws -> URL {
+    /// It is file work and touches nothing of the app's own, so it may be
+    /// called from a background thread, which is where it is called from.
+    nonisolated static func settlePack(_ bundled: URL, home: URL) throws -> URL {
         let fm = FileManager.default
         let version = (try? String(contentsOf: bundled.appendingPathComponent("VERSION"), encoding: .utf8))?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? "unknown"
@@ -137,10 +160,22 @@ final class InstallRun: ObservableObject {
         }
     }
 
-    private func handle(_ obj: EngineTask.Event) {
+    /// Not private, so that the logic check can hand it lines without a run.
+    func handle(_ obj: EngineTask.Event) {
         guard let step = obj["step"] as? String, let state = obj["state"] as? String else { return }
         if step == "done" {
             if let v = obj["vault"] as? String { vaultPath = v }
+            return
+        }
+        if step == "trust" {
+            // Not one of the counted steps, and it has no tile. Any other state
+            // under this name is ignored, like any other line not understood.
+            // The note outlives the app, so an owner who closes Moblee here is
+            // shown the steps the next time they open it.
+            if state == "needed" {
+                trustNeeded = true
+                if let home { Trust.setPending(true, home: home) }
+            }
             return
         }
         if state == "handed-to-updater" {
