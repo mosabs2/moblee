@@ -716,7 +716,8 @@ def main():
     # Block message shape: one paragraph, fixed opening.
     rc, err = run({"tool_name": "Bash", "tool_input": {"command": "rm -rf wiki"}}, vault, env)
     shape_ok = (rc == 2 and err.startswith(
-        "Blocked by the vault safety gate (~/.claude/hooks/bash-guard.py):")
+        "Blocked by the vault safety gate (bash-guard.py):")
+        and ".claude" not in err and "Write tool" not in err
         and "\n" not in err.strip())
     rows.append(("PASS" if shape_ok else "FAIL", "contract", "block message is one paragraph with the fixed opener", rc, 2, ""))
     if not shape_ok:
