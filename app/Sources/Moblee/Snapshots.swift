@@ -30,6 +30,10 @@ enum Snapshots {
             drawAll(to: URL(fileURLWithPath: folder, isDirectory: true))
             exit(0)
         }
+        if let file = Flow.value(after: "--icon", in: args) {
+            drawIcon(to: URL(fileURLWithPath: file))
+            exit(0)
+        }
         if let folder = Flow.value(after: "--rehearse", in: args) {
             rehearse(to: URL(fileURLWithPath: folder, isDirectory: true))
         }
@@ -62,6 +66,37 @@ enum Snapshots {
         }
         try? png.write(to: folder.appendingPathComponent(name + ".png"))
         print("drew \(name).png")
+    }
+
+    /// `--icon <file.png>` draws the app's icon at 1024 points, from the same
+    /// symbols and colour the screens use, so the icon never needs an artist
+    /// or an image file kept by hand. app/scripts/make-icon.sh turns it into
+    /// the .icns the app carries.
+    private static func drawIcon(to file: URL) {
+        let icon = ZStack {
+            RoundedRectangle(cornerRadius: 228, style: .continuous)
+                .fill(LinearGradient(colors: [Color(red: 0.26, green: 0.50, blue: 0.96),
+                                              Color(red: 0.10, green: 0.27, blue: 0.72)],
+                                     startPoint: .top, endPoint: .bottom))
+                .frame(width: 824, height: 824)
+                .shadow(color: .black.opacity(0.30), radius: 24, y: 12)
+            Image(systemName: "books.vertical.fill")
+                .font(.system(size: 400, weight: .medium))
+                .foregroundStyle(.white)
+                .offset(x: -30, y: 40)
+            Image(systemName: "sparkles")
+                .font(.system(size: 210, weight: .semibold))
+                .foregroundStyle(Color(red: 1.0, green: 0.86, blue: 0.42))
+                .offset(x: 215, y: -215)
+        }
+        .frame(width: 1024, height: 1024)
+        let renderer = ImageRenderer(content: icon)
+        renderer.scale = 1
+        guard let image = renderer.nsImage, let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff),
+              let png = rep.representation(using: .png, properties: [:]) else { return }
+        try? png.write(to: file)
+        print("drew the icon to \(file.path)")
     }
 
     private static func scene(_ step: Step, _ configure: (Flow) -> Void = { _ in }) -> Flow {
