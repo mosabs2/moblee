@@ -205,10 +205,17 @@ def table():
 
 
 def main():
-    if "--check" in sys.argv[1:]:
+    args = sys.argv[1:]
+    if args == ["--check"]:
         sys.exit(check())
-    if "--table" in sys.argv[1:]:
+    if args == ["--table"]:
         sys.exit(table())
+    if args:
+        # Asking for help, or a mistyped switch, must never rewrite the guard's
+        # hashes: only the bare command does that (20 September 2026, when
+        # --help did exactly that).
+        print(__doc__.strip() if __doc__ else "usage: release-hashes.py [--check | --table]")
+        sys.exit(0 if args[0] in ("-h", "--help") else 2)
     sys.exit(write_block())
 
 

@@ -307,7 +307,8 @@ def inbox_files():
         # The starter's own note on how to add things (HOW-TO-ADD-CONTENT.md)
         # lives in raw/ and is never ingested, so counting it shows "1 pending"
         # on an empty inbox for ever (install test, 20 September 2026).
-        if os.path.isfile(p) and not f.startswith(".") and not f.upper().startswith("HOW-TO"):
+        # That one file by its exact name: an owner's own "how-to-…" is theirs and is counted.
+        if os.path.isfile(p) and not f.startswith(".") and f != "HOW-TO-ADD-CONTENT.md":
             out.append({"name": f, "folder": "raw", "size": os.path.getsize(p)})
     clip = os.path.join(VAULT, "Clippings")
     for f in sorted(os.listdir(clip)) if os.path.isdir(clip) else []:

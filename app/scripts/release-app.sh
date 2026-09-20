@@ -21,7 +21,26 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 out="${MOBLEE_BUILD_DIR:-$HOME/Library/Caches/moblee-build}"
 profile="${MOBLEE_NOTARY_PROFILE:-moblee-notary}"
 
-identity="$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | sed -e 's/^[^"]*"//' -e 's/"$//')"
+pack_root="$(dirname "$(dirname "$here")")"
+
+# The app carries the pack as it was last COMMITTED, so anything not committed
+# would be left out of what ships, silently. And the delete guard inside it
+# recognises the pack's own scripts by their hashes: shipped stale, the guard
+# on every owner's Mac would refuse Claude the pack's own tools (the galaxy
+# build, for one). Both are checked before anything is built or sent to Apple.
+if [ -n "$(git -C "$pack_root" status --porcelain)" ]; then
+    echo "There are changes that are not committed, and they would not be in the app:"
+    git -C "$pack_root" status --short
+    echo "Commit them (or put them aside), then run this again. Nothing was built."
+    exit 1
+fi
+if ! ( cd "$pack_root" && python3 safety/release-hashes.py --check ); then
+    echo "The guard's hashes are out of date. Run:  python3 safety/release-hashes.py"
+    echo "then commit safety/bash-guard.py and run this again. Nothing was built."
+    exit 1
+fi
+
+identity="$(security find-identity -v -p codesigning | grep "Developer ID Application" | head -1 | sed -e 's/^[^"]*"//' -e 's/"$//' || true)"
 if [ -z "$identity" ]; then echo "No Developer ID Application certificate was found in the keychain."; exit 1; fi
 echo "Signing as: $identity"
 

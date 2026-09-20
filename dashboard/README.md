@@ -19,7 +19,7 @@ Then open http://127.0.0.1:7373 in your browser. That is the whole procedure.
 The server finds your vault from `~/.config/moblee/vault-path` (the Moblee
 installer writes that file), or from the `MOBLEE_VAULT` environment variable,
 or by walking up from the folder you ran it in. Closing the dashboard tab
-shuts the server down automatically — there is nothing to stop by hand. In
+shuts the server down automatically; there is nothing to stop by hand. In
 Safari and Chrome that takes a few seconds, because the page tells the server
 it is leaving. A browser that closes a tab without letting the page say so
 (the browser pane inside the Claude app is one) leaves the server running

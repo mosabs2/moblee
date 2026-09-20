@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""stamp-starter-dates.py — put the real date where the starter pages say "[Date]".
+"""stamp-starter-dates.py: put the real date where the starter pages say "[Date]".
 
 The starter's log opens with an entry headed `[YYYY-MM-DD HH:MM ±TZ]`, and its
 working-state page and index say `[Date]`. Left as they are, the log's first
@@ -33,8 +33,11 @@ def short_zone(moment: datetime.datetime) -> str:
 
 
 def first_commit(vault: Path) -> datetime.datetime | None:
+    """When the wiki's log was first committed. Asked of the log's own path, so
+    that a wiki sitting inside some larger repository is not dated from that
+    repository's beginning."""
     try:
-        r = subprocess.run(["git", "-C", str(vault), "log", "--reverse", "--format=%aI"],
+        r = subprocess.run(["git", "-C", str(vault), "log", "--reverse", "--format=%aI", "--", "wiki/log.md"],
                            capture_output=True, text=True, timeout=60)
         first = r.stdout.strip().splitlines()[0] if r.returncode == 0 and r.stdout.strip() else ""
         return datetime.datetime.fromisoformat(first) if first else None
@@ -50,24 +53,33 @@ def main() -> int:
     a = ap.parse_args()
     vault = Path(a.vault).expanduser().resolve()
 
-    moment = (first_commit(vault) if a.from_history else None) or datetime.datetime.now().astimezone()
+    began = first_commit(vault) if a.from_history else None
+    moment = began or datetime.datetime.now().astimezone()
     stamp = f"{moment.strftime('%Y-%m-%d %H:%M')} {short_zone(moment)}"
     day = moment.strftime("%-d %B %Y")
 
     jobs = [
-        (vault / "wiki" / "log.md", LOG_PLACEHOLDER, f"## [{stamp}] initialised |"),
         (vault / "wiki" / "_context.md", DATE_LINE, rf"\g<1>{day}"),
         (vault / "wiki" / "Index.md", DATE_LINE, rf"\g<1>{day}"),
     ]
+    # An older wiki with no history to date it from keeps its placeholder log
+    # header: today's date on the log's FIRST entry would sit above every later
+    # one, the health check would call the log out of order every week, and the
+    # log is append-only, so nobody could put it right.
+    if began or not a.from_history:
+        jobs.insert(0, (vault / "wiki" / "log.md", LOG_PLACEHOLDER, f"## [{stamp}] initialised |"))
     done = []
     for path, pattern, replacement in jobs:
         try:
-            text = path.read_text(encoding="utf-8")
-        except OSError:
+            # newline="": the file's own line endings come back exactly as they were
+            with open(path, encoding="utf-8", newline="") as fh:
+                text = fh.read()
+        except (OSError, ValueError):   # missing, unreadable, or not text this script can read: left alone
             continue
         new, n = pattern.subn(replacement, text, count=1)
         if n:
-            path.write_text(new, encoding="utf-8")
+            with open(path, "w", encoding="utf-8", newline="") as fh:
+                fh.write(new)
             done.append(path.name)
     print("dated: " + ", ".join(done) if done else "starter dates already filled in; nothing changed")
     return 0

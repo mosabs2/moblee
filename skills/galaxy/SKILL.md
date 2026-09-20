@@ -19,7 +19,7 @@ Detect the vault root at runtime, in this order: the `MOBLEE_VAULT` environment 
    python3 "<vault>/scripts/wiki-galaxy/build.py"
    ```
 
-   It writes `outputs/galaxy/index.html`, `outputs/galaxy/graph-data.js` and `outputs/galaxy/galaxy-libs.min.js` under the vault, and prints two lines: the counts (pages, links, orphans, restricted pages excluded) and the output folder. Needs only the Python 3 that macOS ships; no packages, no network.
+   It writes `outputs/galaxy/index.html`, `outputs/galaxy/graph-data.js` and `outputs/galaxy/galaxy-libs.min.js` under the vault, and prints two lines: the counts (pages, links, pages with no links in or out, restricted pages excluded) and the output folder. Needs only the Python 3 that macOS ships; no packages, no network.
 
 2. **Open in the default browser** (fully offline; a `file://` URL is fine, there is no server and no keys):
 
@@ -27,7 +27,7 @@ Detect the vault root at runtime, in this order: the `MOBLEE_VAULT` environment 
    open "<vault>/outputs/galaxy/index.html"
    ```
 
-3. **Report** the build line back in one sentence (pages, links, orphans). If the orphan count has moved notably since the last run, say so: orphans are lint fodder. If the build line reports unreadable files dropped, say that too, since the graph is then partial.
+3. **Report** the build line back in one sentence (pages, links, pages with no links in or out). If that last count has moved notably since the last run, say so: a page nothing connects to is worth a look. It is not the health check's "orphans" (pages nothing links to, the log left aside), which is a stricter count and may differ. If the build line reports unreadable files dropped, say that too, since the graph is then partial.
 
 ## Notes
 
