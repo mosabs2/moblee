@@ -244,8 +244,18 @@ final class Flow: ObservableObject {
         }
     }
 
+    /// When the last move between screens was made. While one screen slides
+    /// out its button is still there to be pressed, so a second press inside
+    /// the slide (a double click, or a slow Mac) would skip the screen sliding
+    /// in. The question of which assistant must never be skipped that way.
+    private var lastMove = Date.distantPast
+
     func next() {
+        guard Date().timeIntervalSince(lastMove) > 0.5 else { return }
+        // Nothing leaves the question without an answer, whoever asks.
+        if step == .assistant && assistant == nil { return }
         if var s = Step(rawValue: step.rawValue + 1) {
+            lastMove = Date()
             // The Trust screen is only for a run that said ChatGPT is waiting for it.
             if s == .trust && !install.trustNeeded { s = .handoff }
             withAnimation(.easeInOut(duration: 0.35)) { step = s }
