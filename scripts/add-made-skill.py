@@ -72,7 +72,7 @@ def description_of(skill_md: Path) -> str:
 
 def inspect(vault: Path, name: str) -> dict:
     """Everything the owner should see, and every reason not to add it."""
-    out = {"name": name, "description": "", "files": [], "problems": [], "replaces": False}
+    out = {"name": name, "description": "", "body": "", "files": [], "problems": [], "replaces": False}
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,59}", name):
         out["problems"].append("The name must be plain letters, numbers, hyphens or underscores.")
         return out
@@ -99,6 +99,10 @@ def inspect(vault: Path, name: str) -> dict:
         out["problems"].append("The draft has no SKILL.md.")
     else:
         out["description"] = description_of(src / "SKILL.md")
+        # The description is one line the skill writes about itself. What Claude
+        # will actually follow is the rest of the file, so the owner is shown
+        # that too, in full, before anything is added.
+        out["body"] = (src / "SKILL.md").read_text(errors="replace")[:20000]
         if not out["description"]:
             out["problems"].append("SKILL.md does not say what the skill does (no description).")
     if len(out["files"]) > MAX_FILES or total > MAX_BYTES:
@@ -150,6 +154,10 @@ def main() -> int:
         print(f"What it says it does: {info['description'] or '(nothing)'}")
         for f in info["files"]:
             print(f"  {f['path']}  ({f['bytes']} bytes)")
+        if info["body"]:
+            print("\nWhat Claude would be told to do (the whole of SKILL.md):\n")
+            print(info["body"])
+            print("")
         if info["replaces"]:
             print("It replaces an earlier version you added before; that copy is kept in the backups folder.")
         for p in info["problems"]:

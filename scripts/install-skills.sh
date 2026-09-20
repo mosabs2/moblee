@@ -59,6 +59,8 @@ fi
 # ----- copy each skill --------------------------------------------------------
 INSTALLED=()
 SKIPPED=()
+SAME=()
+DIFFERENT=()
 
 for entry in "$SKILLS_SRC"/*; do
   name="$(basename "$entry")"
@@ -76,7 +78,15 @@ for entry in "$SKILLS_SRC"/*; do
 
   dst="$SKILLS_DST/$name"
   if [[ -d "$dst" && $FORCE -eq 0 ]]; then
-    SKIPPED+=("$name (already installed, use -f to overwrite)")
+    if diff -rq -x .DS_Store "$entry" "$dst" >/dev/null 2>&1; then
+      SAME+=("$name")          # this Moblee's own copy is already there: nothing to do
+    else
+      # A different skill already has this name: an older Moblee's copy, or
+      # something of the owner's own. It is left exactly as it is, and that is
+      # said out loud, because Moblee does not work without its own skills.
+      SKIPPED+=("$name (a different skill of this name is already installed; it was left alone)")
+      DIFFERENT+=("$name")
+    fi
     continue
   fi
 
@@ -118,12 +128,25 @@ else
   done
 fi
 
+if [[ ${#SAME[@]} -gt 0 ]]; then
+  echo "Already in place: ${SAME[*]}"
+fi
+
 if [[ ${#SKIPPED[@]} -gt 0 ]]; then
   echo ""
   echo "Skipped:"
   for s in "${SKIPPED[@]}"; do
     echo "  - $s"
   done
+fi
+
+if [[ ${#DIFFERENT[@]} -gt 0 ]]; then
+  echo ""
+  echo "Moblee's own copy of these skills was NOT installed, because a different"
+  echo "skill already has the name: ${DIFFERENT[*]}"
+  echo "Nothing of yours was touched. To put Moblee's copies in (yours are moved to"
+  echo "the backups folder, never deleted), run:  bash scripts/install-skills.sh --update"
+  exit 3
 fi
 
 # ----- WeasyPrint dependencies (optional) -------------------------------------

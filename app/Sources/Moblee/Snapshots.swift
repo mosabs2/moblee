@@ -25,7 +25,7 @@ extension EnvironmentValues {
 @MainActor
 enum Snapshots {
     static func runIfAsked() {
-        let args = CommandLine.arguments
+        let args = Practice.args
         if let folder = Flow.value(after: "--snapshot", in: args) {
             drawAll(to: URL(fileURLWithPath: folder, isDirectory: true))
             exit(0)
@@ -36,7 +36,7 @@ enum Snapshots {
     }
 
     /// `--dark` draws the screens as they look in dark mode.
-    private static let dark = CommandLine.arguments.contains("--dark")
+    private static let dark = Practice.args.contains("--dark")
 
     private static func draw(_ flow: Flow, _ name: String, to folder: URL) {
         let view = RootView()
@@ -80,6 +80,7 @@ enum Snapshots {
         draw(scene(.checkup), "01-checkup", to: folder)
         draw(scene(.name), "02-name-empty", to: folder)
         draw(scene(.name) { $0.ownerName = "Sam" }, "03-name-typed", to: folder)
+        draw(scene(.promise) { $0.ownerName = "Sam" }, "03b-promise", to: folder)
         draw(scene(.build) { f in
             f.install.phase = .running
             f.install.items[0].state = .done

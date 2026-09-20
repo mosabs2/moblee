@@ -143,6 +143,13 @@ final class InstallRun: ObservableObject {
             if let v = obj["vault"] as? String { vaultPath = v }
             return
         }
+        if state == "handed-to-updater" {
+            // The wiki was already there, so the installer passed the job to the
+            // updater, whose steps are different: show those, not six grey tiles.
+            items = InstallRun.updateItems()
+            softSteps = []
+            return
+        }
         withAnimation(.spring(response: 0.45, dampingFraction: 0.75)) {
             switch state {
             case "start": set(step, .running)

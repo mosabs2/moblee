@@ -11,7 +11,7 @@ import SwiftUI
 /// person.
 @MainActor
 enum SelfDrive {
-    static var asked: Bool { CommandLine.arguments.contains("--self-drive") }
+    static var asked: Bool { Practice.args.contains("--self-drive") }
 
     static func run(_ flow: Flow) async {
         guard flow.isTestMode else {
@@ -23,13 +23,68 @@ enum SelfDrive {
             try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
         }
 
+        // The controls themselves are pressed, with real mouse and key events
+        // put into the app's own event queue: the big button by clicking where
+        // it is drawn, the name by typing it, Return by pressing Return. A
+        // button that draws but does not work, or a key that does two things,
+        // fails here. (Added 20 September 2026: until then this walk drove the
+        // model from the inside and never touched a control.)
+        NSApp.activate(ignoringOtherApps: true)
+        await pause(1.0)
+        guard let window = NSApp.windows.first(where: { $0.isVisible }) else { say("no window opened"); exit(1) }
+        window.makeKeyAndOrderFront(nil)
+        let bigButton = CGPoint(x: window.frame.width / 2, y: 73)     // window coordinates, from the bottom left
+
+        func click(_ p: CGPoint) {
+            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                if let e = NSEvent.mouseEvent(with: type, location: p, modifierFlags: [],
+                                              timestamp: ProcessInfo.processInfo.systemUptime,
+                                              windowNumber: window.windowNumber, context: nil,
+                                              eventNumber: 0, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0) {
+                    NSApp.postEvent(e, atStart: false)
+                }
+            }
+        }
+        func key(_ chars: String, code: UInt16 = 0) {
+            for type in [NSEvent.EventType.keyDown, .keyUp] {
+                if let e = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [],
+                                            timestamp: ProcessInfo.processInfo.systemUptime,
+                                            windowNumber: window.windowNumber, context: nil,
+                                            characters: chars, charactersIgnoringModifiers: chars,
+                                            isARepeat: false, keyCode: code) {
+                    NSApp.postEvent(e, atStart: false)
+                }
+            }
+        }
+        func expect(_ what: String, within seconds: Double = 3, _ test: () -> Bool) async {
+            let by = Date().addingTimeInterval(seconds)
+            while !test() && Date() < by { await pause(0.1) }
+            if !test() { say("FAILED: \(what)"); exit(1) }
+            say("ok: \(what)")
+        }
+
         say("welcome"); await pause(1.5)
-        flow.next(); say("check-up"); await pause(7)      // long enough for two re-looks
-        flow.next(); say("name"); await pause(1)
-        flow.ownerName = "Tom & Sam"; await pause(1)
+        click(bigButton)
+        await expect("clicking Start opens the check-up") { flow.step == .checkup }
+        say("check-up"); await pause(7)      // long enough for two re-looks
+        click(bigButton)
+        await expect("clicking Next opens the name screen") { flow.step == .name }
+        say("name"); await pause(1.0)
+        click(bigButton)                     // the button is greyed out until a name is typed
+        await pause(0.8)
+        await expect("a greyed-out Next does nothing") { flow.step == .name }
+        for ch in "Tom & Sam" { key(String(ch)); await pause(0.05) }
+        await expect("typing reaches the name box") { flow.ownerName == "Tom & Sam" }
         flow.back(); say("back to check-up"); await pause(4)
         flow.next(); say("name again"); await pause(1)
-        flow.next(); say("build")
+        await expect("the name is still there after going back") { flow.ownerName == "Tom & Sam" }
+        key("\r", code: 36)                  // Return
+        await pause(1.5)
+        await expect("Return moves on exactly one screen") { flow.step == .promise }
+        say("promise"); await pause(1.0)
+        click(bigButton)
+        await expect("clicking Make it starts the build") { flow.step == .build }
+        say("build")
 
         let deadline = Date().addingTimeInterval(180)
         while (flow.install.phase == .idle || flow.install.phase == .running) && Date() < deadline {
@@ -40,7 +95,9 @@ enum SelfDrive {
         guard flow.install.phase == .finished, let vaultPath = flow.install.vaultPath else {
             say("the install did not finish"); exit(1)
         }
-        flow.next(); say("hand-off"); await pause(2)
+        click(bigButton)
+        await expect("clicking Next after the build opens the hand-off") { flow.step == .handoff }
+        say("hand-off"); await pause(2)
 
         // Now the home screen, as the owner would meet it on a later day: two
         // things agreed with Claude are waiting. One the app adds by itself,
@@ -86,11 +143,17 @@ enum SelfDrive {
         await pause(1.5)
         say("tiles waiting: \(flow.homeModel.tiles.map(\.key).joined(separator: ", "))")
 
-        guard let trips = flow.homeModel.tiles.first(where: { $0.key == "trips" }),
-              let videos = flow.homeModel.tiles.first(where: { $0.key == "videos" }) else {
+        guard flow.homeModel.tiles.contains(where: { $0.key == "trips" }),
+              flow.homeModel.tiles.contains(where: { $0.key == "videos" }) else {
             say("the waiting tiles did not appear"); exit(1)
         }
-        flow.homeModel.press(trips); say("pressed Add on trips")
+        // The big button adds the next thing, and it is pressed for real.
+        await expect("the big button offers the first thing, trips") { flow.homeModel.nextTile?.key == "trips" }
+        click(bigButton); say("clicked the big button (Add the first one)")
+        await expect("the click started adding trips", within: 5) {
+            let s = flow.homeModel.tiles.first(where: { $0.key == "trips" })?.state
+            return s == .running || s == .done
+        }
         let addBy = Date().addingTimeInterval(120)
         while flow.homeModel.tiles.first(where: { $0.key == "trips" })?.state == .running && Date() < addBy {
             await pause(0.3)
@@ -98,9 +161,14 @@ enum SelfDrive {
         let tripsState = flow.homeModel.tiles.first(where: { $0.key == "trips" })?.state
         say("trips ended: \(String(describing: tripsState))")
 
-        flow.homeModel.press(videos); say("explaining the Terminal window"); await pause(2)
-        if let t = flow.homeModel.explaining { flow.homeModel.openTerminal(for: t); flow.homeModel.explaining = nil }
-        await pause(1.5)
+        await expect("the big button moves on to videos") { flow.homeModel.nextTile?.key == "videos" }
+        click(bigButton); say("explaining the Terminal window")
+        await expect("the click opened the explanation first, and nothing else") { flow.homeModel.explaining?.key == "videos" }
+        await pause(1.0)
+        click(bigButton)                      // "Open it"
+        await expect("Open it hands the item over") {
+            flow.homeModel.tiles.first(where: { $0.key == "videos" })?.state == .handedOver
+        }
         let videosState = flow.homeModel.tiles.first(where: { $0.key == "videos" })?.state
         say("videos ended: \(String(describing: videosState))")
 
@@ -116,12 +184,17 @@ enum SelfDrive {
         say("skill brain: \(String(describing: skill("brain")?.state))")
         say("a key with a path in it made a tile: \(flow.homeModel.tiles.contains { $0.key.contains("/") || $0.key.contains(";") })")
 
-        if let g = skill("gym-log") {
-            flow.homeModel.press(g); say("looking at gym-log before adding it"); await pause(2)
-            if let t = flow.homeModel.explaining { flow.homeModel.addSkill(t); flow.homeModel.explaining = nil }
-            let by = Date().addingTimeInterval(30)
-            while skill("gym-log")?.state == .running && Date() < by { await pause(0.3) }
+        await expect("the big button moves on to the drafted skill") { flow.homeModel.nextTile?.key == "gym-log" }
+        click(bigButton); say("looking at gym-log before adding it")
+        await expect("the skill is shown first, the whole of it, and nothing is added yet", within: 10) {
+            flow.homeModel.explaining?.key == "gym-log"
+                && (flow.homeModel.explaining?.body.contains("Write the sets to the Gym Log page") ?? false)
+                && !fm.fileExists(atPath: flow.home.appendingPathComponent(".claude/skills/gym-log").path)
         }
+        await pause(1.0)
+        click(bigButton)                      // "Add it"
+        let by = Date().addingTimeInterval(30)
+        while skill("gym-log")?.state != .done && Date() < by { await pause(0.3) }
         say("skill gym-log ended: \(String(describing: skill("gym-log")?.state))")
 
         let skills = flow.home.appendingPathComponent(".claude/skills", isDirectory: true)

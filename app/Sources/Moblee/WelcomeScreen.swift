@@ -19,6 +19,7 @@ struct TalkDiagram: View {
     @State private var travel: CGFloat = 0
     @State private var hasAppeared = false
     @Environment(\.stillPicture) private var still
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var appeared: Bool { hasAppeared || still }
 
@@ -39,7 +40,7 @@ struct TalkDiagram: View {
                 Circle()
                     .fill(Theme.accent)
                     .frame(width: 14, height: 14)
-                    .position(x: xs[0] + 56 + (xs[2] - xs[0] - 112) * (still ? 0.25 : travel), y: y)
+                    .position(x: xs[0] + 56 + (xs[2] - xs[0] - 112) * ((still || reduceMotion) ? 0.25 : travel), y: y)
                     .opacity(appeared ? 1 : 0)
 
                 node("person.fill", "You", x: xs[0], y: y, delay: 0.0)
@@ -49,10 +50,13 @@ struct TalkDiagram: View {
         }
         .onAppear {
             hasAppeared = true
+            guard !reduceMotion else { return }      // the picture says the same thing standing still
             withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: false)) {
                 travel = 1
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("A picture: you talk to Claude, and Claude keeps your wiki.")
     }
 
     private func node(_ symbol: String, _ label: String,
@@ -60,7 +64,8 @@ struct TalkDiagram: View {
         VStack(spacing: 10) {
             ZStack {
                 Circle()
-                    .fill(Color(nsColor: .controlBackgroundColor))
+                    .fill(Theme.card)
+                    .overlay(Circle().stroke(Theme.cardEdge, lineWidth: 1))
                     .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
                     .frame(width: 104, height: 104)
                 Image(systemName: symbol)
@@ -69,7 +74,7 @@ struct TalkDiagram: View {
             }
             Text(label)
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
         }
         .position(x: x, y: y + 14)
         .scaleEffect(appeared ? 1 : 0.6)

@@ -168,33 +168,65 @@ VAULT_LOCATION="${VAULT_LOCATION/#\~/$HOME}"
 # its content. This is also the recovery path if a previous install stopped
 # part-way (for example at the safety step): run the installer again with the
 # same answers and it finishes the job through the updater.
-if [[ -f "$VAULT_LOCATION/CLAUDE.md" && -d "$VAULT_LOCATION/wiki" ]]; then
+IN_PROGRESS="$HOME/.config/moblee/in-progress"
+RESUME=0
+if [[ -f "$IN_PROGRESS" && -e "$VAULT_LOCATION" && "$(head -1 "$IN_PROGRESS" 2>/dev/null)" == "$VAULT_LOCATION" ]] \
+   && ! grep -q "^finished " "$IN_PROGRESS" 2>/dev/null; then
+  # This very wiki was started by an earlier run that never finished (the disk
+  # filled, the Mac slept, the app was closed). Finish it from the top: nothing
+  # of the owner's can be in it yet, since no install ever handed it over.
+  RESUME=1
+fi
+if [[ $RESUME -eq 0 && -f "$VAULT_LOCATION/CLAUDE.md" && -d "$VAULT_LOCATION/wiki" ]]; then
   echo ""
   echo "There is already a Moblee vault at $VAULT_LOCATION."
   echo "Nothing there will be overwritten. Bringing it up to this version instead..."
   diary "a Moblee wiki already exists at the chosen place; handing over to the updater"
   emit starting handed-to-updater
   trap - EXIT
+  if [[ $PROGRESS -eq 1 ]]; then
+    exec bash "$SCRIPT_DIR/update.sh" "$VAULT_LOCATION" --progress
+  fi
   exec bash "$SCRIPT_DIR/update.sh" "$VAULT_LOCATION"
 fi
 
 # ----- safety: refuse to overwrite --------------------------------------------
-if [[ -e "$VAULT_LOCATION" ]]; then
+if [[ $RESUME -eq 0 && -e "$VAULT_LOCATION" ]]; then
   echo ""
-  echo "Error: $VAULT_LOCATION already exists."
-  echo "Refusing to overwrite. Pick a different location, or delete the existing"
-  echo "directory first if you're sure you want to replace it."
+  echo "There is already a folder at $VAULT_LOCATION, and it is not a Moblee wiki."
+  echo "Nothing was changed. Choose a different name or place and run this again."
   diary "the chosen place already holds something that is not a Moblee wiki; nothing was changed"
   emit starting fail place-taken
+  exit 1
+fi
+
+# ----- room on the disk -------------------------------------------------------
+# A wiki is small, but a full disk stops the copy half-way and leaves a stump.
+FREE_KB="$(df -k "$HOME" 2>/dev/null | awk 'NR==2 {print $4}')"
+if [[ "${FREE_KB:-0}" =~ ^[0-9]+$ && "${FREE_KB:-0}" -lt 512000 ]]; then
+  echo ""
+  echo "This Mac has less than 500 MB free, so the wiki was not started."
+  echo "Nothing was changed. Make some room and run this again."
+  diary "less than 500 MB free ($((FREE_KB / 1024)) MB); nothing was changed"
+  emit starting fail no-room
   exit 1
 fi
 
 # ----- copy the template ------------------------------------------------------
 step_start folder
 echo ""
-echo "Creating vault at $VAULT_LOCATION..."
-mkdir -p "$(dirname "$VAULT_LOCATION")"
-cp -R "$VAULT_TEMPLATE" "$VAULT_LOCATION"
+mkdir -p "$(dirname "$VAULT_LOCATION")" "$HOME/.config/moblee"
+# Which wiki is being made, so that a run that stops part-way can be finished
+# by running the installer again with the same answers.
+echo "$VAULT_LOCATION" > "$IN_PROGRESS"
+if [[ $RESUME -eq 1 ]]; then
+  echo "Finishing the wiki that was started at $VAULT_LOCATION..."
+  diary "an earlier install of this wiki stopped part-way; finishing it"
+  cp -R "$VAULT_TEMPLATE/." "$VAULT_LOCATION/"
+else
+  echo "Creating vault at $VAULT_LOCATION..."
+  cp -R "$VAULT_TEMPLATE" "$VAULT_LOCATION"
+fi
 # the vault's VERSION always comes from the pack, so the template's copy cannot drift
 if [[ -f "$PACKAGE_ROOT/VERSION" ]]; then cp "$PACKAGE_ROOT/VERSION" "$VAULT_LOCATION/VERSION"; fi
 
@@ -344,8 +376,13 @@ SKILLS_OUT="$(mktemp)"
 if bash "$SCRIPT_DIR/install-skills.sh" --quiet 2>&1 | tee "$SKILLS_OUT"; then
   step_ok skills
 else
-  echo "  (core skills not fully installed; run  bash scripts/install-skills.sh  later)"
-  step_fail skills skills-incomplete
+  if grep -q "was NOT installed" "$SKILLS_OUT"; then
+    # a different skill already had one of Moblee's names; said plainly above
+    step_fail skills skills-skipped
+  else
+    echo "  (core skills not fully installed; run  bash scripts/install-skills.sh  later)"
+    step_fail skills skills-incomplete
+  fi
   diary_tail "$SKILLS_OUT"
 fi
 
@@ -399,6 +436,8 @@ mkdir -p "$HOME/.config/moblee"
 echo "$VAULT_LOCATION" > "$HOME/.config/moblee/vault-path"
 # and the pack's own folder, so the owner's Claude can point back at the checklist
 echo "$PACKAGE_ROOT" > "$HOME/.config/moblee/package-path"
+# the install is whole, so it is no longer "in progress": the note says so
+echo "finished $(date '+%Y-%m-%d %H:%M')" >> "$IN_PROGRESS"
 step_ok finish
 CURRENT_STEP="finished"
 diary "=== Moblee install finished ==="

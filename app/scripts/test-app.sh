@@ -27,8 +27,15 @@ BIN="$APP/Contents/MacOS/Moblee"
 
 mkdir -p "$WORK/home-draw" "$WORK/home-rehearse" "$WORK/home-drive"
 
+# Without this the app ignores every practice switch, as a released app must.
+( unset MOBLEE_PRACTICE; "$BIN" --home "$WORK/home-refused" --snapshot "$WORK/screens-refused" > "$WORK/refused.txt" 2>&1 )
+[[ $? -eq 2 && ! -e "$WORK/screens-refused" && ! -e "$WORK/home-refused" ]] && ok "without MOBLEE_PRACTICE=1 a practice switch is refused outright, and nothing is touched" || bad "without MOBLEE_PRACTICE=1 a practice switch is refused outright"
+export MOBLEE_PRACTICE=1
+
 "$BIN" --home "$WORK/home-draw" --snapshot "$WORK/screens" > "$WORK/draw.txt" 2>&1
-[[ "$(ls "$WORK/screens" 2>/dev/null | grep -c '\.png$')" == "19" ]] && ok "nineteen screens drawn to picture files ($WORK/screens)" || bad "nineteen screens drawn (see $WORK/draw.txt)"
+[[ "$(ls "$WORK/screens" 2>/dev/null | grep -c '\.png$')" == "20" ]] && ok "twenty screens drawn to picture files ($WORK/screens)" || bad "twenty screens drawn (see $WORK/draw.txt)"
+"$BIN" --dark --home "$WORK/home-draw" --snapshot "$WORK/screens-dark" > "$WORK/draw-dark.txt" 2>&1
+[[ "$(ls "$WORK/screens-dark" 2>/dev/null | grep -c '\.png$')" == "20" ]] && ok "and the same twenty in dark mode ($WORK/screens-dark)" || bad "twenty dark screens drawn (see $WORK/draw-dark.txt)"
 [[ ! -e "$WORK/home-draw/.claude" ]] && ok "drawing screens installs nothing" || bad "drawing screens installs nothing"
 
 "$BIN" --home "$WORK/home-rehearse" --owner "Tom & Sam" --rehearse "$WORK/screens" > "$WORK/rehearse.txt" 2>&1

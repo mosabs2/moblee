@@ -9,10 +9,20 @@ struct HomeScreen: View {
     @State private var repairing = false
 
     private var waiting: [HomeModel.Tile] { home.tiles.filter { $0.state != .done } }
-    /// Three at a time, the ones still to do first; the rest take their place
-    /// as these are added.
+    /// Three at a time. The ones that can simply be added come first; ones the
+    /// owner has been sent elsewhere to finish, or that cannot be added, come
+    /// after them; the rest take their place as these are dealt with.
     private var shown: [HomeModel.Tile] {
-        Array((waiting + home.tiles.filter { $0.state == .done }).prefix(3))
+        let rank: (HomeModel.Tile) -> Int = { t in
+            switch t.state {
+            case .running: return 0
+            case .waiting, .failed: return 1
+            case .handedOver: return 2
+            case .blocked: return 3
+            case .done: return 4
+            }
+        }
+        return Array(home.tiles.sorted { rank($0) < rank($1) }.prefix(3))
     }
 
     var body: some View {
@@ -28,6 +38,7 @@ struct HomeScreen: View {
                             buttonTitle: "Open Claude", showsBack: false, action: openClaude) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 90)).foregroundStyle(Theme.waiting)
+                        .accessibilityHidden(true)
                 }
             } else if waiting.isEmpty {
                 ScreenFrame(sentence: home.tiles.isEmpty ? "Nothing is waiting. Talk to Claude."
@@ -36,19 +47,28 @@ struct HomeScreen: View {
                     Image(systemName: home.tiles.isEmpty ? "bubble.left.and.bubble.right.fill" : "checkmark.circle.fill")
                         .font(.system(size: 96))
                         .foregroundStyle(home.tiles.isEmpty ? Theme.accent : Theme.good)
+                        .accessibilityHidden(true)
                 }
             } else {
-                ScreenFrame(sentence: "Claude has these ready for you. Tap Add.",
-                            buttonTitle: "Open Claude", showsBack: false, action: openClaude) {
+                // The big button does the job the screen is for: it adds the next
+                // thing. Going back to Claude is the quiet one underneath.
+                ScreenFrame(sentence: home.nextTile == nil ? "Finish these where they opened, then tell Claude."
+                                                           : "Claude has these ready for you.",
+                            buttonTitle: home.nextTile.map { $0.kind == .skill ? "Look at the first one" : "Add the first one" } ?? "Open Claude",
+                            showsBack: false,
+                            quietTitle: home.nextTile == nil ? nil : "Open Claude",
+                            quietAction: home.nextTile == nil ? nil : openClaude,
+                            spoken: spokenList,
+                            action: { if let t = home.nextTile { home.press(t) } else { openClaude() } }) {
                     VStack(spacing: 8) {
-                        HStack(spacing: 18) {
+                        HStack(alignment: .top, spacing: 18) {
                             ForEach(shown) { tile in
-                                RequestTile(tile: tile) { home.press(tile) }
+                                RequestTile(tile: tile, press: { home.press(tile) }, done: { home.markDone(tile) })
                             }
                         }
                         if home.tiles.count > shown.count {
                             Text("and \(home.tiles.count - shown.count) more after these")
-                                .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -63,27 +83,33 @@ struct HomeScreen: View {
         .onDisappear { home.stopWatching() }
     }
 
+    private var spokenList: String {
+        "Claude has these ready for you. " + shown.filter { $0.state != .done }
+            .map { "\($0.title). \($0.why)" }.joined(separator: " Next: ")
+    }
+
     private var updatePrompt: some View {
-        ScreenFrame(sentence: "A newer Moblee is ready for your wiki.",
+        ScreenFrame(sentence: "A newer Moblee is ready for your wiki. Your pages are not touched.",
                     buttonTitle: "Update", showsBack: false,
+                    quietTitle: "Not now", quietAction: { home.updateSetAside = true },
                     action: { flow.install.phase = .idle; flow.mode = .update }) {
             VStack(spacing: 14) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 96)).foregroundStyle(Theme.accent)
+                    .accessibilityHidden(true)
                 Text("\(home.wikiVersion)  →  \(home.packVersion)")
                     .font(.system(size: 20, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
-                Text("Your pages are not touched.")
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                QuietButton(title: "Not now") { home.updateSetAside = true }
+                    .accessibilityLabel("From version \(home.wikiVersion) to \(home.packVersion)")
             }
         }
     }
 
     private var repairPrompt: some View {
         ScreenFrame(sentence: home.repairFailed ? "That did not work. Tell Claude: run a check-up."
-                        : (repairing ? "Switching the guard back on…" : "The safety guard is off. Switch it back on."),
+                        : (repairing ? "Putting it right…"
+                           : (home.safetyOff ? "The safety guard is off. Switch it back on."
+                                             : "One of Moblee's skills is missing. Put it back.")),
                     buttonTitle: home.repairFailed ? "Open Claude" : "Repair",
                     buttonEnabled: !repairing, showsBack: false,
                     action: {
@@ -91,8 +117,9 @@ struct HomeScreen: View {
                         repairing = true
                         home.repair { repairing = false }
                     }) {
-            Image(systemName: "lock.shield.fill")
+            Image(systemName: home.safetyOff ? "lock.shield.fill" : "graduationcap.fill")
                 .font(.system(size: 96)).foregroundStyle(home.repairFailed ? .red : Theme.waiting)
+                .accessibilityHidden(true)
         }
     }
 
@@ -104,19 +131,11 @@ struct HomeScreen: View {
     }
 }
 
-struct QuietButton: View {
-    let title: String
-    let action: () -> Void
-    var body: some View {
-        Button(title, action: action)
-            .buttonStyle(.plain).foregroundStyle(.secondary)
-            .font(.system(size: 13, weight: .medium, design: .rounded))
-    }
-}
-
 struct RequestTile: View {
     let tile: HomeModel.Tile
     let press: () -> Void
+    let done: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 8) {
@@ -125,17 +144,23 @@ struct RequestTile: View {
                 .foregroundStyle(tile.state == .done ? Theme.good
                                  : ((tile.state == .failed || tile.state == .blocked) ? .red : Theme.accent))
                 .frame(height: 50)
+                .symbolEffect(.pulse, options: .repeating, isActive: tile.state == .running && !reduceMotion)
+                .accessibilityHidden(true)
             Text(tile.title)
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.85)
             Text(tile.note.isEmpty ? tile.why : tile.note)
-                .font(.system(size: 12.5, weight: .regular, design: .rounded))
-                .foregroundStyle(tile.note.isEmpty ? Color.secondary : Color.red)
+                .font(.system(size: 13, weight: .regular, design: .rounded))
+                .foregroundStyle(tile.note.isEmpty ? Color.primary.opacity(0.85) : Theme.badText)
                 .multilineTextAlignment(.center).lineLimit(3).minimumScaleFactor(0.85)
             if tile.kind != .skill {
-                Text(tile.detail)
-                    .font(.system(size: 11.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(tile.paid ? Theme.waiting : .secondary)
+                HStack(spacing: 4) {
+                    if tile.paid { Image(systemName: "creditcard.fill").accessibilityHidden(true) }
+                    Text(tile.detail)
+                }
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(tile.paid ? Theme.waitingText : Color.secondary)
+                .multilineTextAlignment(.center)
             }
             Spacer(minLength: 0)
             Group {
@@ -145,17 +170,22 @@ struct RequestTile: View {
                         .buttonStyle(.borderedProminent).tint(Theme.accent).controlSize(.large)
                 case .running:
                     Label("Adding…", systemImage: "arrow.triangle.2.circlepath")
-                        .foregroundStyle(Theme.waiting)
+                        .foregroundStyle(Theme.waitingText)
                 case .handedOver:
-                    Button("Open it again", action: press)
-                        .buttonStyle(.bordered).controlSize(.large)
+                    HStack(spacing: 8) {
+                        if tile.kind == .connection {
+                            Button("Done", action: done).buttonStyle(.borderedProminent).tint(Theme.good)
+                        }
+                        Button("Again", action: press).buttonStyle(.bordered)
+                    }
+                    .controlSize(.regular)
                 case .done:
-                    Text("Added").foregroundStyle(Theme.good)
+                    Text("Added").foregroundStyle(Theme.goodText)
                 case .failed:
                     Button("Try again", action: press)
                         .buttonStyle(.bordered).controlSize(.large)
                 case .blocked:
-                    Text("Tell Claude").foregroundStyle(.red)
+                    Text("Tell Claude").foregroundStyle(Theme.badText)
                 }
             }
             .font(.system(size: 14, weight: .semibold, design: .rounded))
@@ -163,10 +193,21 @@ struct RequestTile: View {
         }
         .padding(.horizontal, 12).padding(.vertical, 14)
         .frame(width: 200, height: 262)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-                .shadow(color: .black.opacity(0.10), radius: 10, y: 4))
+        .background(CardBackground())
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(tile.title). \(tile.why)")
+        .accessibilityValue(stateWord)
+    }
+
+    private var stateWord: String {
+        switch tile.state {
+        case .waiting: return "waiting to be added"
+        case .running: return "being added"
+        case .handedOver: return "opened elsewhere, to be finished there"
+        case .done: return "added"
+        case .failed: return "did not work. \(tile.note)"
+        case .blocked: return "cannot be added. \(tile.note)"
+        }
     }
 }
 
@@ -182,11 +223,13 @@ struct ExplainScreen: View {
 
     var body: some View {
         ScreenFrame(
-            sentence: isSkill ? "Claude wrote this skill. It works in every Claude session on this Mac."
-                : (isTerminal ? "A black window opens. Follow it, then come back."
+            sentence: isSkill ? "Claude wrote this skill for you. It will work in every Claude session on this Mac."
+                : (isTerminal ? "A black window opens and types for itself. Follow it, then come back."
                               : "Do these three in Claude, then come back."),
             buttonTitle: isSkill ? "Add it" : (isTerminal ? "Open it" : "Show me"),
             showsBack: false,
+            quietTitle: "Not now", quietAction: { home.explaining = nil },
+            spoken: isSkill ? "Claude wrote this skill for you. It says: \(tile.detail)" : nil,
             action: {
                 if isSkill { home.addSkill(tile) }
                 else if isTerminal { home.openTerminal(for: tile) }
@@ -194,63 +237,55 @@ struct ExplainScreen: View {
                 home.explaining = nil
             }
         ) {
-            VStack(spacing: 14) {
-                if isSkill {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Label(tile.key, systemImage: "wand.and.stars")
-                            .font(.system(size: 18, weight: .semibold, design: .rounded))
-                        Text("What it says it does")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded)).foregroundStyle(.secondary)
-                        // A scrolling area cannot be drawn to a picture file, so the
-                        // drawn version shows the words plainly.
-                        Group {
-                            if still {
-                                Text(tile.detail.isEmpty ? "It does not say." : tile.detail)
-                                    .font(.system(size: 14, design: .rounded))
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                            } else {
-                                ScrollView {
-                                    Text(tile.detail.isEmpty ? "It does not say." : tile.detail)
-                                        .font(.system(size: 14, design: .rounded))
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                            }
-                        }
-                        .frame(height: 96)
-                        Text("Files: " + tile.files.prefix(6).joined(separator: ", ")
-                             + (tile.files.count > 6 ? " and \(tile.files.count - 6) more" : ""))
-                            .font(.system(size: 12, design: .rounded)).foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                    .padding(18)
-                    .frame(width: 560, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color(nsColor: .controlBackgroundColor))
-                        .shadow(color: .black.opacity(0.10), radius: 10, y: 4))
-                } else if isTerminal {
-                    HStack(spacing: 18) {
-                        HandoffCard(number: 1, symbol: "terminal.fill", title: "It types for itself",
-                                    detail: "Press Return if it asks to start")
-                        HandoffCard(number: 2, symbol: "key.fill", title: "Your Mac password",
-                                    detail: "Nothing shows as you type. That is normal.")
-                        HandoffCard(number: 3, symbol: "clock.fill", title: "Wait",
-                                    detail: "Downloads take a while. Then close it.")
-                    }
-                } else {
-                    HStack(spacing: 18) {
-                        HandoffCard(number: 1, symbol: "gearshape.fill", title: "Connectors",
-                                    detail: "The page opens for you")
-                        HandoffCard(number: 2, symbol: "link", title: "Connect",
-                                    detail: "Find it in the list and press Connect")
-                        HandoffCard(number: 3, symbol: "person.badge.key.fill", title: "Sign in",
-                                    detail: tile.paid ? "Paying is your choice, on their site"
-                                                      : "With your own account")
-                    }
+            if isSkill {
+                skillPreview
+            } else if isTerminal {
+                HStack(alignment: .top, spacing: 18) {
+                    HandoffCard(number: 1, symbol: "terminal.fill", title: "It types for itself",
+                                detail: "Press Return if it asks to start")
+                    HandoffCard(number: 2, symbol: "key.fill", title: "Your Mac password",
+                                detail: "Nothing shows as you type. That is normal.")
+                    HandoffCard(number: 3, symbol: "clock.fill", title: "Wait",
+                                detail: "Downloads take a while. Then close it.")
                 }
-                QuietButton(title: "Not now") { home.explaining = nil }
+                .padding(.horizontal, 30)
+            } else {
+                HStack(alignment: .top, spacing: 18) {
+                    HandoffCard(number: 1, symbol: "gearshape.fill", title: "Connectors",
+                                detail: "The page opens for you")
+                    HandoffCard(number: 2, symbol: "link", title: "Connect",
+                                detail: "Find it in the list and press Connect")
+                    HandoffCard(number: 3, symbol: "person.badge.key.fill", title: "Sign in",
+                                detail: tile.paid ? "Paying is your choice, on their site"
+                                                  : "With your own account")
+                }
+                .padding(.horizontal, 30)
             }
-            .padding(.horizontal, 30)
         }
+    }
+
+    /// The one line the skill says about itself, then the whole of what Claude
+    /// would be told to do, so that the owner is never adding words unseen.
+    private var skillPreview: some View {
+        let whole = "WHAT IT SAYS IT DOES\n\(tile.detail.isEmpty ? "It does not say." : tile.detail)\n\n"
+            + "EVERYTHING CLAUDE WOULD BE TOLD (\(tile.files.count) file\(tile.files.count == 1 ? "" : "s"): "
+            + tile.files.prefix(6).joined(separator: ", ") + ")\n\(tile.body)"
+        return VStack(alignment: .leading, spacing: 8) {
+            Label(tile.key, systemImage: "wand.and.stars")
+                .font(.system(size: 18, weight: .semibold, design: .rounded))
+            Group {
+                if still {
+                    // a scrolling area cannot be drawn to a picture file
+                    Text(whole).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                } else {
+                    ScrollView { Text(whole).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled) }
+                }
+            }
+            .font(.system(size: 13, design: .rounded))
+        }
+        .padding(16)
+        .frame(width: 600, height: 270, alignment: .topLeading)
+        .background(CardBackground(corner: 20))
     }
 }
 
@@ -267,28 +302,32 @@ struct UpdateScreen: View {
         ScreenFrame(
             sentence: install.phase == .finished ? "Your wiki is up to date."
                 : (failed ? "The update stopped. Your pages were not touched." : "Updating your wiki…"),
-            buttonTitle: failed ? "Show what happened" : "Done",
+            buttonTitle: failed ? "Try again" : "Done",
             buttonEnabled: install.phase == .finished || failed,
             showsBack: false,
+            quietTitle: failed ? "Not now" : nil,
+            quietAction: failed ? { home.updateSetAside = true; backHome() } : nil,
             action: {
-                if failed { install.showDiary(); return }
+                if failed { start(); return }
                 backHome()
             }
         ) {
-            VStack(spacing: 6) {
-                LazyVGrid(columns: Array(repeating: GridItem(.fixed(140), spacing: 12), count: 3), spacing: 8) {
-                    ForEach(install.items) { item in
-                        BuildTile(item: item).scaleEffect(0.7).frame(width: 140, height: 80)
-                    }
+            VStack(spacing: 8) {
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(150), spacing: 16), count: 3), spacing: 8) {
+                    ForEach(install.items) { item in BuildTile(item: item, small: true) }
                 }
-                if failed { QuietButton(title: "Back", action: { home.updateSetAside = true; backHome() }) }
+                if failed { QuietButton(title: "Show what happened", action: { install.showDiary() }) }
             }
-            .padding(.top, 18)
         }
         .onAppear {
-            guard !still, install.phase == .idle, let vault = home.vault, let pack = flow.bundledPack else { return }
-            install.startUpdate(home: flow.home, vault: vault, bundledPack: pack)
+            guard !still, install.phase == .idle else { return }
+            start()
         }
+    }
+
+    private func start() {
+        guard let vault = home.vault, let pack = flow.bundledPack else { return }
+        install.startUpdate(home: flow.home, vault: vault, bundledPack: pack)
     }
 
     private func backHome() {

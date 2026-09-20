@@ -7,11 +7,16 @@ struct MobleeApp: App {
 
     init() {
         MainActor.assumeIsolated {
+            // A practice switch without the practice environment is refused
+            // before anything at all is looked at or touched.
+            if !Practice.on, let used = CommandLine.arguments.first(where: { Practice.switches.contains($0) }) {
+                print("\(used) is a practice switch, and this is not a practice run (MOBLEE_PRACTICE=1 is not set); nothing was done.")
+                exit(2)
+            }
             // The modes that do real work in a practice home refuse to start
             // without one, before anything at all has looked at the real home.
-            let args = CommandLine.arguments
+            let args = Practice.args
             let practice = Flow.value(after: "--home", in: args) != nil
-                || !(ProcessInfo.processInfo.environment["MOBLEE_TEST_HOME"] ?? "").isEmpty
             if (args.contains("--self-drive") || args.contains("--rehearse")) && !practice {
                 print("--self-drive and --rehearse only run with --home <practice folder>; nothing was done.")
                 exit(2)
@@ -30,6 +35,19 @@ struct MobleeApp: App {
         .windowResizability(.contentSize)
         .windowStyle(.hiddenTitleBar)
     }
+}
+
+/// The practice switches (`--home`, `--pack`, `--pretend-missing`, `--snapshot`,
+/// `--rehearse`, `--self-drive`, `--dark`, `--owner`, `--step`, `--fresh`) exist
+/// for testing. They are read only when the environment says this is a practice
+/// run (MOBLEE_PRACTICE=1, which the test scripts set), so that a released,
+/// signed Moblee cannot be pointed at some other folder of scripts, or at some
+/// other home, by whoever starts it. Without it the app sees no switches at all.
+enum Practice {
+    static let on = ProcessInfo.processInfo.environment["MOBLEE_PRACTICE"] == "1"
+    static let args: [String] = on ? CommandLine.arguments : []
+    static let switches: Set<String> = ["--home", "--pack", "--pretend-missing", "--snapshot", "--rehearse",
+                                        "--self-drive", "--dark", "--owner", "--step", "--fresh"]
 }
 
 /// Quitting half-way through a build or an update would leave it half done, so
@@ -51,6 +69,7 @@ enum Step: Int, CaseIterable {
     case welcome
     case checkup
     case name
+    case promise
     case build
     case handoff
 }
@@ -83,9 +102,8 @@ final class Flow: ObservableObject {
     static let openingWords = "get me started"
 
     init() {
-        let args = CommandLine.arguments
-        var chosen: String? = ProcessInfo.processInfo.environment["MOBLEE_TEST_HOME"]
-        if let v = Self.value(after: "--home", in: args) { chosen = v }
+        let args = Practice.args
+        let chosen = Self.value(after: "--home", in: args)
         if let chosen, !chosen.isEmpty {
             home = URL(fileURLWithPath: chosen, isDirectory: true)
             isTestMode = true
@@ -101,8 +119,24 @@ final class Flow: ObservableObject {
         if HomeModel.existingVault(home: home) != nil && !args.contains("--fresh") {
             mode = .home
             homeModel.load(home: home, bundledPack: bundledPack)
+        } else {
+            // A wiki that an earlier run started and never finished (the note is
+            // written by the installer's first step and marked finished by its
+            // last): this run finishes that one, and never makes a second beside it.
+            let note = home.appendingPathComponent(".config/moblee/in-progress")
+            if let text = try? String(contentsOf: note, encoding: .utf8),
+               !text.contains("\nfinished "),
+               let first = text.split(separator: "\n").first {
+                let url = URL(fileURLWithPath: String(first), isDirectory: true)
+                if FileManager.default.fileExists(atPath: url.path) {
+                    resumePlace = (url.lastPathComponent, url)
+                }
+            }
         }
     }
+
+    /// Set when an unfinished wiki was found at launch.
+    var resumePlace: (name: String, url: URL)?
 
     static func value(after flag: String, in args: [String]) -> String? {
         guard let i = args.firstIndex(of: flag), i + 1 < args.count else { return nil }
@@ -111,7 +145,7 @@ final class Flow: ObservableObject {
 
     /// The pack inside the app, or `--pack <folder>` while developing.
     var bundledPack: URL? {
-        if let v = Self.value(after: "--pack", in: CommandLine.arguments) {
+        if let v = Self.value(after: "--pack", in: Practice.args) {
             return URL(fileURLWithPath: v, isDirectory: true)
         }
         guard let r = Bundle.main.resourceURL?.appendingPathComponent("pack", isDirectory: true),
@@ -170,6 +204,7 @@ struct RootView: View {
                     case .welcome: WelcomeScreen()
                     case .checkup: CheckupScreen()
                     case .name: NameScreen()
+                    case .promise: PromiseScreen()
                     case .build: BuildScreen()
                     case .handoff: HandoffScreen()
                     }
