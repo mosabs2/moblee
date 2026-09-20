@@ -102,6 +102,10 @@ WIKILINK = re.compile(r"\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]")
 def excluded(rel):
     if rel in EXCLUDE_FILES:
         return True
+    # A blank template is not a page: drawn, it is a star nothing links to,
+    # which the build then counts against the wiki (install test, 20 Sep 2026).
+    if os.path.basename(rel) == "_TEMPLATE.md":
+        return True
     return any(rel == d or rel.startswith(d + os.sep) for d in EXCLUDE_DIRS)
 
 
@@ -215,7 +219,11 @@ def build():
                  for rel, n in ordered]
     out_links = [{"s": index[a], "t": index[b]} for a, b in sorted(links)]
 
-    orphans = sum(1 for rel in nodes if not any(rel in pair for pair in links))
+    # A star drawn with no line to it: a page that neither links out nor is
+    # linked to, the log counted like any other page. This is not the health
+    # check's "orphan" (no link *in*, the log's links left out), so it is not
+    # called one; the two counts answer different questions and may differ.
+    unlinked = sum(1 for rel in nodes if not any(rel in pair for pair in links))
     brand = {"name": os.path.basename(VAULT).upper(),
              "vault": os.path.basename(VAULT)}
 
@@ -232,7 +240,7 @@ def build():
         f.write(";\n")
 
     fail_note = f" · {read_failures} UNREADABLE FILES DROPPED (graph is partial)" if read_failures else ""
-    print(f"✓ {len(out_nodes)} pages · {len(out_links)} links · {orphans} orphans"
+    print(f"✓ {len(out_nodes)} pages · {len(out_links)} links · {unlinked} with no links in or out"
           f" · {skipped_restricted} restricted pages excluded by frontmatter{fail_note}")
     print(f"✓ output: {OUT}  (open index.html in a browser — fully offline)")
 

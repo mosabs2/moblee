@@ -47,7 +47,8 @@ enum Practice {
     static let on = ProcessInfo.processInfo.environment["MOBLEE_PRACTICE"] == "1"
     static let args: [String] = on ? CommandLine.arguments : []
     static let switches: Set<String> = ["--home", "--pack", "--pretend-missing", "--snapshot", "--rehearse",
-                                        "--self-drive", "--dark", "--owner", "--step", "--fresh", "--icon"]
+                                        "--self-drive", "--dark", "--owner", "--step", "--fresh", "--icon",
+                                        "--move-to"]
 }
 
 /// Quitting half-way through a build or an update would leave it half done, so
@@ -84,6 +85,10 @@ final class Flow: ObservableObject {
 
     @Published var mode: Mode = .install
     @Published var step: Step = .welcome
+    /// The app is somewhere it should not stay (Downloads, usually): before
+    /// anything else, it offers to move itself to Applications.
+    @Published var offerMove: Bool = Placement.shouldOffer
+    var movedTo: URL?
     @Published var ownerName: String = "" {
         didSet { if oldValue != ownerName { chosenPlace = nil } }   // a new name means a new folder
     }
@@ -196,6 +201,7 @@ struct RootView: View {
             Theme.background.ignoresSafeArea()
 
             Group {
+                if flow.offerMove { PlacementScreen() } else {
                 switch flow.mode {
                 case .home: HomeScreen()
                 case .update: UpdateScreen()
@@ -208,6 +214,7 @@ struct RootView: View {
                     case .build: BuildScreen()
                     case .handoff: HandoffScreen()
                     }
+                }
                 }
             }
             .environmentObject(flow.homeModel)

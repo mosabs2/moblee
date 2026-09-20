@@ -29,6 +29,7 @@ final class HomeModel: ObservableObject {
         var note: String = ""          // why it failed or cannot be added, in the engine's own words
         var files: [String] = []       // for a made-to-measure skill: what is in it
         var body: String = ""          // and the whole of what Claude would be told to do
+        var steps: [[String]] = []     // for clicks inside Claude: where to go, what to press, how to tell it worked
         var id: String { kind.rawValue + ":" + key }
 
         var symbol: String {
@@ -237,6 +238,10 @@ final class HomeModel: ObservableObject {
                 let detail = "About \(c["minutes"] as? Int ?? 1) min · \(size) · " + (paid ? "can cost money" : "free")
                 tile = Tile(kind: .item, key: key, title: c["title"] as? String ?? key,
                             why: why, detail: detail, how: how, paid: paid)
+                // The pack's own words for the three cards; a list of any other shape is ignored.
+                if let steps = c["steps"] as? [[String]], steps.count == 3, steps.allSatisfy({ $0.count == 2 }) {
+                    tile?.steps = steps
+                }
             case .skill:
                 guard Self.safeName(key) else { continue }
                 tile = Tile(kind: .skill, key: key, title: "A skill Claude wrote: \(key)",
@@ -314,12 +319,18 @@ final class HomeModel: ObservableObject {
     /// An item added in a Terminal window finishes out of the app's sight, so
     /// the saved state is looked at every few seconds.
     private func refreshStates() {
-        let status = (Self.json(home.appendingPathComponent(".config/moblee/setup-state.json"))?["status"]
-                      as? [String: Bool]) ?? [:]
+        // Read value by value: one entry that is not a plain yes or no must not
+        // make the whole record unreadable and every added tile forget it was added.
+        let status = ((Self.json(home.appendingPathComponent(".config/moblee/setup-state.json"))?["status"]
+                       as? [String: Any]) ?? [:]).compactMapValues { $0 as? Bool }
         for i in tiles.indices where tiles[i].state != .running {
             switch tiles[i].kind {
             case .item:
                 if status[tiles[i].key] == true, tiles[i].state != .done { tiles[i].state = .done }
+                // Clicks inside Claude happen where neither Moblee nor the pack's
+                // check can see, so there the owner's word is what finishes it.
+                if tiles[i].how == .clicks, tiles[i].state != .done,
+                   ownerSaidDone().contains(tiles[i].id) { tiles[i].state = .done }
             case .skill:
                 let marker = home.appendingPathComponent(".claude/skills/\(tiles[i].key)/.made-for-you")
                 let installed = home.appendingPathComponent(".claude/skills/\(tiles[i].key)/SKILL.md")
@@ -399,8 +410,18 @@ final class HomeModel: ObservableObject {
 
     /// For an item that needs the owner at a Terminal window: write a small
     /// command file that runs the pack's own checklist for that one item, and
-    /// open it. The checklist asks its usual questions there. Only the item's
-    /// key, which has matched the pack's own list, reaches the file.
+    /// open it. Only the item's key, which has matched the pack's own list,
+    /// reaches the file.
+    ///
+    /// `--yes`: the owner has pressed Add and then Open it, so the checklist's
+    /// "Start now?" would be a third asking of the same question, and one the
+    /// companion never warned them about (install test, 20 September 2026).
+    ///
+    /// The last lines end this window's own shell before it can speak. Left to
+    /// exit by itself, Apple's Terminal set-up prints "truncating history
+    /// files" and "Deleting expired sessions", which read badly beside a
+    /// promise that nothing is deleted. That shell exists only to run this
+    /// file, and it is ended only when it is what started it, in Terminal.
     func openTerminal(for tile: Tile) {
         guard let pack, tile.kind == .item, catalogue[tile.key] != nil else { return }
         let dir = home.appendingPathComponent("Library/Application Support/Moblee/run", isDirectory: true)
@@ -413,9 +434,15 @@ final class HomeModel: ObservableObject {
         echo "Nothing shows while you type. That is normal."
         echo ""
         cd '\(pack.path.replacingOccurrences(of: "'", with: "'\\''"))' || exit 1
-        python3 scripts/moblee-setup.py --only \(tile.key)
+        python3 scripts/moblee-setup.py --only \(tile.key) --yes
         echo ""
-        echo "You can close this window now and go back to Moblee."
+        echo "Finished. Close this window and go back to Moblee."
+        echo ""
+        if [ "${TERM_PROGRAM:-}" = "Apple_Terminal" ]; then
+          case "$(ps -o comm= -p "$PPID" 2>/dev/null)" in
+            -zsh|zsh|*/zsh|-bash|bash|*/bash) kill -9 "$PPID" ;;
+          esac
+        fi
         """
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

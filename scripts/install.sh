@@ -271,6 +271,12 @@ done < <(find "$VAULT_LOCATION" \
                  -o -name "*.yaml" -o -name "*.json" \) \
               -print0)
 
+# The starter's log, working-state page and index say "[Date]" until someone
+# fills them in, and the log's first entry can never be corrected afterwards.
+# The installer knows the moment, so it writes it.
+python3 "$SCRIPT_DIR/stamp-starter-dates.py" --vault "$VAULT_LOCATION" | sed 's/^/  /' \
+  || echo "  (the starter pages' dates were not filled in; harmless, Claude writes them at the first ingest)"
+
 step_ok folder
 
 # ----- copy the vault tooling (v0.4, extended v0.5) ---------------------------

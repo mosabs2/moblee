@@ -246,6 +246,17 @@ def check_mac(f: Findings) -> None:
             f.add(OK, f"{name} is installed.")
         else:
             f.add(LOOK, f"{name} was not found in Applications ({note}).", None if "Claude" in name else "F16")
+    # An owner who installed with the Moblee app needs to be able to find it
+    # again: everything added later is added there. Left in Downloads it is run
+    # from a temporary copy, cannot be found by name, and goes when Downloads
+    # is tidied. Downloads itself is never looked into (the Mac would ask the
+    # owner for permission); only the two places the app should be.
+    pack = find_pack()
+    if pack and "Application Support/Moblee" in str(pack):
+        if (Path("/Applications") / "Moblee.app").exists() or (HOME / "Applications" / "Moblee.app").exists():
+            f.add(OK, "The Moblee app is in Applications.")
+        else:
+            f.add(LOOK, "The Moblee app is not in Applications, so it may be hard to find again.", "F24")
 
 
 def check_skills(f: Findings, pack: Path | None) -> None:

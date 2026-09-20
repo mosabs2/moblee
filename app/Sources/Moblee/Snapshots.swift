@@ -111,6 +111,7 @@ enum Snapshots {
         // No window and no screen being drawn yet, so waiting here is safe.
         Checkup.knownBeforeDrawing = Checkup.developerToolsInstalled()
 
+        draw(scene(.welcome) { $0.offerMove = true }, "00a-move-to-applications", to: folder)
         draw(scene(.welcome), "00-welcome", to: folder)
         draw(scene(.checkup), "01-checkup", to: folder)
         draw(scene(.name), "02-name-empty", to: folder)
@@ -148,6 +149,12 @@ enum Snapshots {
                   why: "You want a voice for your podcast.", detail: "About 5 min · 0 MB · can cost money",
                   how: .clicks, paid: true),
         ]
+        var google = HomeModel.Tile(kind: .item, key: "google", title: "Gmail, Google Calendar and Google Drive",
+                                    why: "Your calendar lives in Google.", detail: "About 3 min · 0 MB · free",
+                                    how: .clicks, paid: false)
+        google.steps = [["Connectors", "The page opens. If not: in Claude, Settings, then Connectors"],
+                        ["Switch on three", "Gmail, Google Calendar, Google Drive. Connect, then sign in"],
+                        ["Check it worked", "Ask Claude: what is on my calendar today?"]]
         func homeScene(_ configure: (Flow) -> Void) -> Flow {
             let f = Flow(); f.mode = .home; f.homeModel.loaded = true
             f.homeModel.wikiVersion = "0.8.0"; f.homeModel.packVersion = "0.8.0"
@@ -163,6 +170,8 @@ enum Snapshots {
         draw(homeScene { $0.homeModel.needsRepair = true }, "12-home-repair", to: folder)
         draw(homeScene { $0.homeModel.tiles = sample; $0.homeModel.explaining = sample[1] }, "13-explain-terminal", to: folder)
         draw(homeScene { $0.homeModel.tiles = sample; $0.homeModel.explaining = sample[2] }, "14-explain-clicks", to: folder)
+        draw(homeScene { $0.homeModel.tiles = [google]; $0.homeModel.explaining = google }, "14b-explain-google", to: folder)
+        draw(homeScene { f in var g = google; g.state = .handedOver; f.homeModel.tiles = [g] }, "14c-google-handed-over", to: folder)
         var made = HomeModel.Tile(kind: .skill, key: "gym-log", title: "A skill Claude wrote: gym-log",
                                   why: "You asked to log gym sets by saying log gym.",
                                   detail: "Logs the owner's gym sets to the Gym Log page when they say log gym.",

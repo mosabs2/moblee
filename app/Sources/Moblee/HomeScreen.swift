@@ -173,7 +173,10 @@ struct RequestTile: View {
                         .foregroundStyle(Theme.waitingText)
                 case .handedOver:
                     HStack(spacing: 8) {
-                        if tile.kind == .connection {
+                        // Anything done by clicks inside Claude, whether it is on the
+                        // pack's list (Google) or not, is finished by the owner's word:
+                        // nothing outside Claude can see those connections.
+                        if tile.how == .clicks {
                             Button("Done", action: done).buttonStyle(.borderedProminent).tint(Theme.good)
                         }
                         Button("Again", action: press).buttonStyle(.bordered)
@@ -225,7 +228,7 @@ struct ExplainScreen: View {
         ScreenFrame(
             sentence: isSkill ? "Claude wrote this skill for you. It will work in every Claude session on this Mac."
                 : (isTerminal ? "A black window opens and types for itself. Follow it, then come back."
-                              : "Do these three in Claude, then come back."),
+                              : "Do these three in Claude. Then come back and press Done."),
             buttonTitle: isSkill ? "Add it" : (isTerminal ? "Open it" : "Show me"),
             showsBack: false,
             quietTitle: "Not now", quietAction: { home.explaining = nil },
@@ -242,22 +245,32 @@ struct ExplainScreen: View {
             } else if isTerminal {
                 HStack(alignment: .top, spacing: 18) {
                     HandoffCard(number: 1, symbol: "terminal.fill", title: "It types for itself",
-                                detail: "Press Return if it asks to start")
+                                detail: "Press Return if it asks you to")
                     HandoffCard(number: 2, symbol: "key.fill", title: "Your Mac password",
                                 detail: "Nothing shows as you type. That is normal.")
                     HandoffCard(number: 3, symbol: "clock.fill", title: "Wait",
                                 detail: "Downloads take a while. Then close it.")
                 }
                 .padding(.horizontal, 30)
+            } else if tile.steps.count == 3 {
+                // The pack's own three cards for this item: where to go, what to
+                // switch on by name, and how to tell it worked. Without them an
+                // owner lands in Claude with nothing to look for.
+                HStack(alignment: .top, spacing: 18) {
+                    HandoffCard(number: 1, symbol: "gearshape.fill", title: tile.steps[0][0], detail: tile.steps[0][1])
+                    HandoffCard(number: 2, symbol: "link", title: tile.steps[1][0], detail: tile.steps[1][1])
+                    HandoffCard(number: 3, symbol: "text.bubble.fill", title: tile.steps[2][0], detail: tile.steps[2][1])
+                }
+                .padding(.horizontal, 30)
             } else {
                 HStack(alignment: .top, spacing: 18) {
                     HandoffCard(number: 1, symbol: "gearshape.fill", title: "Connectors",
-                                detail: "The page opens for you")
-                    HandoffCard(number: 2, symbol: "link", title: "Connect",
-                                detail: "Find it in the list and press Connect")
-                    HandoffCard(number: 3, symbol: "person.badge.key.fill", title: "Sign in",
-                                detail: tile.paid ? "Paying is your choice, on their site"
-                                                  : "With your own account")
+                                detail: "The page opens. If not: in Claude, Settings, then Connectors")
+                    HandoffCard(number: 2, symbol: "link", title: "Connect \(tile.key)",
+                                detail: tile.paid ? "Press Connect and sign in. Paying is your choice"
+                                                  : "Find it, press Connect, sign in with your own account")
+                    HandoffCard(number: 3, symbol: "text.bubble.fill", title: "Check it worked",
+                                detail: "Ask Claude to use it. If it answers, it is connected")
                 }
                 .padding(.horizontal, 30)
             }
