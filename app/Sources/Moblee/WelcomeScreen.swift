@@ -5,7 +5,7 @@ struct WelcomeScreen: View {
 
     var body: some View {
         ScreenFrame(
-            sentence: "You talk. Claude keeps your wiki.",
+            sentence: "You talk. Your assistant keeps your wiki.",
             buttonTitle: "Start",
             action: flow.next
         ) {
@@ -56,7 +56,7 @@ struct TalkDiagram: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("A picture: you talk to Claude, and Claude keeps your wiki.")
+        .accessibilityLabel("A picture: you talk to your assistant, and it keeps your wiki.")
     }
 
     private func node(_ symbol: String, _ label: String,

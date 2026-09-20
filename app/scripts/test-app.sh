@@ -5,7 +5,8 @@
 #
 # Builds the app, then, in a fresh temporary practice home so nothing on this
 # Mac is changed:
-#   1. draws every screen to picture files (no window),
+#   1. draws every screen to picture files (no window), and checks the app's
+#      decisions about the assistant (no window, no scripts run),
 #   2. rehearses a real install through the app's own code (no window),
 #   3. opens the real window and lets the app click through every screen by
 #      itself, with a real install on the way.
@@ -33,10 +34,28 @@ mkdir -p "$WORK/home-draw" "$WORK/home-rehearse" "$WORK/home-drive"
 export MOBLEE_PRACTICE=1
 
 "$BIN" --home "$WORK/home-draw" --snapshot "$WORK/screens" > "$WORK/draw.txt" 2>&1
-[[ "$(ls "$WORK/screens" 2>/dev/null | grep -c '\.png$')" == "23" ]] && ok "twenty-three screens drawn to picture files ($WORK/screens)" || bad "twenty-three screens drawn (see $WORK/draw.txt)"
+[[ "$(ls "$WORK/screens" 2>/dev/null | grep -c '\.png$')" == "38" ]] && ok "thirty-eight screens drawn to picture files ($WORK/screens)" || bad "thirty-eight screens drawn (see $WORK/draw.txt)"
 "$BIN" --dark --home "$WORK/home-draw" --snapshot "$WORK/screens-dark" > "$WORK/draw-dark.txt" 2>&1
-[[ "$(ls "$WORK/screens-dark" 2>/dev/null | grep -c '\.png$')" == "23" ]] && ok "and the same twenty-three in dark mode ($WORK/screens-dark)" || bad "twenty-three dark screens drawn (see $WORK/draw-dark.txt)"
-[[ ! -e "$WORK/home-draw/.claude" ]] && ok "drawing screens installs nothing" || bad "drawing screens installs nothing"
+[[ "$(ls "$WORK/screens-dark" 2>/dev/null | grep -c '\.png$')" == "38" ]] && ok "and the same thirty-eight in dark mode ($WORK/screens-dark)" || bad "thirty-eight dark screens drawn (see $WORK/draw-dark.txt)"
+for s in 03c-assistant-unanswered 06b-trust-steps 06e-trust-proved 07b-handoff-chatgpt 07c-handoff-both 10b-home-chatgpt 15a-update-asks-assistant; do
+  [[ -s "$WORK/screens/$s.png" ]] || bad "  drawn: $s"
+done
+[[ ! -e "$WORK/home-draw/.claude" && ! -e "$WORK/home-draw/.codex" && ! -e "$WORK/home-draw/.config" ]] && ok "drawing screens installs nothing" || bad "drawing screens installs nothing"
+
+# The decisions about the assistant, checked without a window and without running
+# any of the pack's scripts: whether an update asks the question first (only when
+# no choice is on record), what the updater is then told, how the line that says
+# ChatGPT is waiting for the owner's trust is taken, how lines that are not
+# understood are ignored, how the proof's findings are read, and the link into
+# ChatGPT. It writes only inside its own practice home.
+mkdir -p "$WORK/home-logic"
+"$BIN" --home "$WORK/home-logic" --check-logic > "$WORK/logic.txt" 2>&1
+RC=$?
+[[ $RC -eq 0 ]] && grep -q "^logic: every check held" "$WORK/logic.txt" && ! grep -q "^logic: FAILED" "$WORK/logic.txt" && ok "the app's decisions about the assistant hold (see $WORK/logic.txt)" || bad "the app's decisions about the assistant hold (exit $RC; see $WORK/logic.txt)"
+grep -q "^logic: ok: with no choice on record, an update asks the question first" "$WORK/logic.txt" && grep -q "^logic: ok: and the updater is told nothing, so the record stands" "$WORK/logic.txt" && ok "  an update asks which assistant only on a Mac with no choice on record, and otherwise tells the updater nothing" || bad "  when an update asks which assistant"
+grep -q "^logic: ok: lines that are not understood are ignored" "$WORK/logic.txt" && ok "  progress lines that are not understood are still ignored" || bad "  progress lines that are not understood are still ignored"
+[[ ! -e "$WORK/home-logic/.claude" && ! -e "$WORK/home-logic/.codex" && ! -e "$WORK/home-logic/Wiki" ]] && ok "  and checking them installs nothing" || bad "  checking the decisions installs nothing"
+( unset MOBLEE_PRACTICE; "$BIN" --check-logic > "$WORK/logic-refused.txt" 2>&1 ); [[ $? -eq 2 ]] && ok "  without a practice run the check is refused" || bad "  without a practice run the logic check is refused"
 
 "$BIN" --home "$WORK/home-rehearse" --owner "Tom & Sam" --rehearse "$WORK/screens" > "$WORK/rehearse.txt" 2>&1
 RC=$?
@@ -98,9 +117,13 @@ grep -q "^self-drive: already there" "$WORK/move-again.txt" && [[ -f "$MOVED/Con
 "$BIN" --home "$WORK/home-drive" --self-drive > "$WORK/drive.txt" 2>&1
 RC=$?
 [[ $RC -eq 0 ]] && ok "the real window opens every screen and finishes an install" || bad "the real window opens every screen and finishes an install (exit $RC; see $WORK/drive.txt)"
-for s in welcome check-up name build hand-off home; do
+for s in welcome check-up name assistant build hand-off home; do
   grep -q "^self-drive: $s" "$WORK/drive.txt" && ok "  reached: $s" || bad "  reached: $s"
 done
+grep -q "^self-drive: ok: Return moves on exactly one screen, to the question of which assistant" "$WORK/drive.txt" && grep -q "^self-drive: ok: nothing is chosen for the owner beforehand" "$WORK/drive.txt" && grep -q "^self-drive: ok: tapping the Claude card answers the question" "$WORK/drive.txt" && ok "the question of which assistant appears after the name, with nothing chosen beforehand, and a tap on Claude answers it" || bad "the question of which assistant appears after the name and a tap answers it"
+grep -q "^self-drive: ok: the answer went to the installer as --assistant claude" "$WORK/drive.txt" && [[ "$(tr -d '[:space:]' < "$WORK/home-drive/.config/moblee/assistant" 2>/dev/null)" == "claude" ]] && grep -q "assistant: claude" "$WORK/home-drive/.config/moblee/install-diary.txt" 2>/dev/null && ok "  --assistant claude reached the installer, which kept it on record and noted it in the diary" || bad "  --assistant claude reached the installer"
+grep -q "^self-drive: ok: an install for Claude asks for no Trust step" "$WORK/drive.txt" && [[ ! -e "$WORK/home-drive/.codex" && ! -e "$WORK/home-drive/.config/moblee/trust-pending" ]] && ok "  an install for Claude puts nothing of ChatGPT's on the Mac and asks for no Trust step" || bad "  an install for Claude asks for no Trust step"
+grep -q "^self-drive: ok: at home the wiki is known to be for Claude, and an update would ask nothing" "$WORK/drive.txt" && ok "  at home the choice is read from the record, so an update would ask nothing" || bad "  at home the choice is read from the record"
 grep -q "^self-drive: tiles waiting: trips, videos" "$WORK/drive.txt" && ok "home screen shows the two things agreed with Claude" || bad "home screen shows the two things agreed with Claude"
 grep -q "^self-drive: trips ended: .*done" "$WORK/drive.txt" && [[ -f "$WORK/home-drive/.claude/skills/trips/SKILL.md" ]] && ok "pressing Add on a quiet item adds it (the skill is really there)" || bad "pressing Add on a quiet item adds it"
 grep -q "^self-drive: videos ended: .*handedOver" "$WORK/drive.txt" && [[ -x "$WORK/home-drive/Library/Application Support/Moblee/run/add-videos.command" ]] && ok "a Terminal item is explained, then handed over as a command file" || bad "a Terminal item is explained, then handed over as a command file"

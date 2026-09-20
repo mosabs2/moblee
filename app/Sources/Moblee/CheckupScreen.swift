@@ -3,7 +3,7 @@ import AppKit
 
 /// One thing the Mac needs before the wiki can be built.
 struct Need: Identifiable {
-    enum Kind { case developerTools, claude, obsidian }
+    enum Kind { case developerTools, claude, chatgpt, obsidian }
     let kind: Kind
     let symbol: String
     let name: String
@@ -17,14 +17,29 @@ final class Checkup: ObservableObject {
     @Published var present: [String: Bool] = [:]
     @Published var asked: Set<String> = []
 
-    let needs: [Need] = [
-        Need(kind: .developerTools, symbol: "wrench.and.screwdriver.fill",
-             name: "Apple's tools", fixTitle: "Get", optional: false),
-        Need(kind: .claude, symbol: "sparkles",
-             name: "Claude", fixTitle: "Get", optional: false),
-        Need(kind: .obsidian, symbol: "books.vertical.fill",
-             name: "Obsidian", fixTitle: "Get", optional: true),
-    ]
+    /// What this screen is looking for. The check-up before the install looks
+    /// for the first three, as it always has; an owner who says there that
+    /// they use ChatGPT gets ChatGPT's app in Claude's place; and the question
+    /// of which assistant looks only for the chosen assistant's app.
+    @Published var kinds: [Need.Kind] = [.developerTools, .claude, .obsidian] {
+        didSet { if kinds != oldValue { apply() } }
+    }
+
+    var needs: [Need] { kinds.map(Self.need) }
+
+    static func need(_ kind: Need.Kind) -> Need {
+        switch kind {
+        case .developerTools:
+            return Need(kind: .developerTools, symbol: "wrench.and.screwdriver.fill",
+                        name: "Apple's tools", fixTitle: "Get", optional: false)
+        case .claude:
+            return Need(kind: .claude, symbol: "sparkles", name: "Claude", fixTitle: "Get", optional: false)
+        case .chatgpt:
+            return Need(kind: .chatgpt, symbol: "ellipsis.bubble.fill", name: "ChatGPT", fixTitle: "Get", optional: false)
+        case .obsidian:
+            return Need(kind: .obsidian, symbol: "books.vertical.fill", name: "Obsidian", fixTitle: "Get", optional: true)
+        }
+    }
 
     /// Practice runs can pretend something is missing: `--pretend-missing tools,claude`.
     private let pretendMissing: Set<String> = {
@@ -59,6 +74,7 @@ final class Checkup: ObservableObject {
     }
 
     func start() {
+        timer?.invalidate()
         look()
         timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.look() }
@@ -95,16 +111,7 @@ final class Checkup: ObservableObject {
             asked.remove(name)
         }
         for need in needs {
-            let found: Bool
-            switch need.kind {
-            case .developerTools:
-                found = !pretendMissing.contains("tools") && toolsInstalled
-            case .claude:
-                found = !pretendMissing.contains("claude")
-                    && Self.appInstalled("com.anthropic.claudefordesktop")
-            case .obsidian:
-                found = !pretendMissing.contains("obsidian") && Self.appInstalled("md.obsidian")
-            }
+            let found = isThere(need.kind)
             if present[need.name] != found {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                     present[need.name] = found
@@ -113,10 +120,32 @@ final class Checkup: ObservableObject {
         }
     }
 
+    private func isThere(_ kind: Need.Kind) -> Bool {
+        switch kind {
+        case .developerTools:
+            return !pretendMissing.contains("tools") && toolsInstalled
+        case .claude:
+            return !pretendMissing.contains("claude") && Self.appInstalled("com.anthropic.claudefordesktop")
+        case .chatgpt:
+            return !pretendMissing.contains("chatgpt") && ChatGPTApp.installed
+        case .obsidian:
+            return !pretendMissing.contains("obsidian") && Self.appInstalled("md.obsidian")
+        }
+    }
+
+    /// Which of these apps are not on the Mac, asked at the moment of a tap.
+    /// For apps only: whether Apple's tools are there is never asked this way,
+    /// because finding that out means waiting for a program.
+    func missing(_ apps: [Need.Kind]) -> [Need.Kind] {
+        apps.filter { $0 != .developerTools && !isThere($0) }
+    }
+
     func fix(_ need: Need) {
         asked.insert(need.name)
         askedAt[need.name] = Date()
         switch need.kind {
+        case .chatgpt:
+            NSWorkspace.shared.open(URL(string: "https://chatgpt.com/download")!)
         case .developerTools:
             // Apple's own dialogue does the download; this only asks for it.
             let p = Process()
@@ -174,6 +203,8 @@ struct CheckupScreen: View {
                    : "Say yes in the window that opened. It takes a few minutes."),
             buttonTitle: "Next",
             buttonEnabled: checkup.readyToGoOn,
+            quietTitle: quietTitle,
+            quietAction: quietTitle == nil ? nil : switchAssistant,
             action: flow.next
         ) {
             HStack(spacing: 22) {
@@ -186,8 +217,34 @@ struct CheckupScreen: View {
             }
             .padding(.horizontal, 40)
         }
-        .onAppear { checkup.start() }
+        .onAppear {
+            if flow.assistant == .chatgpt { checkup.kinds = [.developerTools, .chatgpt, .obsidian] }
+            checkup.start()
+        }
         .onDisappear { checkup.stop() }
+    }
+
+    /// The question of which assistant comes after this screen, and this screen
+    /// asks for Claude's app. An owner who uses ChatGPT alone, and has no
+    /// Claude, would be stopped here for an app they will never use; so when
+    /// Claude is the thing missing, they can say so, and ChatGPT's app is
+    /// looked for in its place. The question screen then shows their answer
+    /// already chosen.
+    private var lookingForChatGPT: Bool { checkup.kinds.contains(.chatgpt) }
+
+    private var quietTitle: String? {
+        if lookingForChatGPT { return "I use Claude" }
+        return checkup.present["Claude"] == false ? "I use ChatGPT" : nil
+    }
+
+    private func switchAssistant() {
+        if lookingForChatGPT {
+            flow.assistant = .claude
+            checkup.kinds = [.developerTools, .claude, .obsidian]
+        } else {
+            flow.assistant = .chatgpt
+            checkup.kinds = [.developerTools, .chatgpt, .obsidian]
+        }
     }
 }
 

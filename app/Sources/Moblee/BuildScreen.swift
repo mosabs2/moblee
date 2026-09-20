@@ -97,7 +97,8 @@ struct BuildScreen: View {
         let place = flow.resumePlace ?? flow.chosenPlace ?? flow.freeLocation()
         flow.chosenPlace = place
         install.start(home: flow.home, ownerName: flow.trimmedName,
-                      wikiName: place.name, location: place.url, bundledPack: pack)
+                      wikiName: place.name, location: place.url, bundledPack: pack,
+                      assistant: flow.assistant ?? .claude)
     }
 }
 

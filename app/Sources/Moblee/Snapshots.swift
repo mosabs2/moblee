@@ -34,6 +34,9 @@ enum Snapshots {
             drawIcon(to: URL(fileURLWithPath: file))
             exit(0)
         }
+        if args.contains("--check-logic") {
+            LogicCheck.run()
+        }
         if let folder = Flow.value(after: "--rehearse", in: args) {
             rehearse(to: URL(fileURLWithPath: folder, isDirectory: true))
         }
@@ -117,6 +120,10 @@ enum Snapshots {
         draw(scene(.name), "02-name-empty", to: folder)
         draw(scene(.name) { $0.ownerName = "Sam" }, "03-name-typed", to: folder)
         draw(scene(.promise) { $0.ownerName = "Sam" }, "03b-promise", to: folder)
+        draw(scene(.assistant) { $0.ownerName = "Sam" }, "03c-assistant-unanswered", to: folder)
+        draw(scene(.assistant) { $0.ownerName = "Sam"; $0.assistant = .chatgpt }, "03d-assistant-answered", to: folder)
+        draw(scene(.promise) { $0.ownerName = "Sam"; $0.assistant = .chatgpt }, "03e-promise-chatgpt", to: folder)
+        draw(scene(.promise) { $0.ownerName = "Sam"; $0.assistant = .both }, "03f-promise-both", to: folder)
         draw(scene(.build) { f in
             f.install.phase = .running
             f.install.items[0].state = .done
@@ -136,6 +143,23 @@ enum Snapshots {
             f.ownerName = "Sam"
             f.install.vaultPath = "/Users/sam/Wiki/Sam Wiki"
         }, "07-handoff", to: folder)
+        draw(scene(.handoff) { f in
+            f.ownerName = "Sam"; f.assistant = .chatgpt
+            f.install.vaultPath = "/Users/sam/Wiki/Sam Wiki"
+        }, "07b-handoff-chatgpt", to: folder)
+        draw(scene(.handoff) { f in
+            f.ownerName = "Sam"; f.assistant = .both
+            f.install.vaultPath = "/Users/sam/Wiki/Sam Wiki"
+        }, "07c-handoff-both", to: folder)
+
+        // the Trust screen and the proof, in each of their states
+        let trustStages: [(TrustScreen.Stage, String)] = [
+            (.steps, "06b-trust-steps"), (.offer, "06c-trust-offer"), (.proving, "06d-trust-proving"),
+            (.proved, "06e-trust-proved"), (.notRunning, "06f-trust-not-running"), (.cannotTell, "06g-trust-cannot-tell"),
+        ]
+        for (stage, name) in trustStages {
+            draw(scene(.trust) { f in f.assistant = .chatgpt; f.trustStart = stage }, name, to: folder)
+        }
 
         // the home screen of a Mac that already has a wiki
         let sample: [HomeModel.Tile] = [
@@ -166,6 +190,9 @@ enum Snapshots {
             f.homeModel.tiles = t
         }, "09-home-states", to: folder)
         draw(homeScene { _ in }, "10-home-nothing-waiting", to: folder)
+        draw(homeScene { $0.homeModel.tiles = sample; $0.homeModel.assistant = .both }, "08b-home-waiting-both", to: folder)
+        draw(homeScene { $0.homeModel.assistant = .chatgpt }, "10b-home-chatgpt", to: folder)
+        draw(homeScene { f in f.mode = .update; f.askingAssistant = true }, "15a-update-asks-assistant", to: folder)
         draw(homeScene { $0.homeModel.wikiVersion = "0.7.0" }, "11-home-update", to: folder)
         draw(homeScene { $0.homeModel.needsRepair = true }, "12-home-repair", to: folder)
         draw(homeScene { $0.homeModel.tiles = sample; $0.homeModel.explaining = sample[1] }, "13-explain-terminal", to: folder)
@@ -207,8 +234,10 @@ enum Snapshots {
         if flow.trimmedName.isEmpty { flow.ownerName = "Sam" }
 
         let place = flow.freeLocation()
+        flow.assistant = .claude
         flow.install.start(home: flow.home, ownerName: flow.trimmedName,
-                           wikiName: place.name, location: place.url, bundledPack: pack)
+                           wikiName: place.name, location: place.url, bundledPack: pack,
+                           assistant: .claude)
 
         let deadline = Date().addingTimeInterval(180)
         while flow.install.phase == .running && Date() < deadline {
