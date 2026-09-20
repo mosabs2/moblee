@@ -117,6 +117,23 @@ enum SelfDrive {
             await pause(0.5)
         } while !(NSApp.isActive && window.isKeyWindow) && Date() < keyboardBy
         say(NSApp.isActive && window.isKeyWindow ? "has the keyboard" : "was not given the keyboard within ten seconds")
+        // The box takes the typing by itself when its screen appears in front.
+        // If the screen appeared while another app was in front it does not,
+        // and a person would click in the box; so the box is found where it is
+        // drawn and clicked, with the same real mouse events as the buttons.
+        func editableBox(in view: NSView?) -> NSTextField? {
+            guard let view else { return nil }
+            if let field = view as? NSTextField, field.isEditable { return field }
+            for sub in view.subviews { if let found = editableBox(in: sub) { return found } }
+            return nil
+        }
+        if let box = editableBox(in: window.contentView) {
+            let r = box.convert(box.bounds, to: nil)
+            click(CGPoint(x: r.midX, y: r.midY)); await pause(0.4)
+            say("clicked in the name box")
+        } else {
+            say("the name box was not found on the screen")
+        }
         for ch in "Tom & Sam" { key(String(ch)); await pause(0.05) }
         await expect("typing reaches the name box") { flow.ownerName == "Tom & Sam" }
         flow.back(); say("back to check-up"); await pause(4)
