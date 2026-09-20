@@ -6,7 +6,7 @@ Moblee runs on a Mac only.
 
 ## Two ways to install
 
-**With the Moblee app.** If a signed Moblee app is offered on the Releases page of the GitHub repository, download it and double-click it. It does step 1 for you: it checks what your Mac needs, asks one question, and makes the wiki. Carry on from step 2.
+**With the Moblee app.** Download the Moblee app from the Releases page of the GitHub repository (it is signed and notarised by Apple, so the Mac opens it without a warning), open the zip and double-click Moblee. It does step 1 for you: it checks what your Mac needs, asks one question, and makes the wiki. Carry on from step 2.
 
 **In Terminal.** Otherwise, follow the three steps below. They always work, and both ways run the same installer.
 

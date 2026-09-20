@@ -1442,7 +1442,13 @@ def main() -> int:
         say(f"Quit Claude and open it again so it sees the new {new}.")
         if any(it.key == "chrome" for it in chosen):
             say("Then type /chrome inside Claude Code and switch it on.")
-    return 0
+    # Started by the Moblee app (--yes), the exit code is what the app's Terminal
+    # window reads to choose between "Finished" and "That did not finish", so an
+    # item seen to be not working is a failure there. From the installer, the
+    # updater or a Terminal of the owner's own it stays 0, as it always was: the
+    # words above have already said what did not work, and those callers take
+    # any other code to mean the checklist itself stopped early.
+    return 1 if (failed and args.yes) else 0
 
 
 if __name__ == "__main__":

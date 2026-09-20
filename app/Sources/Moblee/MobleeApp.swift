@@ -55,9 +55,11 @@ enum Practice {
 /// the app waits for the engine to finish; one window, and closing it quits.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor static weak var install: InstallRun?
+    /// The move to Applications is half-way through: closing now would leave a half-made copy.
+    @MainActor static var moving = false
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        let busy = MainActor.assumeIsolated { AppDelegate.install?.phase == .running }
+        let busy = MainActor.assumeIsolated { AppDelegate.install?.phase == .running || AppDelegate.moving }
         if busy { NSSound.beep(); return .terminateCancel }
         return .terminateNow
     }

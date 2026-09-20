@@ -127,6 +127,8 @@ for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh log-append.py; do
       echo "   replaced scripts/$tool (old copy kept)"
     elif [[ ! -f "$VAULT/scripts/$tool" ]]; then
       echo "   added scripts/$tool"
+    else
+      continue   # identical already: not rewritten, so its date does not suggest a change that did not happen
     fi
     cp "$SCRIPT_DIR/$tool" "$VAULT/scripts/$tool"
   fi
@@ -231,9 +233,27 @@ python3 "$SCRIPT_DIR/add-habits-page.py" --vault "$VAULT" | sed 's/^/   /' \
   || echo "   (Habits and Tools page not added; ask Claude to create it from the template)"
 # A wiki made before 0.8.1 still has a first log entry headed "YYYY-MM-DD".
 # It is dated from the wiki's first commit; a line already written over is left
-# alone. The change is left for the owner's next commit, like their own work.
-python3 "$SCRIPT_DIR/stamp-starter-dates.py" --vault "$VAULT" --from-history | sed 's/^/   /' \
-  || echo "   (the starter pages' dates were left as they are; harmless)"
+# alone. Each of the three pages that had no uncommitted work of the owner's
+# before this goes into the updater's own commit, with the correction named in
+# the commit message and the diary, since the log is otherwise append-only. A
+# page the owner was in the middle of changing is dated too, but left for their
+# own next commit with the rest of their work.
+STAMP_CLEAN=()
+if [[ -d "$VAULT/.git" ]]; then
+  for p in wiki/log.md wiki/_context.md wiki/Index.md; do
+    if git -C "$VAULT" diff --quiet -- "$p" 2>/dev/null && git -C "$VAULT" diff --cached --quiet -- "$p" 2>/dev/null; then
+      STAMP_CLEAN+=("$p")
+    fi
+  done
+fi
+STAMP_OUT="$(python3 "$SCRIPT_DIR/stamp-starter-dates.py" --vault "$VAULT" --from-history 2>&1 || true)"
+if [[ -z "$STAMP_OUT" ]]; then STAMP_OUT="(the dates on the starter pages were left as they are; harmless)"; fi
+echo "   $STAMP_OUT"
+STAMP_NOTE=""
+if [[ "$STAMP_OUT" == dated:* ]]; then
+  STAMP_NOTE="; the starter pages' placeholder dates filled in from the wiki's first commit"
+  diary "the starter pages' placeholder dates were filled in (${STAMP_OUT#dated: }), from the wiki's first commit"
+fi
 # so the owner's Claude can point back at the checklist in this folder
 mkdir -p "$HOME/.config/moblee"
 echo "$PACKAGE_ROOT" > "$HOME/.config/moblee/package-path"
@@ -313,6 +333,10 @@ if [[ -d "$VAULT/.git" ]]; then
     for p in scripts dashboard VERSION CLAUDE.md .gitignore .claude wiki/Identity.md "wiki/Wiki Operations/Moblee Learning Path.md" "wiki/Wiki Operations/Habits and Tools.md"; do
       if [[ -e "$p" ]]; then git add -A -- "$p" 2>/dev/null || true; fi
     done
+    # the starter pages the updater dated, where the owner had no uncommitted work of their own
+    for p in ${STAMP_CLEAN[@]+"${STAMP_CLEAN[@]}"}; do
+      if [[ -e "$p" ]]; then git add -- "$p" 2>/dev/null || true; fi
+    done
     if git diff --cached --quiet; then
       if [[ "$OLD_VERSION" == "$NEW_VERSION" ]]; then
         echo "   already at $NEW_VERSION; nothing to change"
@@ -320,7 +344,7 @@ if [[ -d "$VAULT/.git" ]]; then
         echo "   nothing new to commit"
       fi
     else
-      git commit --quiet -m "moblee: updated from $OLD_VERSION to $NEW_VERSION" \
+      git commit --quiet -m "moblee: updated from $OLD_VERSION to $NEW_VERSION$STAMP_NOTE" \
         && echo "   committed: moblee: updated from $OLD_VERSION to $NEW_VERSION" \
         || echo "   (commit did not go through; ask Claude to commit the update)"
     fi

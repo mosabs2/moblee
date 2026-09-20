@@ -41,7 +41,7 @@ Ticking everything free takes about an hour and a half the first time, mostly wa
 
 ## Getting started
 
-Read [`START_HERE.md`](START_HERE.md): one page, three steps. You run the installer yourself, with the Moblee app when a signed build is on the Releases page or in Terminal (`bash scripts/install.sh`), open the new wiki in Obsidian, then open Claude in the wiki and say "get me started". The installer is yours to run because it changes Claude's own settings; a careful Claude will not make those changes on the strength of a downloaded file, so the pack never asks you to paste anything into Claude. A paid Claude plan is needed for the Code tab in Claude's app.
+Read [`START_HERE.md`](START_HERE.md): one page, three steps. You run the installer yourself, with the Moblee app from the Releases page or in Terminal (`bash scripts/install.sh`), open the new wiki in Obsidian, then open Claude in the wiki and say "get me started". The installer is yours to run because it changes Claude's own settings; a careful Claude will not make those changes on the strength of a downloaded file, so the pack never asks you to paste anything into Claude. A paid Claude plan is needed for the Code tab in Claude's app.
 
 If you prefer to read more first, start at [`docs/00-overview.md`](docs/00-overview.md).
 
