@@ -11,6 +11,9 @@ the app runs it in Terminal:
     python3 scripts/add-made-skill.py <name> --describe   # shows it, changes nothing
     python3 scripts/add-made-skill.py <name> --describe --json
 
+With Claude: the skill is added to ~/.claude/skills. With ChatGPT: Moblee does
+not set this up for ChatGPT yet.
+
 Checks made before anything is copied: the name is plain; the draft is a real
 folder inside the wiki holding only ordinary files (no links to other places);
 it has a SKILL.md; it is small; its name is not one of Moblee's own skills; and

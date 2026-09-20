@@ -11,8 +11,11 @@ Run from the Moblee package folder, in Terminal:
     python3 scripts/moblee-setup.py --list     # every item with its time, space and cost
 
 Nothing is ticked by default. The usual way in is the "get me started"
-conversation with Claude in the vault, which asks how the owner works and
-gives them a --tick command for the items that fit.
+conversation with your assistant in the vault, which asks how the owner works
+and gives them a --tick command for the items that fit.
+
+The connections, plugins, optional skills and voice on this list are set up
+for Claude. Moblee does not set them up for ChatGPT yet.
 
 The installer and the updater offer it; it can be run again at any time to add something that was left out. Nothing it
 does deletes anything. Every settings file it changes is copied to
@@ -117,6 +120,17 @@ def wait_for_return(prompt: str = "Press Return when you have done that") -> boo
     if ans is None:
         return False
     return ans.strip().lower() != "s"
+
+
+def assistant_choice() -> str:
+    """The owner's assistant: claude, chatgpt or both. The installer keeps it
+    as one word in ~/.config/moblee/assistant; no file means claude. Read only
+    to choose what the checklist says about itself; nothing else depends on it."""
+    try:
+        word = (CONFIG_DIR / "assistant").read_text().strip().lower()
+    except (OSError, ValueError):
+        return "claude"
+    return word if word in ("claude", "chatgpt", "both") else "claude"
 
 
 def open_url(url: str) -> None:
@@ -1083,8 +1097,8 @@ def show_checklist(items: list, ticked: dict, status: dict, from_claude: bool = 
     if from_claude:
         say("The items you agreed with Claude are ticked. Change anything you like.")
     else:
-        say("Nothing is ticked yet. Not sure what you need? Open Claude in your wiki")
-        say("and say 'get me started': it asks how you work and suggests what fits.")
+        say("Nothing is ticked yet. Not sure what you need? Open your assistant in your")
+        say("wiki and say 'get me started': it asks how you work and suggests what fits.")
     say("Items already working are marked 'working' and are left alone. Type the")
     say("numbers to tick or untick (for example: 3 7 12), 'all' for everything,")
     say("'free' for everything free, 'none' to clear, and press Return on its own")
@@ -1321,6 +1335,9 @@ def main() -> int:
         return 0
 
     rule("Moblee setup: connect your wiki to your life")
+    if assistant_choice() != "claude":
+        say("The connections, plugins, optional skills and voice on this list are set up")
+        say("for Claude. Moblee does not set them up for ChatGPT yet.")
     if not claude_ok():
         say("Claude Code is not installed yet. Install it first (see docs/01-prerequisites.md),")
         say("then run this again. Items that do not need it can still be added now.")

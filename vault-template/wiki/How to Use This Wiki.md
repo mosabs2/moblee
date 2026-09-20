@@ -4,9 +4,9 @@ Welcome to your wiki. This document explains how the structure works, why it's d
 
 ## What This Is
 
-This is your personal knowledge base, a persistent, compounding artifact that grows smarter with every source added and every question asked. It follows the [[Karpathy LLM Wiki Pattern]]: instead of retrieving raw documents from scratch on every question (the way ChatGPT file uploads or NotebookLM work), the LLM incrementally builds and maintains a structured, interlinked wiki. Cross-references are already in place. Contradictions have been flagged. Synthesis reflects everything ingested to date.
+This is your personal knowledge base, a persistent, compounding artifact that grows smarter with every source added and every question asked. It follows the [[Karpathy LLM Wiki Pattern]]: instead of retrieving raw documents from scratch on every question (the way file uploads to a chat or NotebookLM work), the LLM incrementally builds and maintains a structured, interlinked wiki. Cross-references are already in place. Contradictions have been flagged. Synthesis reflects everything ingested to date.
 
-You curate sources, direct analysis, and ask the right questions. Claude handles the bookkeeping, summarising, cross-referencing, filing, and maintenance. Obsidian is the IDE; Claude is the programmer; the wiki is the codebase.
+You curate sources, direct analysis, and ask the right questions. Your assistant (Claude, ChatGPT, or both) handles the bookkeeping, summarising, cross-referencing, filing, and maintenance. Obsidian is the IDE; your assistant is the programmer; the wiki is the codebase.
 
 ## Your Daily Workflow
 
@@ -19,8 +19,8 @@ You curate sources, direct analysis, and ask the right questions. Claude handles
 
 ### Adding New Content
 
-**Method 1, via Cowork (easiest).**
-Open Cowork and say things like:
+**Method 1, in conversation (easiest).**
+**With Claude:** open Cowork. **With ChatGPT:** open your wiki's project in the ChatGPT app. <!-- verify on testdev --> Say things like:
 - "I had a meeting about [Your Topic] today, add it to the wiki."
 - "Process the new files in raw/."
 - "Add this to my [Your Domain] page: [paste text]."
@@ -29,14 +29,14 @@ Open Cowork and say things like:
 **Method 2, Obsidian Web Clipper (best for articles).**
 1. Install the Obsidian Web Clipper extension in Chrome.
 2. When you're reading an article, click the clipper icon, it saves directly into `Clippings/` in your vault.
-3. Open Cowork and say "Process the new clipping(s)."
+3. Open your assistant and say "Process the new clipping(s)."
 4. The clipping includes the source URL, author, and date automatically.
 
 **Method 3, drop files into raw/.**
 1. Open Finder.
 2. Navigate to your vault folder.
 3. Drag any file into the **raw/** folder (HTML, PDF, screenshot, text file).
-4. Next time you open Cowork or Claude Code, say "Process the new files in raw/."
+4. Next time you open your assistant, say "Process the new files in raw/."
 
 ### Searching
 
@@ -75,35 +75,35 @@ For example, if you're on a page named `Health`, backlinks will show you every o
 │   ├── processed/     ← Already-ingested files
 │   └── HOW-TO-ADD-CONTENT.md
 ├── outputs/           ← Reports and generated documents
-├── CLAUDE.md          ← The schema (rules for Claude)
+├── CLAUDE.md          ← The schema (rules for your assistant; AGENTS.md with ChatGPT)
 └── Welcome.md         ← Where to start
 ```
 
 ## The Three Operations
 
-This wiki has three core operations, all handled by Claude.
+This wiki has three core operations, all handled by your assistant.
 
 ### 1. Ingest (adding new knowledge)
 
-Drop a source into `raw/` or clip an article with the Web Clipper, then ask Claude to process it. Claude reads the source, extracts key information, writes or updates the relevant wiki pages, updates the [[Index]], and logs the action in `wiki/log.md`. A single source may touch 10–15 wiki pages. Sources are immutable, Claude reads from them but never modifies the originals.
+Drop a source into `raw/` or clip an article with the Web Clipper, then ask your assistant to process it. It reads the source, extracts key information, writes or updates the relevant wiki pages, updates the [[Index]], and logs the action in `wiki/log.md`. A single source may touch 10–15 wiki pages. Sources are immutable, your assistant reads from them but never modifies the originals.
 
 ### 2. Query (asking questions then saving answers)
 
-Ask Claude questions against the wiki. Claude searches relevant pages, synthesises an answer with citations, and presents it. The important part: **good answers can be saved back into the wiki as new pages.** A comparison, an analysis, a connection, these are valuable and should not disappear into chat history. After a substantive answer, Claude will offer to save it as a wiki page so explorations compound in the knowledge base.
+Ask your assistant questions against the wiki. It searches relevant pages, synthesises an answer with citations, and presents it. The important part: **good answers can be saved back into the wiki as new pages.** A comparison, an analysis, a connection, these are valuable and should not disappear into chat history. After a substantive answer, your assistant will offer to save it as a wiki page so explorations compound in the knowledge base.
 
 ### 3. Lint (health-checking the wiki)
 
-Periodically, ask Claude to health-check the wiki. Claude looks for: contradictions between pages, stale claims that newer sources have superseded, orphan pages with no inbound links, important concepts mentioned but lacking their own page, missing cross-references, and data gaps that could be filled. This keeps the wiki healthy as it grows. To trigger this, say: "Lint the wiki" or "Health-check the wiki."
+Periodically, ask your assistant to health-check the wiki. It looks for: contradictions between pages, stale claims that newer sources have superseded, orphan pages with no inbound links, important concepts mentioned but lacking their own page, missing cross-references, and data gaps that could be filled. This keeps the wiki healthy as it grows. To trigger this, say: "Lint the wiki" or "Health-check the wiki."
 
 ## The Activity Log
 
-`wiki/log.md` is a chronological, append-only record of everything that happens in the wiki, ingests, queries, lint passes. Each entry is timestamped and categorised. This gives you a timeline of the wiki's evolution and helps Claude understand what has been done recently across sessions.
+`wiki/log.md` is a chronological, append-only record of everything that happens in the wiki, ingests, queries, lint passes. Each entry is timestamped and categorised. This gives you a timeline of the wiki's evolution and helps your assistant understand what has been done recently across sessions.
 
 ## Tips
 
-**You don't need to learn markdown.** Just read the wiki pages and use Cowork to update them. Claude handles all the formatting.
+**You don't need to learn markdown.** Just read the wiki pages and ask your assistant to update them. It handles all the formatting.
 
-**The wiki is alive.** Every time you chat with Cowork about something, a meeting, a health update, a training session, an article you read, ask Claude to add it. The wiki should grow every week.
+**The wiki is alive.** Every time you talk to your assistant about something, a meeting, a health update, a training session, an article you read, ask it to add it. The wiki should grow every week.
 
 **Search is your friend.** You'll rarely need to browse, just press Cmd+O and type what you're looking for.
 
@@ -168,7 +168,7 @@ Once you have at least three pages in your wiki, try this to build muscle memory
 
 Every link you add makes the wiki smarter.
 
-## What to Ask Cowork
+## What to Ask Cowork or ChatGPT
 
 Here are the kinds of things you can say to keep the wiki growing.
 
@@ -176,7 +176,7 @@ Here are the kinds of things you can say to keep the wiki growing.
 
 **Query**: "What does my wiki say about [Your Topic]?" · "Summarise everything I know about [Your Topic]." · "Compare the two analyses on my [Your Domain] page." · "Create a briefing document from my [Your Domain] page."
 
-**Save an answer**: "Yes, save that as a wiki page" (when Claude offers after a substantive answer).
+**Save an answer**: "Yes, save that as a wiki page" (when your assistant offers after a substantive answer).
 
 **Lint**: "Lint the wiki." · "Health-check the wiki." · "What's missing from my [Your Domain] page?" · "Are there any contradictions in my [Your Domain] page?"
 

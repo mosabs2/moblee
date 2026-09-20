@@ -6,6 +6,10 @@ your vault (active threads, today's plan, the recent log), lets you ask the
 wiki questions by voice or text (each ask runs `claude -p` in the vault), and
 draws any charts you configure in dashboard-charts.json.
 
+With Claude: asks and the History tab run on Claude Code. With ChatGPT: Moblee
+does not set this up for ChatGPT yet; the views that only read the wiki's
+files work whichever assistant you use.
+
 Plain-files safe: reads the vault markdown in place. Anything Claude changes
 during an ask is recorded to outputs/dashboard-audit/ inside the vault, and
 git is the undo path.
@@ -409,7 +413,7 @@ def latest_graph():
 #    "type": "line" | "bar" | "cumulative",
 #    "x": "column name", "y": "column name or list of names",
 #    "date_x": true}
-# Ask Claude to add a chart and it edits this file; the tab redraws on the
+# Ask your assistant to add a chart and it edits this file; the tab redraws on the
 # next visit. The file is re-read on every request, so edits land live.
 
 def load_charts():

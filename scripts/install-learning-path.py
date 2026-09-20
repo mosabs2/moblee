@@ -42,7 +42,7 @@ LABEL = "com.moblee.nightly-tip"
 PLIST = Path.home() / "Library" / "LaunchAgents" / f"{LABEL}.plist"
 BACKUPS = Path.home() / ".config" / "moblee" / "backups"
 MARKER = "## The learning path (coaching)"
-INDEX_LINE = "- [[Moblee Learning Path]]: thirty-two short lessons on using this wiki, one an evening; say \"lesson\" to Claude.\n"
+INDEX_LINE = "- [[Moblee Learning Path]]: thirty-two short lessons on using this wiki, one an evening; say \"lesson\" to your assistant.\n"
 COACHING = """## The learning path (coaching)
 
 `wiki/Wiki Operations/Moblee Learning Path.md` holds thirty-two short lessons on using this wiki, with a Progress list at the bottom. If the evening reminder is installed, a notification names the next lesson each evening. When the user's whole message is **"lesson"**, **"next lesson"** or **"lesson N"** (and only that; a message that merely contains the word is not a trigger): read the page, take the lowest lesson not yet listed under Progress (or the one named), and give it in your own words in a few sentences, tied to what the log shows the user has actually done recently; offer to do its "This evening" step together now, and do it if the user agrees; then, if that lesson is not already listed, append a line `- N, YYYY-MM-DD` under Progress (date from the clock, never from memory) and commit. At every **orient**, if no lesson has been given today and lessons remain, end the sitrep with one sentence naming the next lesson (a statement, not a question); do not give it unasked. At the first orient on or after each Saturday, add one sentence saying how many lessons remain and naming one tool from a given lesson that the log shows has gone unused since, with an offer to go over it again. Never mark a lesson given that was not given. If the user asks to stop the evening reminder, tell them to run `python3 scripts/install-learning-path.py --vault <vault> --remove-reminder` from the folder where they downloaded Moblee.
@@ -178,7 +178,7 @@ def is_loaded() -> bool:
 
 def schedule_reminder(vault: Path, script: Path, hour: int | None) -> int:
     if platform.system() != "Darwin":
-        print('the evening reminder needs macOS; skipped (say "lesson" to Claude whenever you like)')
+        print('the evening reminder needs macOS; skipped (say "lesson" to your assistant whenever you like)')
         return 0
     if hour is None:
         hour = current_hour() if current_hour() is not None else 21
@@ -257,7 +257,7 @@ def remove_reminder() -> int:
         print(f"evening reminder switched off; its schedule file was moved to {keep}")
     else:
         print("no evening reminder was scheduled")
-    print('The lessons stay in the vault: say "lesson" to Claude whenever you like.')
+    print('The lessons stay in the vault: say "lesson" to your assistant whenever you like.')
     return 0
 
 
@@ -285,7 +285,7 @@ def main() -> int:
     script = add_tip_script(vault)
     add_coaching_rule(vault, a.assistant)
     rc = 0 if a.no_reminder else schedule_reminder(vault, script, a.hour)
-    print('Learning path ready. Open Claude Code in your vault and say "lesson" to begin.')
+    print('Learning path ready. Open your assistant in your vault and say "lesson" to begin.')
     return rc
 
 

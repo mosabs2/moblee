@@ -11,12 +11,16 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 TEMPLATE = HERE.parent / "vault-template" / "wiki" / "Identity.md"
+# The sentence of the rules file that names the owner. Wikis made before 0.9.0
+# say "where Claude is the maintainer"; later ones say "the assistant".
+OWNER_SENTENCE = re.compile(r"knowledge base for (.+?) where (?:Claude|the assistant) is the maintainer")
 
 
 def instruction_file(vault: Path) -> Path:
@@ -43,9 +47,9 @@ def owner_name(vault: Path, explicit: str | None) -> str:
     claude_md = instruction_file(vault)
     if claude_md.exists():
         for line in claude_md.read_text(encoding="utf-8").splitlines():
-            head, sep, rest = line.partition("knowledge base for ")
-            if sep and " where Claude is the maintainer" in rest:
-                return rest.split(" where Claude is the maintainer")[0].strip()
+            found = OWNER_SENTENCE.search(line)
+            if found:
+                return found.group(1).strip()
     return "[Your Name]"
 
 

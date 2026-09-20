@@ -5,11 +5,11 @@ description: Capture substantive knowledge from a chat into the user's personal 
 
 # Wiki Capture
 
-A skill for funnelling knowledge from scattered Claude chats into a single Obsidian wiki that follows the Karpathy LLM Wiki Pattern.
+A skill for funnelling knowledge from scattered chats with the assistant into a single Obsidian wiki that follows the Karpathy LLM Wiki Pattern.
 
 ## Why this exists
 
-The wiki is maintained by Claude in a dedicated Cowork project, but the user interacts with Claude across many one-off chats throughout the day. Substantive material from those chats, a research answer, a decision, a new contact, a domain-specific insight, tends to evaporate when the chat closes. This skill makes capture a one-step operation: produce a well-formed note destined for `raw/`, either written directly (when the vault is on the filesystem) or as a copy-paste artifact (everywhere else). The ingest pass that runs in the dedicated wiki project handles promotion from `raw/` into the proper `wiki/` pages; this skill never touches `wiki/` itself.
+The wiki is maintained by the assistant in a dedicated project (with Claude, Claude Code or a Cowork project; with ChatGPT, the wiki folder opened as a project <!-- verify on testdev -->), but the user talks to the assistant across many one-off chats throughout the day. Substantive material from those chats, a research answer, a decision, a new contact, a domain-specific insight, tends to evaporate when the chat closes. This skill makes capture a one-step operation: produce a well-formed note destined for `raw/`, either written directly (when the vault is on the filesystem) or as a copy-paste artifact (everywhere else). The ingest pass that runs in the dedicated wiki project handles promotion from `raw/` into the proper `wiki/` pages; this skill never touches `wiki/` itself.
 
 Routing every save-back through this one skill gives three things. It is a **single, auditable write path** toward the vault. It is a **review gate**: content waits in `raw/` for a deliberate ingest pass rather than being silently injected into compiled pages. And it gives captured content **real provenance**: a `raw/` note becomes a source with attribution, moved to `raw/processed/` by the ingest that consumes it, exactly like any clipped article. It is also the executor for the save-back offers other skills make: when the user accepts a `brain` save-back offer, or the "save this answer" offer after a substantive query, `wiki-capture` performs the write.
 
@@ -57,7 +57,7 @@ Any of these (or clear variants) should invoke the skill:
 
 ### Summary-then-capture flow
 
-The user routinely asks Claude to summarise a chat or a section of its contents. Summarising itself is a normal Claude task and does not invoke this skill. But two related patterns do:
+The user routinely asks the assistant to summarise a chat or a section of its contents. Summarising itself is a normal task and does not invoke this skill. But two related patterns do:
 
 1. **Combined phrasing** ("summarise this chat and save it to the wiki", "sum up the last hour and capture it"): route straight to bulk-capture mode. Do not produce a separate conversational summary first; the bulk-capture output *is* the summary, filtered and structured for the wiki. The difference between a plain summary and a capture is that capture filters ephemera and groups by target page; a combined request still wants that filter applied.
 
@@ -69,13 +69,13 @@ The user routinely asks Claude to summarise a chat or a section of its contents.
 
 ### Proactive offer (gentle)
 
-After a **clearly substantive** Claude turn, offer capture **once** at the end of the response. One sentence is enough, e.g.:
+After a **clearly substantive** turn of your own, offer capture **once** at the end of the response. One sentence is enough, e.g.:
 
 > *Want me to capture this to your wiki?*
 
 Clearly substantive means the response produced something worth keeping: research synthesis, a decision the user has arrived at, a new contact or relationship fact, a product recommendation with reasoning, a project milestone, or reference material the user is likely to want again. If in doubt, do not offer; the cost of missing a capture is small (the user can always ask explicitly), the cost of pestering is real.
 
-**Never offer capture for:** casual chitchat, simple factual lookups Claude answered in one sentence, debugging a one-off code error, weather, arithmetic, small talk, drafts the user has already said to discard, or anything the user has signalled is ephemeral. Never offer twice in one chat if the first offer was declined; respect the signal.
+**Never offer capture for:** casual chitchat, simple factual lookups answered in one sentence, debugging a one-off code error, weather, arithmetic, small talk, drafts the user has already said to discard, or anything the user has signalled is ephemeral. Never offer twice in one chat if the first offer was declined; respect the signal.
 
 ## What a capture note looks like
 
@@ -84,7 +84,7 @@ Use this structure for every capture. It is the contract the ingest pass expects
 ```
 # [Short title: noun phrase, not a sentence]
 
-**Captured**: YYYY-MM-DD HH:MM ±TZ ([runtime: Claude Code / Cowork / claude.ai]; [one line on how the content was produced])
+**Captured**: YYYY-MM-DD HH:MM ±TZ ([runtime: Claude Code / Cowork / claude.ai / ChatGPT]; [one line on how the content was produced])
 **Target page**: [[Exact Wiki Page Name]] (add secondary targets after it, in priority order, if the material also informs another page)
 **Source context**: [what prompted this capture, what the user asked, and any facts or decisions the user supplied in conversation that the content depends on]
 
@@ -110,7 +110,7 @@ from (the pages, sources or conversation it draws on) and that it awaits an
 ingest pass.]*
 ```
 
-**Verify the date against the workstation clock before stamping it.** Run `date` (or trust the injected current date in Cowork) rather than carrying a date over from the conversation; a capture stamped with yesterday's date mis-sorts the inbox and misleads the ingest.
+**Verify the date against the workstation clock before stamping it.** Run `date` (with Claude in Cowork, trust the injected current date) rather than carrying a date over from the conversation; a capture stamped with yesterday's date mis-sorts the inbox and misleads the ingest.
 
 ### Conventions to enforce
 
@@ -168,9 +168,9 @@ Check for it with:
 ls -d "[Your Vault]/raw" 2>/dev/null
 ```
 
-If the skill is running on the Mac itself (Claude Code, a local agent, or a Cowork session with the home directory mounted), that path should exist. If it does, use **direct-write mode**.
+If the skill is running on the Mac itself (Claude Code, ChatGPT's app on the Mac, a local agent, or a Cowork session with the home directory mounted), that path should exist. If it does, use **direct-write mode**. **With ChatGPT:** in a project that is not the wiki folder, its sandbox does not let it write into the vault without the owner's approval; if that is not given, use artifact mode.
 
-If the skill is running in a Cowork session where the vault has been mounted under a session-specific path instead, try:
+**With Claude:** if the skill is running in a Cowork session where the vault has been mounted under a session-specific path instead, try:
 
 ```bash
 ls -d /sessions/*/mnt/*/raw 2>/dev/null | head -1
@@ -229,12 +229,12 @@ If the vault is not mounted, the skill cannot do the move; just remind the user 
 ## Mode B: Artifact (vault not mounted)
 
 1. Build the same filename as above.
-2. Produce a markdown artifact containing the full capture note.
+2. Produce a markdown artifact containing the full capture note (with ChatGPT, the full note in the reply as one markdown block).
 3. Tell the user the exact filename and where it goes:
 
    > *Here's the capture note. Save it as `capture-YYYY-MM-DD-[slug].md` in the `raw/` folder of your vault next time you're on your Mac, the vault lives at `[Your Vault]/raw/`. The ingest pass will pick it up from there.*
 
-The artifact must be fully self-contained; a user in a plain Claude.ai chat with no filesystem access should be able to copy it, paste it into a new file on their Mac, and be done.
+The artifact must be fully self-contained; a user in a plain chat with no filesystem access (claude.ai in a browser, for example) should be able to copy it, paste it into a new file on their Mac, and be done.
 
 ## Bulk-capture mode
 
@@ -242,7 +242,7 @@ Triggered by phrases like "capture everything from this chat", "save the whole c
 
 Process:
 
-1. Read back through the full conversation and identify **distinct knowledge units**, each one should be something that would belong in a particular wiki page's particular section. A unit is not "every Claude turn"; it is "every coherent piece of knowledge worth preserving".
+1. Read back through the full conversation and identify **distinct knowledge units**, each one should be something that would belong in a particular wiki page's particular section. A unit is not "every turn of the assistant"; it is "every coherent piece of knowledge worth preserving".
 2. Group units by target wiki page.
 3. Produce **one capture note per target page**, combining all that page's material from the chat into a single `Content` section. If two or three units from the chat all target the same wiki page, they belong in one note, not three; the ingest pass can separate them if needed, but producing three thin notes on the same target wastes cycles. Conversely, if units target three different pages, produce three separate notes.
 4. If there are more than three or four target pages, show the user the proposed grouping first and get confirmation before generating the notes; the user may want to drop some or merge others.
@@ -265,7 +265,7 @@ Skill:
 
 ### Example 2: Proactive offer declined
 
-After a substantive turn, Claude ends the response with:
+After a substantive turn, the assistant ends the response with:
 
 > *Want me to capture this to your wiki?*
 

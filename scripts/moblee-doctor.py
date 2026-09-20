@@ -255,7 +255,7 @@ def check_vault(f: Findings, vault: Path | None, pack: Path | None) -> None:
             waiting = [r for r in json.loads(req.read_text()).get("requests", []) if r.get("status") == "waiting"]
             if waiting:
                 keys = ", ".join(str(r.get("key")) for r in waiting)
-                f.add(LOOK, f"{len(waiting)} thing(s) agreed with Claude are waiting in the Moblee app: {keys}.", "F18")
+                f.add(LOOK, f"{len(waiting)} thing(s) agreed with your assistant are waiting in the Moblee app: {keys}.", "F18")
         except (OSError, ValueError):
             f.add(LOOK, "The list of things waiting for the Moblee app does not load; Claude can rewrite it.", "F18")
 
@@ -421,7 +421,7 @@ def check_codex_limit(f: Findings) -> tuple[int, bool]:
     if not present:
         f.add(LOOK, f"The setting that lets ChatGPT read a long instruction file ({DOC_LIMIT_KEY}) is not in "
                     f"~/.codex/config.toml, so ChatGPT reads the first {DOC_LIMIT_DEFAULT:,} bytes only. "
-                    "The next update adds it.", "F11")
+                    "The next update adds it.", "F27")
         return DOC_LIMIT_DEFAULT, False
     if value is None or value <= 0:
         f.add(LOOK, f"The setting {DOC_LIMIT_KEY} in ~/.codex/config.toml could not be read as a number, so how "
@@ -450,7 +450,7 @@ def check_codex_instructions(f: Findings, vault: Path | None, assistant: str, li
     if claude_md.is_file() and not same:
         f.add(LOOK, "CLAUDE.md and AGENTS.md are two separate files, so what the two assistants are told can drift "
                     f"apart; Moblee keeps {real.name} up to date. Moblee's own arrangement for both assistants is "
-                    "AGENTS.md as a link to CLAUDE.md.")
+                    "AGENTS.md as a link to CLAUDE.md.", "F28")
     elif assistant == "both" and not claude_md.is_file():
         f.add(PROBLEM, "The wiki is set up for both assistants but has no CLAUDE.md, so Claude starts without the "
                        "wiki's instructions. An update with both assistants chosen adds it.", "F11")
@@ -466,7 +466,7 @@ def check_codex_instructions(f: Findings, vault: Path | None, assistant: str, li
                if key_present else "The next update lifts the limit.")
         f.add(PROBLEM, f"The instruction file ChatGPT reads ({shape}) is {size:,} bytes, and ChatGPT reads only the "
                        f"first {limit:,}, so it never sees the last {size - limit:,}. {fix}",
-              None if key_present else "F11")
+              None if key_present else "F27")
 
 
 def find_codex() -> str | None:
@@ -542,7 +542,7 @@ def prove_guard(f: Findings, announce: bool) -> None:
     gone = [what for what, there in (("the folder", folder.is_dir()), ("the page", page.is_file())) if not there]
     if gone:
         f.add(PROBLEM, "The delete guard is not running in ChatGPT. Asked to remove a folder and delete a page in a "
-                       f"scratch wiki, ChatGPT did it ({' and '.join(gone)} gone). " + TRUST_FIX + left, "F02")
+                       f"scratch wiki, ChatGPT did it ({' and '.join(gone)} gone). " + TRUST_FIX + left, "F26")
         return
     if timed_out:
         f.add(UNSURE, "ChatGPT did not finish within three minutes, so the guard could not be proved this time. "
@@ -573,7 +573,7 @@ def check_chatgpt(f: Findings, vault: Path | None, pack: Path | None, assistant:
     elif in_place:
         f.add(UNSEEN, "Whether the delete guard has been trusted in ChatGPT cannot be seen from its files, and ChatGPT "
                       "skips the guard until it has. " + TRUST_CHECK + " Running this check-up with --prove-guard "
-                      "puts it to the test.")
+                      "puts it to the test.", "F26")
     limit, key_present = check_codex_limit(f)
     check_codex_instructions(f, vault, assistant, limit, key_present)
     check_skills(f, pack, CODEX_SKILLS, "ChatGPT")

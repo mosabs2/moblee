@@ -1,24 +1,48 @@
 # 09. Safety: why Claude cannot delete your files
 
-From v0.5 every Moblee vault carries a safety layer that the pack installs itself, so the owner has nothing to set up. It exists because a vault where Claude can delete is a vault where one wrong "yes" loses work, and the owner should never have to be the last line of defence.
+From v0.5 every Moblee vault carries a safety layer that the pack installs itself, so with Claude the owner has nothing to set up. It exists because a vault where your assistant can delete is a vault where one wrong "yes" loses work, and the owner should never have to be the last line of defence.
+
+With Claude, everything on this page holds from the moment the installer finishes. With ChatGPT, one step is yours: the page holds once you have done the Trust step below and proved the guard.
 
 ## The three parts
 
-**The delete guard.** A small program runs every time Claude is about to execute a shell command. It reads the command, and any script file the command would run, and refuses the destructive class: deleting a file or folder, emptying one, moving material out of the vault or into the Trash or a temporary folder, overwriting one page with another, rewriting git history, force-pushing, and the indirect spellings of all of these (a `find` that deletes, a piped delete, a one-line Python script, an AppleScript). When it refuses, Claude is told what to do instead: move the material within the vault, or tell you what should go so you can remove it yourself. No guard can promise to catch every spelling a determined attacker could invent, which is why the permission rules and the written rule sit alongside it. If the guard itself ever hits an internal error, it lets the command through rather than freezing your Claude (it fails open), so the guard is protection against a careless assistant, not a lock against a hostile one.
+**The delete guard.** A small program runs every time your assistant is about to execute a shell command. With ChatGPT it also runs before ChatGPT's file-editing tool is used, because that tool can delete and move files. It reads the command, and any script file the command would run, and refuses the destructive class: deleting a file or folder, emptying one, moving material out of the vault or into the Trash or a temporary folder, overwriting one page with another, rewriting git history, force-pushing, and the indirect spellings of all of these (a `find` that deletes, a piped delete, a one-line Python script, an AppleScript). When it refuses, your assistant is told what to do instead: move the material within the vault, or tell you what should go so you can remove it yourself. No guard can promise to catch every spelling a determined attacker could invent, which is why the permission rules and the written rule sit alongside it. If the guard itself ever hits an internal error, it lets the command through rather than freezing your assistant (it fails open), so the guard is protection against a careless assistant, not a lock against a hostile one. The same is true on ChatGPT, where a guard that crashes lets the command through, and OpenAI describes hooks as a guardrail and not a complete boundary.
 
-**The permission rules.** Claude Code asks permission before running commands. Without an allow list, it asks for almost everything, and an owner who is asked forty times an hour learns to click yes without reading, which defeats every other safeguard. Moblee writes a starter allow list for routine work (reading, searching, editing inside the vault, committing) and a deny list that refuses deletion and history rewriting at this layer too. The allow list is broad only because the guard inspects every command regardless of it.
+**The permission rules.** **With Claude:** Claude Code asks permission before running commands. Without an allow list, it asks for almost everything, and an owner who is asked forty times an hour learns to click yes without reading, which defeats every other safeguard. Moblee writes a starter allow list for routine work (reading, searching, editing inside the vault, committing) and a deny list that refuses deletion and history rewriting at this layer too. The allow list is broad only because the guard inspects every command regardless of it.
 
-**The rule in writing.** `CLAUDE.md` carries a hard rule: never delete without explicit approval in the same message, and finished material moves rather than goes. `wiki/Identity.md` carries the same commitment as part of who Claude is to you. The guard enforces the rule mechanically; the words are there so that Claude also understands it.
+**With ChatGPT:** Moblee does not set this up for ChatGPT yet. ChatGPT's own sandbox is the second layer there: in its default mode the agent cannot write outside the wiki folder, has no network, and cannot change `.git`. The sandbox does not stop a deletion inside the wiki; the guard does.
+
+**The rule in writing.** `CLAUDE.md` (for ChatGPT, `AGENTS.md`) carries a hard rule: never delete without explicit approval in the same message, and finished material moves rather than goes. `wiki/Identity.md` carries the same commitment as part of who your assistant is to you. The guard enforces the rule mechanically; the words are there so that your assistant also understands it.
+
+## With ChatGPT: the Trust step
+
+ChatGPT does not run a newly installed or changed guard until you have reviewed it. Until then the guard is skipped, and nothing on screen says so. The installer and the updater print these steps when they are due:
+
+1. Open the ChatGPT menu and choose Settings.
+2. Choose Hooks, under the Coding heading.
+3. Open "User config".
+4. Press Trust beside the hook whose command ends `bash-guard.py`.
+5. Turn its switch on.
+
+ChatGPT asks for this again whenever Moblee updates the guard. Then prove that the guard is live, from the Moblee folder:
+
+```
+python3 scripts/moblee-doctor.py --prove-guard
+```
+
+The check-up asks ChatGPT to remove a folder and delete a page in a scratch wiki, away from your own. It reports the guard as proved only if ChatGPT was refused and both are still there. Without `--prove-guard` the check-up marks the Trust step `CANNOT SEE`, because ChatGPT's files do not show whether you have pressed Trust.
 
 ## What this means day to day
 
-Say "delete" and Claude will say what it would rather do instead: move the file to an archive folder, or to `raw/processed/`. If you genuinely want something gone, Claude cannot do it for you: the guard refuses the command outright and there is no "yes" that overrides it from inside Claude Code. Claude will name exactly what should go and where it is, and you remove it yourself in Finder or in the Terminal. That is deliberate. The one person who can delete from your vault is you.
+Say "delete" and your assistant will say what it would rather do instead: move the file to an archive folder, or to `raw/processed/`. If you genuinely want something gone, your assistant cannot do it for you: the guard refuses the command outright and there is no "yes" that overrides it from inside Claude Code, or from inside a ChatGPT conversation once the guard is trusted. Your assistant will name exactly what should go and where it is, and you remove it yourself in Finder or in the Terminal. That is deliberate. The one person who can delete from your vault is you.
 
-Git keeps every version of every file in the vault. "Take me back to how the Index looked on 10 September" is always possible. You do not need to know how; your Claude does.
+Git keeps every version of every file in the vault. "Take me back to how the Index looked on 10 September" is always possible. You do not need to know how; your assistant does.
 
 ## Things you may notice, and why
 
-A few ordinary-looking actions are refused, on purpose. Claude cannot use `git stash`, or `git checkout` on a file that already exists, because both throw away uncommitted work; it can still restore a file that has gone missing from an earlier commit, and it can still make and switch branches. Claude cannot overwrite an existing page by redirecting output over it, or by copying or moving another file onto it; it edits pages with its editing tool and writes new ones with its writing tool. Claude cannot move anything out of the vault into a temporary folder, the Trash or another disk. And Claude cannot install or update the guard itself: that is done by the installer or the updater, which you run from the Terminal or through the Moblee app, so that no conversation can weaken it.
+A few ordinary-looking actions are refused, on purpose. Your assistant cannot use `git stash`, or `git checkout` on a file that already exists, because both throw away uncommitted work; it can still restore a file that has gone missing from an earlier commit, and it can still make and switch branches. It cannot overwrite an existing page by redirecting output over it, or by copying or moving another file onto it; it edits pages with its editing tool and writes new ones with its writing tool. It cannot move anything out of the vault into a temporary folder, the Trash or another disk. And it cannot install or update the guard itself: that is done by the installer or the updater, which you run from the Terminal or through the Moblee app, so that no conversation can weaken it.
+
+With ChatGPT you are also asked to approve each commit, because ChatGPT's sandbox protects the vault's `.git` folder. That is expected.
 
 ## The Moblee app and the same principle
 
@@ -26,4 +50,6 @@ From v0.8.1 the Moblee app can install the wiki, update it and add the extras yo
 
 ## Checking that the guard is on
 
-Ask your Claude: "Is the delete guard installed and working?" It should run the guard's own test (a delete command is refused, a harmless one passes) and tell you the result. The updater and installer both run that test before they register the guard.
+**With Claude:** Ask your Claude: "Is the delete guard installed and working?" It should run the guard's own test (a delete command is refused, a harmless one passes) and tell you the result. The updater and installer both run that test before they register the guard.
+
+**With ChatGPT:** The guard's own test cannot show whether ChatGPT is running it. Run `python3 scripts/moblee-doctor.py --prove-guard` from the Moblee folder, as described under the Trust step above.

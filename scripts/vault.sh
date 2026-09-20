@@ -17,7 +17,7 @@
 #      behind by Cowork's bindfs sandbox, then auto-commit with a
 #      "session start <timestamp>: commit pending Cowork changes" message.
 #   4. Print the last 5 commits so recent history is visible.
-#   5. Confirm you're ready to start Claude Code.
+#   5. Confirm you're ready to start your assistant.
 #
 # You do not need to remember individual pending-commit scripts; git itself
 # tracks every change and `vault` commits whatever has accumulated.
@@ -93,5 +93,8 @@ vault() {
   git log --oneline -5
 
   # --- Step 7: ready signal ----------------------------------------------------
-  printf '\nReady. Run `claude` to start Claude Code.\n\n'
+  # The ChatGPT line below: <!-- verify on testdev -->
+  printf '\nReady.\n'
+  printf 'With Claude: run `claude` to start Claude Code.\n'
+  printf 'With ChatGPT: open the ChatGPT app, choose Work, and open this folder as a project.\n\n'
 }

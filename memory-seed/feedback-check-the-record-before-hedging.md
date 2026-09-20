@@ -1,6 +1,6 @@
 ---
 name: feedback-check-the-record-before-hedging
-description: Before saying "I'm not sure" or "you'll want to check", do the lookup in the wiki, the log or git history; the record is almost always retrievable and retrieving it is Claude's job.
+description: Before saying "I'm not sure" or "you'll want to check", do the lookup in the wiki, the log or git history; the record is almost always retrievable and retrieving it is the assistant's job.
 metadata:
   type: feedback
 ---

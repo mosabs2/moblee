@@ -703,7 +703,7 @@ def check_outputs_size(vault: Path, findings: list[str]) -> tuple[int, int]:
     findings.append(
         f"- **outputs/ size guard**: **{total_mb:.0f} MB across {len(files)} files — over the {OUTPUTS_SIZE_THRESHOLD_MB} MB advisory threshold.** "
         "This is information, not an instruction: nothing is touched automatically. "
-        "If the folder feels heavy, ask Claude to move old renders into an `archive/` folder "
+        "If the folder feels heavy, ask your assistant to move old renders into an `archive/` folder "
         "(they can be re-rendered from the markdown sources at any time), or raise the threshold "
         "in `scripts/lint-v2.py` if the working set is legitimately larger now. The 15 largest:"
     )

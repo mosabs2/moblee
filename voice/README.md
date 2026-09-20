@@ -1,5 +1,7 @@
 # Moblee voice stack (macOS)
 
+**With Claude only.** This extra reads Claude's replies aloud. Moblee does not set this up for ChatGPT yet.
+
 Give Claude a voice. After installing, every Claude Code reply is read aloud,
 which is useful the moment you look away from the screen.
 

@@ -1,6 +1,6 @@
 ---
 name: design-your-brand
-description: Walk the user through defining their personal brand identity (colours, typography, monogram) and apply it across wiki-to-pdf renders. Use when the user wants to set up or refresh the visual identity their PDFs and branded reports will use, before running `wiki-to-pdf` for the first time, or when they want to update their brand defaults. Trigger phrases include "design my brand", "set up brand", "set up my brand", "choose my colours", "set my brand colours", "personalise the PDF output", "configure brand", "refresh my brand", and clear variants. Do not trigger on requests that ask Claude to *generate* a logo or *create* artwork, this skill captures choices and applies them; it does not produce visual assets from scratch.
+description: Walk the user through defining their personal brand identity (colours, typography, monogram) and apply it across wiki-to-pdf renders. Use when the user wants to set up or refresh the visual identity their PDFs and branded reports will use, before running `wiki-to-pdf` for the first time, or when they want to update their brand defaults. Trigger phrases include "design my brand", "set up brand", "set up my brand", "choose my colours", "set my brand colours", "personalise the PDF output", "configure brand", "refresh my brand", and clear variants. Do not trigger on requests that ask the assistant to *generate* a logo or *create* artwork, this skill captures choices and applies them; it does not produce visual assets from scratch.
 ---
 
 # Design Your Brand
@@ -8,7 +8,7 @@ description: Walk the user through defining their personal brand identity (colou
 A short interview skill that captures the user's personal visual identity (primary colour, secondary colour, gradient, typography, optional monogram or logo) and writes the answers into two places:
 
 1. A new or refreshed `wiki/Brand Reference.md` page in the user's vault, documenting the brand in human-readable form.
-2. The CSS custom properties at the top of `~/.claude/skills/wiki-to-pdf/brand.css`, so every subsequent PDF renders in the new brand without further configuration.
+2. The CSS custom properties at the top of `~/.claude/skills/wiki-to-pdf/brand.css`, so every subsequent PDF renders in the new brand without further configuration. **With ChatGPT:** the file is `~/.agents/skills/wiki-to-pdf/brand.css`; use that path wherever this skill names the other, the Brand Reference page included. It is outside the wiki folder, so ChatGPT asks the owner to approve the edit; say so before making it.
 
 The skill is conversational, not declarative. It works through six short stages, asking one question at a time and offering thoughtful defaults when the user has no strong preference.
 
@@ -22,7 +22,7 @@ Run this skill when:
 
 Do not run this skill when:
 
-- The user wants Claude to *invent* a logo or *generate* artwork. This skill captures choices; it does not produce visual assets. If the user has no monogram, the skill records that and the PDFs render without one.
+- The user wants the assistant to *invent* a logo or *generate* artwork. This skill captures choices; it does not produce visual assets. If the user has no monogram, the skill records that and the PDFs render without one.
 - The user is mid-render and just wants to override the variant for a single document. That is `wiki-to-pdf`'s `--variant` flag, not a full brand refresh.
 
 ## The interview
@@ -146,7 +146,7 @@ On confirmation, write to two places:
    - [[How to Use This Wiki]]
    ```
 
-2. **`~/.claude/skills/wiki-to-pdf/brand.css`**, update the `:root` block at the top of the file to replace the default values with the user's. Preserve every other line in the file; only the variables and the `@import` line (if the typeface changed) should change. Use `Edit` rather than `Write` so the rest of the stylesheet is left untouched.
+2. **`~/.claude/skills/wiki-to-pdf/brand.css`**, update the `:root` block at the top of the file to replace the default values with the user's. Preserve every other line in the file; only the variables and the `@import` line (if the typeface changed) should change. Change those lines in place and never rewrite the whole file (with Claude, `Edit` rather than `Write`), so the rest of the stylesheet is left untouched.
 
 After saving, append a log entry to `wiki/log.md` in the standard form:
 
@@ -174,7 +174,7 @@ The skill can be re-run any time to refresh the brand. On a re-run:
 1. Detect the existing `wiki/Brand Reference.md` if present and read the current values.
 2. Open the interview by showing the user the current settings and asking which stages they want to change.
 3. Skip stages the user does not want to touch.
-4. On save, overwrite only the changed values in `brand.css` (use `Edit` with `replace_all: false` on each variable line) and update `wiki/Brand Reference.md` with the new values plus an updated `Last set:` date.
+4. On save, overwrite only the changed values in `brand.css` (with Claude, `Edit` with `replace_all: false` on each variable line) and update `wiki/Brand Reference.md` with the new values plus an updated `Last set:` date.
 
 If `wiki/Brand Reference.md` does not exist, treat the run as a first-time setup.
 
@@ -182,12 +182,12 @@ If `wiki/Brand Reference.md` does not exist, treat the run as a first-time setup
 
 The page itself follows the wiki's house style: British English, analytical prose where it makes sense, absolute dates, no em dashes, no emojis. The bullet-list usage in the skeleton above is appropriate because the brand reference is genuinely a list-like inventory of values, not flowing argumentation.
 
-## Notes for Claude operating this skill
+## Notes for the assistant operating this skill
 
 - **Be conversational.** The user may not have a strong brand opinion. Offer thoughtful defaults and move quickly through stages where the user has nothing to say.
 - **Confirm before writing.** The save step touches two files; verify the captured values back before either edit.
 - **Don't generate artwork.** If the user has no monogram, accept that and configure the PDFs to render without one. Generating logos or monograms is a separate creative task and not part of this skill.
-- **Use `Edit` for brand.css, not `Write`.** The CSS file has structural content below the `:root` block that must be preserved. Only the values inside `:root` (and possibly the `@import` line) should change.
+- **Change brand.css in place; never rewrite it** (with Claude, `Edit`, not `Write`). The CSS file has structural content below the `:root` block that must be preserved. Only the values inside `:root` (and possibly the `@import` line) should change.
 - **Verify the brand renders correctly.** After saving, offer a single test render of any wiki page to confirm the brand applies. If the test render produces unexpected colours (e.g. the user typed a hex with too few digits, or the typeface failed to load), surface the issue rather than burying it.
 - **Update the log.** The schema entry on `wiki/log.md` is part of the operation, not optional.
 - **Respect the user's pace.** A user who knows their brand can finish the interview in two minutes. A user starting from scratch may want to think for a few days between stages. Both are fine; the skill should not pressure the user to complete in one sitting.

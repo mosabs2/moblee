@@ -1,6 +1,6 @@
 # Working state and tempo
 
-Working state and tempo for [Your Vault Name], distinct from the catalogue of contents in [[Index]] and the rules in `CLAUDE.md`. Refresh at the end of any session that opens, closes, or materially advances an active thread; weekly review as backstop.
+Working state and tempo for [Your Vault Name], distinct from the catalogue of contents in [[Index]] and the rules file at the vault root. Refresh at the end of any session that opens, closes, or materially advances an active thread; weekly review as backstop.
 
 Last refreshed: [Date], initial setup, no threads yet active.
 

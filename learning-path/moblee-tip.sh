@@ -42,11 +42,11 @@ fi
 PAGE="$VAULT/wiki/Wiki Operations/Moblee Learning Path.md"
 
 if [[ -z "$VAULT" || ! -d "$VAULT" ]]; then
-  notify "Moblee" "The evening reminder cannot find your vault. Tell Claude: the lesson reminder cannot find the vault."
+  notify "Moblee" "The evening reminder cannot find your vault. Tell your assistant: the lesson reminder cannot find the vault."
   exit 0
 fi
 if [[ ! -r "$PAGE" ]]; then
-  notify "Moblee" "The evening reminder cannot read the learning path. Tell Claude: the lesson reminder cannot read the learning path."
+  notify "Moblee" "The evening reminder cannot read the learning path. Tell your assistant: the lesson reminder cannot read the learning path."
   exit 0
 fi
 
@@ -68,5 +68,5 @@ if [[ -z "$NEXT" ]]; then
   if [[ $PRINT_ONLY -eq 0 ]]; then mkdir -p "$(dirname "$FINISHED")" && date '+%Y-%m-%d' > "$FINISHED"; fi
 else
   HEADING="$(grep -m1 "^## Lesson $NEXT:" "$PAGE" | sed "s/^## Lesson $NEXT: //")"
-  notify "Moblee, lesson $NEXT of $TOTAL" "$HEADING. Open Claude Code in your vault and say: lesson $NEXT"
+  notify "Moblee, lesson $NEXT of $TOTAL" "$HEADING. Open your assistant in your vault and say: lesson $NEXT"
 fi

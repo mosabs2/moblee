@@ -166,7 +166,7 @@ The render log line is part of the operation, not optional. It mirrors the disci
 
 ## How the render runs
 
-1. Resolve the source: if the user quotes `[[Page]]`, look up the file by exact title under `wiki/`. If a path is named, use it. Confirm the file exists; if not, ask before guessing. **Restricted folders are excluded by default**: any folder the vault's `CLAUDE.md` marks restricted, and any page carrying `restricted:` frontmatter. Never resolve a render target into one unless the user names the restricted page explicitly, and never render one to a shareable PDF without saying what it is.
+1. Resolve the source: if the user quotes `[[Page]]`, look up the file by exact title under `wiki/`. If a path is named, use it. Confirm the file exists; if not, ask before guessing. **Restricted folders are excluded by default**: any folder the vault's `CLAUDE.md` (`AGENTS.md` with ChatGPT) marks restricted, and any page carrying `restricted:` frontmatter. Never resolve a render target into one unless the user names the restricted page explicitly, and never render one to a shareable PDF without saying what it is.
 2. Detect bundle intent from the request phrasing.
 3. Read the source markdown plus any cluster notes.
 4. Strip frontmatter and remember the `parent`, `summary`, and `status` fields.
@@ -203,6 +203,8 @@ python3 ~/.claude/skills/wiki-to-pdf/render.py \
   --vault "[Your Vault]" \
   --output-dir "[Your Vault]/outputs"
 ```
+
+**With Claude:** the path above. **With ChatGPT:** the script is at `~/.agents/skills/wiki-to-pdf/render.py`.
 
 Optional flags:
 
@@ -247,4 +249,4 @@ The skill calls the script under the hood. The user does not have to type the co
 - Does not write to `wiki/` directly. The only wiki write is the one-line render entry on `wiki/log.md` per the operation discipline. It does not modify the source page.
 - Does not regenerate cover images. It uses the existing files referenced from your brand-mark folder.
 - Does not handle non-markdown sources. PDFs and images in `raw/processed/` are not in scope.
-- Does not produce slide decks or Word documents. PDF only. PowerPoint output goes through the `pptx` skill; Word goes through `docx`.
+- Does not produce slide decks or Word documents. PDF only. **With Claude:** PowerPoint output goes through the `pptx` skill; Word goes through `docx`. **With ChatGPT:** Moblee does not set this up for ChatGPT yet.

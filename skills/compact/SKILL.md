@@ -9,7 +9,7 @@ The compaction executor. Its job is to keep the vault light so every session sta
 
 ## Finding the vault
 
-Detect the vault root at runtime, in this order: the `MOBLEE_VAULT` environment variable; the path recorded in `~/.config/moblee/vault-path` (the Moblee installer writes it); otherwise walk up from the current working directory looking for a folder containing `wiki/Index.md`. If none of those finds a vault, say so plainly and stop; do not guess a path.
+Detect the vault root at runtime, in this order: the `MOBLEE_VAULT` environment variable; the path recorded in `~/.config/moblee/vault-path` (the Moblee installer writes it); otherwise walk up from the current working directory looking for a folder containing `wiki/Index.md`. If none of those finds a vault, say so plainly and stop; do not guess a path. With ChatGPT the vault's rules file is `AGENTS.md`; read that wherever this skill says `CLAUDE.md`.
 
 ## Why this exists
 
@@ -53,7 +53,7 @@ Run `python3 scripts/lint-v2.py` (or read the latest `outputs/lint/lint-v2-*.md`
 | top-level `wiki/*.md` | flag > 25k tok | cluster-note / subfolder / stub-plus-link extraction (gated) |
 | `wiki/log.md` | annual rollover | leave it: append-only, tailed not loaded; an annual rollover to `wiki/log-archive/` bounds it |
 
-Token counts are estimated as characters divided by four, matching how the lint's guard estimates them. Most pages are fine and should not be touched. A compaction pass is surgical: name the few files over cap, act on those.
+Token counts are estimated as characters divided by four, matching how the lint's guard estimates them. **With ChatGPT:** by default only the first 32 KiB of the rules file is read, which is less than the 10k cap; Moblee's installer raises that limit, and the check-up says if it is missing (the companion's field guide, F27). Most pages are fine and should not be touched. A compaction pass is surgical: name the few files over cap, act on those.
 
 ## Hard guardrails
 
