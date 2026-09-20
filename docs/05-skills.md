@@ -20,7 +20,7 @@ On any later day, say "guide me" and it offers one next step, with the reason: s
 
 **Setup review.** When you ask, or when the weekly health check says one is due (more than ninety days since the last), it tells you in two or three sentences what your use looks like and asks, item by item, whether you want a change. Nothing is removed by Moblee.
 
-**What it never does.** It never runs the installer, the updater or the checklist (the read-only `--check` and `--list` excepted), never copies anything into `~/.claude/` (for ChatGPT, `~/.codex/` and `~/.agents/`), and never edits your assistant's settings. If you ask it to, it explains that these are yours to do in the Moblee app or in a Terminal window of your own. It never starts a conversation unasked, and it leaves any password, recovery phrase, card number or code it finds in your material out of the wiki and tells you.
+**What it never does.** It never runs the installer, the updater or the checklist (the read-only `--check` and `--list` excepted), never copies anything into `~/.claude/` (for ChatGPT, `~/.codex/` and `~/.agents/`), and never edits your assistant's settings. The one exception is the brand file, `brand.css` in the `wiki-to-pdf` skill's folder, which the `design-your-brand` skill edits after telling you; you may be asked to approve that one edit. If you ask it to do any of the rest, it explains that these are yours to do in the Moblee app or in a Terminal window of your own. It never starts a conversation unasked, and it leaves any password, recovery phrase, card number or code it finds in your material out of the wiki and tells you.
 
 **Trigger phrases.**
 
@@ -85,7 +85,7 @@ The analytical and ghost patterns are read-only; save-back routes through `wiki-
 - "Add to my wiki."
 - "Capture everything from this chat."
 
-When the vault is mounted (with Claude: Claude Code, or Cowork with the folder mounted; with ChatGPT: the vault's folder open as a project), the skill writes directly into `raw/<date>-<topic>.md`. <!-- verify on testdev --> When the vault is not mounted, it produces a copy-paste markdown artefact for you to paste in by hand.
+When the vault is mounted (with Claude: Claude Code, or Cowork with the folder mounted; with ChatGPT: open ChatGPT, choose Work, and open your wiki folder), the skill writes directly into `raw/<date>-<topic>.md`. <!-- verify on testdev --> When the vault is not mounted, it produces a copy-paste markdown artefact for you to paste in by hand.
 
 It also handles light housekeeping on request: "move the processed files" or "tidy up raw" will move ingested files into the `raw/processed/` subfolder for you.
 

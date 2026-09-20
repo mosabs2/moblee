@@ -65,7 +65,7 @@ Once the daily notes exist, your assistant can plan into them. "Plan the week" l
 
 ## Lesson 7: Tell it what to hold you to
 
-Your vault has a file, `Identity.md`, that says who your assistant is to you: verify rather than guess, challenge rather than flatter, never delete on its own. One list in it starts empty and belongs to you. It holds the things you want your assistant to keep you honest about over time. It raises them, sparingly, for as long as they stay on the list.
+Your vault has a file, `Identity.md`, that says who your assistant is to you: verify rather than guess, challenge rather than flatter, never delete. One list in it starts empty and belongs to you. It holds the things you want your assistant to keep you honest about over time. It raises them, sparingly, for as long as they stay on the list.
 
 **Say:** "read wiki/Identity.md, then ask me what I want to be held to, and write my answers under the list for that"
 
@@ -77,7 +77,7 @@ Your vault has a file, `Identity.md`, that says who your assistant is to you: ve
 
 ## Lesson 8: The five files you never open
 
-Five files run the place. `CLAUDE.md` holds the rules (in a vault set up for ChatGPT alone it is named `AGENTS.md`). `wiki/_context.md` is the working state: active threads, open decisions, a watch list. `wiki/log.md` is the diary, with one dated entry per thing done and nothing ever rewritten. `wiki/Index.md` is the catalogue, one line per page. You met `wiki/Identity.md` in lesson 7. Your assistant reads them at the start of every session and writes them as it works. Rather than opening them, you ask about them: "what changed yesterday?", "what's on my watch list?", "what are my open decisions?".
+Five files run the place. `CLAUDE.md` holds the rules (ChatGPT reads them as `AGENTS.md`; where the vault has both names, one is the real file and the other is a link to it). `wiki/_context.md` is the working state: active threads, open decisions, a watch list. `wiki/log.md` is the diary, with one dated entry per thing done and nothing ever rewritten. `wiki/Index.md` is the catalogue, one line per page. You met `wiki/Identity.md` in lesson 7. Your assistant reads them at the start of every session and writes them as it works. Rather than opening them, you ask about them: "what changed yesterday?", "what's on my watch list?", "what are my open decisions?".
 
 Your assistant also keeps standing notes on how you work. **With Claude:** they sit in a memory folder under `~/.claude`, outside the vault. **With ChatGPT:** they sit on a wiki page, `wiki/Wiki Operations/Assistant Memory.md`.
 
@@ -103,7 +103,7 @@ The state files are read in full at every session start, so they are kept light.
 
 ## Lesson 11: Git is your undo
 
-Every version your assistant commits is kept by git, and it commits at the end of each piece of work. You never type git commands. **With Claude:** routine commits happen without asking. **With ChatGPT:** you are asked to approve each commit, and that is expected. You can always ask what changed on a given day, and you can ask the question that matters most: "how did my Projects page look on the 10th?" Your assistant shows you the earlier version and, if you want it back, copies the section into the current page with its editing tool. It restores by copying and never by rewinding, so nothing else changes. Regret is recoverable, which is why the never-delete rule can be absolute: nothing is ever the only copy.
+Every version your assistant commits is kept by git, and it commits at the end of each piece of work. You never type git commands. **With Claude:** routine commits happen without asking. **With ChatGPT:** you are asked to approve each commit, and that is expected. You can always ask what changed on a given day, and you can ask the question that matters most: "how did my Projects page look on the 10th?" Your assistant shows you the earlier version and, if you want it back, copies the section into the current page with its editing tool. It restores by copying and never by rewinding, so nothing else changes. Regret is recoverable for anything that was committed, which is why the never-delete rule can be absolute. With ChatGPT, approve the commit when asked: work that is not committed has no earlier version.
 
 **Say:** "show me the last ten changes" or "how did my [page] look a week ago?"
 
@@ -111,11 +111,19 @@ Every version your assistant commits is kept by git, and it commits at the end o
 
 ## Lesson 12: Nothing gets deleted, and how to tidy anyway
 
-Your assistant cannot delete in your vault. A guard refuses the command before it runs, however it is phrased, and nothing you say to your assistant overrides it. A message beginning "Blocked by the vault safety gate" means the guard is working as intended. Tidying happens by moving: finished material goes to `processed/` or an `archive/` folder. If you really want something gone, your assistant names it and says where it is, and you remove it yourself in Finder.
+Your assistant cannot delete in your vault. A guard refuses the command before it runs, in the forms it knows, including indirect ones, and nothing you say to your assistant overrides it. A message beginning "Blocked by the vault safety gate" means the guard is working as intended. Tidying happens by moving: finished material goes to `processed/` or an `archive/` folder. If you really want something gone, your assistant names it and says where it is, and you remove it yourself in Finder.
 
 **With Claude:** this holds as written.
 
-**With ChatGPT:** this holds once you have trusted the guard and proved it. ChatGPT skips a new or changed guard until you have reviewed it, and nothing on screen says so. Open the ChatGPT menu, Settings, Hooks (under the Coding heading), open "User config", press Trust beside the hook whose command ends `bash-guard.py`, and turn its switch on. ChatGPT asks again whenever Moblee updates the guard. To prove the guard is live, run `python3 scripts/moblee-doctor.py --prove-guard` in Terminal, in the folder where you downloaded Moblee. OpenAI describes hooks as a guardrail and not a complete boundary, and a guard that crashes lets the command through. ChatGPT's own sandbox is a second layer: by default the assistant cannot write outside the wiki folder. The sandbox does not stop a deletion inside the wiki; the guard does.
+**With ChatGPT:** this holds once you have trusted the guard and proved it. ChatGPT skips a new or changed guard until you have reviewed it, and nothing on screen says so. There are five steps:
+
+1. Open the ChatGPT menu and choose Settings.
+2. Choose Hooks, under the heading Coding.
+3. Open "User config".
+4. Press Trust beside the hook that ends `bash-guard.py`.
+5. Turn its switch on.
+
+If ChatGPT is open, quit it and open it again afterwards, so that it reads the whole rules file. You must do this again after any Moblee update that changes the guard. ChatGPT will not remind you. To prove the guard is live, run `python3 scripts/moblee-doctor.py --prove-guard` in Terminal, in the folder where you downloaded Moblee. In the Moblee app, press Prove the guard on the home screen. The proof uses a little of your ChatGPT allowance. OpenAI describes hooks as a guardrail and not a complete boundary, and a guard that crashes or takes too long lets the command through. ChatGPT's own sandbox is a second layer: by default the assistant does not write outside the wiki folder and the Mac's temporary folders without asking you. The sandbox does not stop a deletion inside the wiki; the guard does.
 
 **Say:** "propose what could be archived, and move it if I agree"
 
@@ -291,7 +299,7 @@ The failure to guard against is an assistant that flatters a caricature of you b
 
 ## Lesson 32: When stuck, where to turn
 
-This is the last lesson. From here, your assistant keeps coaching at every orient, and the Saturday check runs itself if the schedule is installed. When something breaks or puzzles you, describe it to your assistant first; it can read the vault's own rules and the logs, and it will tell you plainly if a fix needs you. The documentation that came with Moblee (the `docs/` folder in the download) covers installing, updating and the safety guard in more depth. Nothing you do inside the vault can lose your work: the guard, the commit gate and git see to that. With ChatGPT, the guard counts once it is trusted and proved (lesson 12).
+This is the last lesson. From here, your assistant keeps coaching at every orient, and the Saturday check runs itself if the schedule is installed. When something breaks or puzzles you, describe it to your assistant first; it can read the vault's own rules and the logs, and it will tell you plainly if a fix needs you. The documentation that came with Moblee (the `docs/` folder in the download) covers installing, updating and the safety guard in more depth. Committed work can always be brought back: the guard, the commit gate and git see to that. With ChatGPT, the guard counts once it is trusted and proved (lesson 12).
 
 **Say:** "something is not working: [describe what you saw]"
 

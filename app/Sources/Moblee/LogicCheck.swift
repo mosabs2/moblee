@@ -39,6 +39,57 @@ enum LogicCheck {
             flow.cancelUpdateQuestion()
             check("Not now on the question goes back home with nothing to tell the updater",
                   flow.mode == .home && !flow.askingAssistant && flow.updateAssistant == nil)
+
+            // --- a lost choice file: what the wiki's own rules files show ---
+            // Made-up wikis in a folder of the check's own (never "Wiki", which
+            // would look like an install), one for each way the files are laid down.
+            let fm = FileManager.default
+            let yard = home.appendingPathComponent("logic-check/wikis", isDirectory: true)
+            func wiki(_ name: String, real: [String], links: [String: String]) -> URL {
+                let v = yard.appendingPathComponent(name, isDirectory: true)
+                try? fm.createDirectory(at: v.appendingPathComponent("wiki"), withIntermediateDirectories: true)
+                for r in real { try? "# rules\n".write(to: v.appendingPathComponent(r), atomically: true, encoding: .utf8) }
+                for (from, to) in links {
+                    try? fm.createSymbolicLink(atPath: v.appendingPathComponent(from).path, withDestinationPath: to)
+                }
+                return v
+            }
+            let forChatGPT = wiki("chatgpt-with-link", real: ["AGENTS.md"], links: ["CLAUDE.md": "AGENTS.md"])
+            let linkDropped = wiki("chatgpt-link-dropped", real: ["AGENTS.md"], links: [:])
+            let forBoth = wiki("both", real: ["CLAUDE.md"], links: ["AGENTS.md": "CLAUDE.md"])
+            let forClaude = wiki("claude", real: ["CLAUDE.md"], links: [:])
+            let twoFiles = wiki("two-real-files", real: ["CLAUDE.md", "AGENTS.md"], links: [:])
+            check("a real AGENTS.md with CLAUDE.md a link to it is read as a wiki for ChatGPT",
+                  Assistant.inferred(vault: forChatGPT) == .chatgpt)
+            check("and so is a real AGENTS.md whose link a sync tool dropped",
+                  Assistant.inferred(vault: linkDropped) == .chatgpt)
+            check("a real CLAUDE.md says nothing about the assistant, with an AGENTS.md link, without one, or beside a real AGENTS.md",
+                  Assistant.inferred(vault: forBoth) == nil && Assistant.inferred(vault: forClaude) == nil
+                      && Assistant.inferred(vault: twoFiles) == nil)
+            let vaultNote = home.appendingPathComponent(".config/moblee/vault-path")
+            func pointAt(_ v: URL) {
+                try? fm.createDirectory(at: vaultNote.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try? (v.path + "\n").write(to: vaultNote, atomically: true, encoding: .utf8)
+            }
+            var recognised = true
+            for v in [forChatGPT, linkDropped, forBoth, forClaude, twoFiles] {
+                pointAt(v)
+                if HomeModel.existingVault(home: home)?.path != v.path { recognised = false }
+            }
+            check("a wiki is recognised by either rules file, real or a link", recognised)
+            pointAt(forClaude)
+            check("with no choice on record and a wiki laid down for Claude, the choice is read as Claude",
+                  Assistant.onRecord(home: home) == .claude)
+            pointAt(forChatGPT)
+            check("with no choice on record and a wiki laid down for ChatGPT alone, the choice is read as ChatGPT",
+                  Assistant.onRecord(home: home) == .chatgpt)
+            check("and an update still asks, since nothing is on record", Assistant.mustAsk(home: home))
+            record("somebody-else\n")
+            check("a word on record that cannot be read is no record: the wiki's files are asked, as for no file",
+                  Assistant.onRecord(home: home) == .chatgpt && Assistant.mustAsk(home: home))
+            record("claude\n")
+            check("a choice on record is believed over the shape of the files", Assistant.onRecord(home: home) == .claude)
+            pointAt(forClaude)      // the checks below are of a wiki laid down for Claude
         } else {
             check("the practice home had no choice on record to begin with", false)
         }
@@ -87,6 +138,43 @@ enum LogicCheck {
         check("some other problem is never taken for a verdict on the guard",
               GuardProof.read(rows([["level": "PROBLEM", "text": "The delete guard is not installed for ChatGPT.", "guide": "F02"]])) == .cannotTell)
         check("nothing readable is read as could not tell", GuardProof.read(Data("Traceback".utf8)) == .cannotTell)
+        check("not running is known by its level and its guide, whatever the sentence says",
+              GuardProof.read(rows([["level": "PROBLEM", "text": "Reworded one day.", "guide": "F26"]])) == .notRunning)
+        check("the same guide on a row that is not a PROBLEM decides nothing",
+              GuardProof.read(rows([["level": "CANNOT SEE", "text": "Whether the delete guard has been trusted", "guide": "F26"]])) == .cannotTell)
+        check("a row that says not running wins over one that says proved",
+              GuardProof.read(rows([["level": "OK", "text": "Proved: the delete guard is running in ChatGPT.", "guide": NSNull()],
+                                    ["level": "PROBLEM", "text": "The delete guard is not running in ChatGPT.", "guide": "F26"]])) == .notRunning)
+
+        // The same, read from samples of what the check-up really prints (kept
+        // in app/Fixtures/prove-guard with a note of where they came from), so
+        // that the rows above, typed here by hand, are not the only witness.
+        if let folder = Flow.value(after: "--fixtures", in: Practice.args) {
+            let samples = URL(fileURLWithPath: folder, isDirectory: true).appendingPathComponent("prove-guard")
+            let expected: [(String, GuardProof.Result)] = [("proved.json", .proved), ("not-running.json", .notRunning),
+                                                           ("cannot-tell.json", .cannotTell), ("not-in-place.json", .cannotTell)]
+            for (name, want) in expected {
+                let data = try? Data(contentsOf: samples.appendingPathComponent(name))
+                check("the check-up's own sample \(name) is read as \(want)", data.map { GuardProof.read($0) == want } ?? false)
+            }
+        } else {
+            check("the check-up's own samples were given (--fixtures <app/Fixtures>)", false)
+        }
+        // And the check-up this app carries still says what the samples say: the
+        // opening word of the proved line, and the guide on the not-running line.
+        if let pack = flow.bundledPack,
+           let source = try? String(contentsOf: pack.appendingPathComponent("scripts/moblee-doctor.py"), encoding: .utf8) {
+            check("the check-up in this app's pack still opens its proved line with \"Proved:\" at level OK",
+                  source.contains("f.add(OK, \"Proved:"))
+            var carriesGuide = false
+            if let start = source.range(of: "f.add(PROBLEM, \"The delete guard is not running in ChatGPT.") {
+                let call = source[start.lowerBound...].prefix(400)
+                if let end = call.range(of: "return") { carriesGuide = call[..<end.lowerBound].contains("\"F26\")") }
+            }
+            check("and still gives its not-running line the guide F26 at level PROBLEM", carriesGuide)
+        } else {
+            check("this app carries a pack whose check-up can be read", false)
+        }
 
         // --- the link into ChatGPT ---
         check("the link carries the absolute path, percent-encoded",
@@ -103,6 +191,92 @@ enum LogicCheck {
         Trust.setPending(false, home: home)
         check("and answered, without being deleted",
               !Trust.pending(home: home) && FileManager.default.fileExists(atPath: Trust.note(home: home).path))
+
+        // What each way of leaving the Trust screen does to the note.
+        Trust.setPending(true, home: home)
+        Trust.putOff(at: .steps, home: home)
+        check("Later on the steps leaves the step waiting", Trust.pending(home: home))
+        Trust.putOff(at: .offer, home: home)
+        check("Later on the offer, after the owner said the steps are done, answers it", !Trust.pending(home: home))
+        Trust.record(.notRunning, home: home)
+        check("a proof that sees the guard not running sets the step waiting again", Trust.pending(home: home))
+        Trust.putOff(at: .notRunning, home: home)
+        check("and Later after that leaves it waiting", Trust.pending(home: home))
+        Trust.record(.cannotTell, home: home)
+        check("a proof that could not tell changes nothing", Trust.pending(home: home))
+        Trust.record(.proved, home: home)
+        check("a proof that proves the guard answers it", !Trust.pending(home: home))
+
+        // A note left from when the wiki was for ChatGPT, read by an owner who
+        // has since changed to Claude alone.
+        Trust.setPending(true, home: home)
+        check("a waiting note is not shown to an owner whose choice is Claude alone",
+              !Trust.pending(home: home, for: .claude))
+        check("and is shown to one who uses ChatGPT, alone or with Claude",
+              Trust.pending(home: home, for: .chatgpt) && Trust.pending(home: home, for: .both))
+        let model = flow.homeModel
+        model.assistant = .claude
+        model.refreshTrust(home: home)
+        check("at home, for Claude alone, the Trust screen is not waiting", !model.trustPending)
+        model.assistant = .both
+        model.refreshTrust(home: home)
+        check("at home, for both, it is", model.trustPending)
+        Trust.setPending(false, home: home)
+        model.refreshTrust(home: home)
+
+        // --- a wiki newer than this app ---
+        model.assistant = .claude
+        model.wikiVersion = "0.9.0"; model.packVersion = "0.9.0"
+        check("on a wiki of this app's own version, Change is offered", model.canChangeAssistant)
+        model.tiles = [HomeModel.Tile(kind: .item, key: "trips", title: "Trip planning", why: "", detail: "",
+                                      how: .silent, paid: false, state: .running)]
+        check("but not while something is being added", !model.canChangeAssistant)
+        flow.mode = .home
+        flow.beginUpdate(changingAssistant: true)
+        check("and pressing it then would start nothing", flow.mode == .home && !flow.askingAssistant)
+        model.tiles = []
+        model.wikiVersion = "0.9.1"
+        check("on a wiki newer than this app, Change is hidden", !model.canChangeAssistant)
+        flow.beginUpdate(changingAssistant: true)
+        check("and neither Change nor Update can start this app's older updater",
+              flow.mode == .home && !flow.askingAssistant)
+        flow.beginUpdate()
+        check("by either door", flow.mode == .home)
+        model.safetyOff = true
+        check("a guard that looks off on a newer wiki is not this app's to repair", model.repairIsForANewerMoblee)
+        var ended = false
+        model.repair { ended = true }
+        check("and Repair, if it were ever asked for, runs nothing and reports no failure",
+              ended && !model.repairFailed)
+        model.wikiVersion = "0.9.0"
+        check("on a wiki of this app's own version, the same guard is this app's to repair", !model.repairIsForANewerMoblee)
+        model.safetyOff = false
+        model.wikiVersion = ""; model.packVersion = ""
+
+        // --- the hook entry that counts as on, for ChatGPT ---
+        check("the entry this Moblee writes counts as on", HomeModel.coversBothWays("Bash|apply_patch"))
+        check("so does one a later Moblee widens", HomeModel.coversBothWays("Bash|apply_patch|write_file"))
+        check("one that covers the shell alone does not", !HomeModel.coversBothWays("Bash"))
+        check("nor does an entry with no matcher", !HomeModel.coversBothWays(nil))
+
+        // --- a ChatGPT app with no agent inside it ---
+        let apps = home.appendingPathComponent("logic-check/apps", isDirectory: true)
+        let older = apps.appendingPathComponent("older/ChatGPT.app", isDirectory: true)
+        let newest = apps.appendingPathComponent("newest/ChatGPT.app", isDirectory: true)
+        let fmApps = FileManager.default
+        try? fmApps.createDirectory(at: older.appendingPathComponent("Contents/Resources"), withIntermediateDirectories: true)
+        try? fmApps.createDirectory(at: newest.appendingPathComponent("Contents/Resources"), withIntermediateDirectories: true)
+        let agent = newest.appendingPathComponent("Contents/Resources/codex")
+        try? "#!/bin/sh\n".write(to: agent, atomically: true, encoding: .utf8)
+        try? fmApps.setAttributes([.posixPermissions: 0o755], ofItemAtPath: agent.path)
+        check("a ChatGPT app with its agent inside is ready", ChatGPTApp.state(of: newest) == .ready)
+        check("a ChatGPT app with no agent inside is an older one, not a ready one", ChatGPTApp.state(of: older) == .older)
+        check("no app at all is missing", ChatGPTApp.state(of: apps.appendingPathComponent("none/ChatGPT.app")) == .missing
+              && ChatGPTApp.state(of: nil) == .missing)
+        check("the older one is named as such, with where to get the newest",
+              ChatGPTApp.olderSentence == "Your ChatGPT app is an older one. Get the newest from chatgpt.com/download.")
+        check("the name question names no assistant",
+              !NameScreen.words.contains("Claude") && !NameScreen.words.contains("ChatGPT"))
 
         print(failed == 0 ? "logic: every check held" : "logic: \(failed) check(s) FAILED")
         exit(failed == 0 ? 0 : 1)

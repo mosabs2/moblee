@@ -238,7 +238,7 @@
 </style>
 </head>
 <body>
-<div id="deadbar" role="alert">⚠️ <b>Dashboard server is off</b> — this page can&rsquo;t reach it and asks will not run. Restart with <code>python3 dashboard/server.py</code> in a terminal (or ask your assistant), then <button onclick="deadRetry(this)">Try again</button></div>
+<div id="deadbar" role="alert"><b>Dashboard server is off.</b> This page can&rsquo;t reach it and asks will not run. Restart with <code>python3 dashboard/server.py</code> in a terminal (or ask your assistant), then <button onclick="deadRetry(this)">Try again</button></div>
 <div class="aurora"><i class="a0"></i><i class="a1"></i><i class="a2"></i><i class="a3"></i></div>
 <canvas class="spectro" id="spectro"></canvas>
 <div id="vorb" aria-hidden="true"><svg viewBox="0 0 200 200">
@@ -630,7 +630,7 @@ async function run(prompt){
       if(!alive){
         serverDown(true);
         st.textContent='server off — nothing was run';
-        ai.innerHTML+='<div style="color:var(--bad);font-weight:700">[The dashboard server is off — this ask never ran. Restart with <code>python3 dashboard/server.py</code> in a terminal (or ask your assistant), then send again. Your prompt is back in the box.]</div>';
+        ai.innerHTML+='<div style="color:var(--bad);font-weight:700">[The dashboard server is off, so this ask never ran. Restart with <code>python3 dashboard/server.py</code> in a terminal (or ask your assistant), then send again. Your prompt is back in the box.]</div>';
         if(ask&&!ask.value&&prompt)ask.value=prompt;   // nothing typed is lost
         clearAck(); RUNNING=false; btn.disabled=false; RUNCTRL=null; if(cb)cb.style.display='none';
         return;

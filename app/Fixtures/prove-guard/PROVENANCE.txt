@@ -1,0 +1,24 @@
+Where these samples came from
+
+Each file here is what `python3 scripts/moblee-doctor.py --prove-guard --json`
+prints: a JSON list of rows, each with "level", "text" and "guide", as
+`json.dumps(f.rows, indent=2)` writes them.
+
+They were NOT captured from a run. They were put together by hand on
+20 September 2026 from the script's own source (scripts/moblee-doctor.py at
+branch second-assistant): the level words from its constants (OK, PROBLEM,
+CANNOT TELL), the sentences copied from the f.add(...) calls in prove_guard,
+check_codex_guard, check_chatgpt, check_diary and main, with TRUST_CHECK and
+TRUST_FIX written out in full, and the guide codes as those calls give them.
+The rows a real run adds about the Mac, the wiki's pages and the scheduled
+jobs are left out; the app reads none of them. The scratch folder's date is
+made up.
+
+The app's logic check (`--check-logic --fixtures <this folder's parent>`)
+reads them to make sure the app still knows a proved guard, a guard that is
+not running, and "could not tell" when it sees the check-up's real words.
+
+Replace them with captured output after the first real proof on the test
+account, and say so here. If the check-up's wording or its guide codes change,
+change these in the same commit, or the logic check will pass on words the
+check-up no longer says.

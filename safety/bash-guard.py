@@ -65,8 +65,20 @@ and a patch can delete a file ("*** Delete File:"), move one ("*** Move
 to:") or write over one ("*** Add File:" on a path that exists). scan_patch
 reads those three lines and nothing else: an ordinary edit ("*** Update
 File:" with hunks) is never refused, as an Edit is never refused on Claude.
+It reads them the way Codex's own patch reader does: outside an Update
+hunk a header may be indented, inside one only a header at column 0 counts
+(an indented line there is the page's own text); paths are taken literally,
+with no ~ or $ expansion; and a new file may be claimed once per patch, so
+a move followed by an add onto the same name cannot replace a page. If
+reading a patch fails and it holds a delete or move line, it is refused.
+Through the shell, apply_patch is allowed in one spelling only, a single
+quoted heredoc with no cd before it, because every other spelling hides the
+patch or the folder it applies in. A shell or interpreter started with
+nothing to run is refused for both assistants: Codex can type into such a
+session afterwards (write_stdin) without the hook being asked again.
 (Payload shape and patch grammar confirmed by a live Codex run and from
-codex-rs/apply-patch/src/parser.rs, 20 September 2026.)
+codex-rs/apply-patch/src/parser.rs and streaming_parser.rs, 20 September
+2026.)
 
 Per-machine: lives in ~/.claude/hooks/ (Claude Code) or ~/.codex/hooks/
 (ChatGPT), wired as a PreToolUse hook by safety/install-safety.py, matching
@@ -262,7 +274,7 @@ PY_DEL_CALL_RE = re.compile(
     r"(?:path\s*=\s*)?[rR]?(['\"])([^'\"]*)\1\s*[,)]")
 
 # ---------------------------------------------------------------- state
-STATE = {"cwd": None, "vault": None, "files": 0}
+STATE = {"cwd": None, "vault": None, "files": 0, "chdir": False}
 
 
 def _safe(fn, *args, **kw):
@@ -814,6 +826,48 @@ def scan_stdin_code(seg, lang, depth):
     return None
 
 
+# A shell or interpreter with no script, no inline body and nothing arriving
+# on stdin has nothing to run: it sits open, and ChatGPT's agent can type into
+# it afterwards (write_stdin) without the hook being asked again.
+STDIN_OPS = ("<", "<<", "<<<", "<&", "<>")
+SHELL_INFO = {"--version", "--help"}
+PY_INFO = {"-V", "-VV", "--version", "-h", "-?", "--help", "--help-all",
+           "--help-env", "--help-xoptions"}
+PY_BOOL_FLAGS = set("bBdEiIOqsSuvx")
+INTERP_SESSION_FLAGS = {"-i", "--interactive", "-a", "-"}
+
+
+def stdin_supplied(seg):
+    """True if this step is given its input in the command itself."""
+    if seg is None:
+        return False
+    return bool(seg.piped_in or any(op in STDIN_OPS for op, _ in seg.redirs))
+
+
+def bare_session(b):
+    return ("starts %s with nothing to run, which leaves a session open that "
+            "the guard cannot see into; pass the command with -c (or -e), or "
+            "name a script file" % b)
+
+
+def python_stays_open(rest):
+    """True for `python -i …`: the session stays open after the script."""
+    i = 0
+    while i < len(rest):
+        t = rest[i]
+        if (not t.startswith("-") or t in ("-", "--")
+                or t.startswith("-c") or t.startswith("-m")):
+            return False
+        if t in ("-W", "-X", "-Q"):
+            i += 2
+            continue
+        if (not t.startswith("--") and "i" in t[1:]
+                and all(ch in PY_BOOL_FLAGS for ch in t[1:])):
+            return True
+        i += 1
+    return False
+
+
 # ---------------------------------------------------------------- wrappers
 def peel(toks, assigns, depth=0):
     """(basename-head, original head, rest) after peeling wrappers and keywords."""
@@ -979,6 +1033,10 @@ def rule_shell(b, rest, seg, depth):
         return None  # `bash -n file` is a read
     if i < n and rest[i] != "-":
         return scan_file(rest[i], "shell", depth)
+    if not stdin_supplied(seg):
+        if any(t in SHELL_INFO for t in rest):
+            return None  # prints and exits
+        return bare_session(b)
     return scan_stdin_code(seg, "shell", depth)
 
 
@@ -994,14 +1052,21 @@ def rule_source(b, rest, depth):
 def rule_python(b, rest, seg, depth, assigns):
     if b not in PYTHONS:
         return None
+    if python_stays_open(rest) and not stdin_supplied(seg):
+        return ("starts %s with -i, which keeps a session open after the "
+                "script that the guard cannot see into; run it without -i" % b)
     i, n = 0, len(rest)
     while i < n:
         t = rest[i]
         if t == "-":
+            if not stdin_supplied(seg):
+                return bare_session(b)
             return scan_stdin_code(seg, "python", depth)
         if t == "--":
             i += 1
             break
+        if t in PY_INFO:
+            return None  # prints and exits
         if t.startswith("-") and len(t) > 1:
             if t.startswith("-c"):
                 body = t[2:] if len(t) > 2 else (rest[i + 1] if i + 1 < n else "")
@@ -1021,6 +1086,8 @@ def rule_python(b, rest, seg, depth, assigns):
         break
     if i < n:
         return scan_file(rest[i], "python", depth)
+    if not stdin_supplied(seg):
+        return bare_session(b)
     return scan_stdin_code(seg, "python", depth)
 
 
@@ -1074,6 +1141,12 @@ def rule_interp_e(b, rest, seg, depth):
         return None
     if script and script != "-":
         return scan_file(script, b, depth)
+    if not stdin_supplied(seg):
+        # Only the plainly interactive forms: no argument at all, or nothing
+        # but a flag that asks for a session (`node --test`, `php -m` and the
+        # like do their work and exit).
+        if all(t in INTERP_SESSION_FLAGS for t in rest):
+            return bare_session(b)
     return scan_stdin_code(seg, b, depth)
 
 
@@ -1104,6 +1177,8 @@ def rule_awk(b, rest, seg, depth):
 def rule_other_interp(b, rest, seg, depth):
     if b not in OTHER_INTERP:
         return None
+    if not rest and not stdin_supplied(seg):
+        return bare_session(b)
     body = " ".join(rest)
     k = keyword_hit(body, "unknown")
     return ("%s body contains %s" % (b, k)) if k else None
@@ -1400,6 +1475,73 @@ def _git_checkout(args):
     return None  # pure restore of files that do not currently exist
 
 
+# apply_patch run as a shell command (ChatGPT's agent puts it on the PATH).
+PATCH_HEADS = {"apply_patch", "applypatch"}
+CHDIR_HEADS = {"cd", "pushd", "popd", "chdir"}
+PATCH_SHELL_WHY = (
+    "runs apply_patch through the shell in a form the guard cannot read "
+    "(%s); use the file-editing tool itself, or pass the whole patch as one "
+    "quoted heredoc, apply_patch <<'EOF' ... EOF, with no cd before it")
+
+
+def changes_folder(lines, assigns):
+    """True if any step of the command changes the working folder."""
+    for line in lines:
+        for seg in line.segs:
+            if not seg.toks:
+                continue
+            try:
+                b = peel(seg.toks, assigns)[0]
+            except Exception:
+                b = norm_head(seg.toks[0])
+            if b in CHDIR_HEADS:
+                return True
+            if any(t in ("-C", "--chdir") or t.startswith("--chdir=")
+                   for t in seg.toks) and any(norm_head(t) == "env" for t in seg.toks):
+                return True  # env -C <folder> <command>
+    return False
+
+
+def _apply_patch_shell(rest, seg):
+    line = seg.line
+    ops = [op for op, _ in seg.redirs]
+    if rest:
+        why = "the patch is passed as an argument"
+    elif seg.piped_in:
+        why = "the patch is piped in"
+    elif any(op in ("<", "<<<", "<&", "<>") for op in ops):
+        why = "the patch is read from a file or a string"
+    elif ops.count("<<") != 1 or line is None or len(line.bodies) != 1:
+        why = "the patch is not in one heredoc of its own"
+    elif "<<-" in line.text:
+        why = "a <<- heredoc strips tabs, so the patch is not what it looks like"
+    elif STATE.get("chdir"):
+        why = "the command changes folder first, so the paths cannot be placed"
+    else:
+        body = line.bodies[0]
+        m = HEREDOC_RE.search(line.text)
+        if (not m or not m.group(1)) and ("$" in body or "`" in body):
+            why = ("the heredoc is unquoted and the patch holds $ or a "
+                   "backtick, which the shell would rewrite")
+        else:
+            return scan_patch_guarded(body)
+    return PATCH_SHELL_WHY % why
+
+
+def rule_apply_patch(b, rest, seg):
+    if b not in PATCH_HEADS:
+        return None
+    try:
+        return _apply_patch_shell(rest, seg)
+    except Exception:
+        # A bug here must not freeze the assistant, but a visible delete or
+        # move line is still refused.
+        text = seg.line.text + "\n" + "\n".join(seg.line.bodies) if seg.line else ""
+        if loose_patch_line(text):
+            return PATCH_SHELL_WHY % "it holds a delete or move line and could not be read"
+        return None
+
+
 # ---------------------------------------------------------------- drivers
 def scan_segment_tokens(toks, depth, seg=None, assigns=None, allow_root=False):
     if seg is None:
@@ -1432,6 +1574,7 @@ def scan_segment_tokens(toks, depth, seg=None, assigns=None, allow_root=False):
             (rule_move_copy, (b, rest)),
             (rule_tee, (b, rest)),
             (rule_git, (b, rest, depth)),
+            (rule_apply_patch, (b, rest, seg)),
     ):
         r = _safe(fn, *a)
         if r:
@@ -1448,8 +1591,12 @@ def scan_command(command, depth=0):
     except Exception:
         seg = Seg()
         seg.toks = fallback_tokens(command)
+        if any(norm_head(t) in CHDIR_HEADS for t in seg.toks):
+            STATE["chdir"] = True
         return scan_segment_tokens(seg.toks, depth, seg)
     assigns = _safe(assignments, lines) or {}
+    if _safe(changes_folder, lines, assigns):
+        STATE["chdir"] = True  # stays set: an apply_patch step may be nested
     for line in lines:
         for seg in line.segs:
             r = scan_segment_tokens(seg.toks, depth, seg, assigns)
@@ -1463,55 +1610,155 @@ def scan_command(command, depth=0):
 
 
 # ---------------------------------------------------------------- patches
-PATCH_OP_RE = re.compile(
-    r"^\*\*\* (Delete File|Move to|Add File|Update File): (.+?)[ \t]*$", re.M)
+PATCH_FILE_MARKS = (("*** add file:", "add"), ("*** delete file:", "delete"),
+                    ("*** update file:", "update"))
+PATCH_MOVE_MARK = "*** move to:"
+PATCH_END_MARK = "*** end patch"
+
+
+def patch_ops(text):
+    """[(op, path)] in order, read as Codex's own patch reader reads them
+    (streaming_parser.rs). Outside an Update hunk the reader trims a line
+    before looking for a header, so an indented header counts. Inside one it
+    trims the right-hand side only: a header counts at column 0, and an
+    indented line is the page's own text (content is prefixed '+', '-' or a
+    space). Letter case and a missing space after the colon are forgiven
+    here, which errs towards refusing. One pass, no regular expression."""
+    ops, in_update = [], False
+    for raw in text.split("\n"):
+        line = raw.rstrip() if in_update else raw.strip()
+        if not line.startswith("***"):
+            continue
+        low = line.lower()
+        for mark, op in PATCH_FILE_MARKS:
+            if low.startswith(mark):
+                ops.append((op, line[len(mark):].strip()))
+                in_update = op == "update"
+                break
+        else:
+            if low.startswith(PATCH_MOVE_MARK):
+                ops.append(("move", line[len(PATCH_MOVE_MARK):].strip()))
+            elif low.startswith(PATCH_END_MARK):
+                in_update = False
+    return ops
+
+
+def loose_patch_line(text):
+    """True if any line, however indented, asks for a delete or a move."""
+    for raw in text.split("\n"):
+        low = raw.strip().lower()
+        if low.startswith("*** delete file:") or low.startswith(PATCH_MOVE_MARK):
+            return True
+    return False
+
+
+def patch_path(path):
+    """The absolute path a patch line names, taken literally as the patch tool
+    takes it: no ~, no $VAR. None when it cannot be placed (no cwd, NUL)."""
+    if not path or "\x00" in path:
+        return None
+    if not os.path.isabs(path):
+        if not STATE["cwd"]:
+            return None
+        path = os.path.join(STATE["cwd"], path)
+    return path
+
+
+def patch_throwaway(path):
+    """True iff the literal path lies outside the vault, under a throwaway root."""
+    p = patch_path(path)
+    if p is None:
+        return False
+    real = os.path.realpath(p)
+    if STATE["vault"] and inside(real, STATE["vault"]):
+        return False
+    return any(real.startswith(root + os.sep) for root in throwaway_roots())
+
+
+def patch_key(target):
+    """One name per file on a filesystem that ignores case and accent form."""
+    return unicodedata.normalize("NFC", os.path.realpath(target)).casefold()
 
 
 def scan_patch(text):
     """Reason string if an apply_patch body deletes a file, moves one out of
-    the vault or over another, or adds a file where one already exists.
-    Operation lines start at column 0; a page's own text inside a patch is
-    prefixed with '+', '-' or a space, so it can never be read as one."""
-    moving = None
-    for m in PATCH_OP_RE.finditer(text):
-        op, path = m.group(1), m.group(2).strip()
-        if op == "Update File":
+    the vault or over another, or adds a file where one already exists,
+    on disk or earlier in the same patch."""
+    vault = STATE["vault"] if STATE["cwd"] else None
+    moving, claimed = None, set()
+    for op, path in patch_ops(text):
+        if op == "update":
             moving = path
             continue
-        if op == "Delete File":
+        if op == "delete":
             moving = None
-            if throwaway_target(path):
+            if _safe(patch_throwaway, path):
                 continue
             return "deletes a file (apply_patch, Delete File: %s)" % path
-        if op == "Add File":
+        if op == "add":
             moving = None
-            target = resolve(path)
-            if target and os.path.exists(target):
+            target = patch_path(path)
+            if target is None:
+                # Cannot be placed: judge the instruction files by name.
+                if os.path.basename(path) in CONTENT_FILES:
+                    return ("writes over an existing file (apply_patch, "
+                            "Add File: %s)" % path)
+                continue
+            if os.path.lexists(target):
                 return ("writes over an existing file (apply_patch, "
                         "Add File: %s)" % path)
+            key = patch_key(target)
+            if key in claimed:
+                return ("writes twice to the same new file in one patch "
+                        "(apply_patch, Add File: %s)" % path)
+            claimed.add(key)
             continue
         # Move to: the destination of the Update File named just above.
-        sink = forbidden_destination(path)
-        if sink:
-            return "apply_patch move %s" % sink
-        src, dest = resolve(moving or ""), resolve(path)
-        vault = STATE["vault"]
-        if vault and (src is None or inside(src, vault)):
-            if dest is None or not inside(dest, vault):
-                return ("moves vault material out of the vault "
+        src = patch_path(moving) if moving else None
+        dest = patch_path(path)
+        source_name, moving = moving, None
+        if vault:
+            if src is None or inside(src, vault):
+                if dest is None or not inside(dest, vault):
+                    sink = _safe(forbidden_destination, path)
+                    if sink:
+                        return "apply_patch move %s" % sink
+                    return ("moves vault material out of the vault "
+                            "(apply_patch, Move to: %s)" % path)
+        else:
+            sink = _safe(forbidden_destination, path)
+            if sink:
+                return "apply_patch move %s" % sink
+            if source_name is None or is_content_path(source_name):
+                # No cwd, so nothing can be placed: a content page may move
+                # only to another content location, judged by name.
+                text_dest = os.path.normpath(path)
+                if (os.path.isabs(text_dest) or text_dest.startswith("..")
+                        or not any(text_dest.startswith(d + "/") for d in CONTENT_DIRS)):
+                    return ("moves vault material out of the vault "
+                            "(apply_patch, Move to: %s)" % path)
+        if dest is not None:
+            if os.path.lexists(dest):
+                return ("moves over an existing file (apply_patch, "
+                        "Move to: %s)" % path)
+            key = patch_key(dest)
+            if key in claimed:
+                return ("moves onto a file written earlier in the same patch "
                         "(apply_patch, Move to: %s)" % path)
-        if dest and os.path.exists(dest):
-            return ("moves over an existing file (apply_patch, "
-                    "Move to: %s)" % path)
-        if not vault and is_content_path(moving or ""):
-            # No cwd, so nothing resolves: a content page may move only to
-            # another content location, judged by name.
-            text_dest = os.path.normpath(path).lstrip("./")
-            if not any(text_dest.startswith(d + "/") for d in CONTENT_DIRS):
-                return ("moves vault material out of the vault "
-                        "(apply_patch, Move to: %s)" % path)
-        moving = None
+            claimed.add(key)
     return None
+
+
+def scan_patch_guarded(text):
+    """scan_patch, except that a failure while reading refuses a patch that
+    holds a delete or move line rather than letting it through."""
+    try:
+        return scan_patch(text)
+    except Exception:
+        if loose_patch_line(text):
+            return ("holds a delete or move line in a patch the guard could "
+                    "not finish reading (apply_patch)")
+        return None
 
 
 BLOCK_MSG = (
@@ -1547,13 +1794,14 @@ def main():
         sys.exit(0)  # fail open only on a malformed payload
     try:
         if tool == "apply_patch":
-            reason = scan_patch(command)
+            reason = scan_patch_guarded(command)
         else:
             reason = scan_command(command)
-            # A patch can also arrive through the shell, as a heredoc fed to
-            # an apply_patch command; its operation lines are read the same.
+            # rule_apply_patch reads a patch fed to an apply_patch step. This
+            # second look covers a step it could not see (behind a wrapper the
+            # guard does not peel): the operation lines are read the same.
             if not reason and "*** Begin Patch" in command:
-                reason = scan_patch(command)
+                reason = scan_patch_guarded(command)
     except Exception:
         reason = None  # framework bug: never freeze the assistant
     if reason:

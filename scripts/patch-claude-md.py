@@ -3,8 +3,9 @@
 Moblee schema without replacing the file.
 
 The file patched is the vault's instruction file: CLAUDE.md, or AGENTS.md in a
-vault set up for ChatGPT alone. Where both are present CLAUDE.md is the real
-file and AGENTS.md a link to it, and the real file is the one patched.
+vault set up for ChatGPT alone (where CLAUDE.md is a link to it). For both
+assistants CLAUDE.md is the real file and AGENTS.md a link to it. The real
+file is the one patched, never the link.
 
 A vault's CLAUDE.md is part template and part the owner's own rules, so it is
 never overwritten. This script inserts the blocks a newer Moblee version needs,
@@ -61,7 +62,7 @@ BLOCKS = [
         r"^## Hard rules\s*$",
         "first-bullet",
         "Shell commands are composed plainly",
-        "- **Shell commands are composed plainly**: no command substitution (`$(...)` or backticks), no heredocs, no leading variable assignments. Logic goes into a script file under `scripts/` and the file is run. **With Claude:** these shapes trigger a permission prompt regardless of the allow list, and a vault that prompts constantly trains its owner to click yes without reading. **With ChatGPT:** Moblee does not set this up for ChatGPT yet.\n",
+        "- **Shell commands are composed plainly**: no command substitution (`$(...)` or backticks), no heredocs, no leading variable assignments. Logic goes into a script file under `scripts/` and the file is run. **With Claude:** these shapes trigger a permission prompt regardless of the allow list, and a vault that prompts constantly trains its owner to click yes without reading. **With ChatGPT:** the rule holds all the same; plain commands are the ones the guard reads most reliably.\n",
     ),
     (
         "never-delete rule",
@@ -200,8 +201,20 @@ def main() -> int:
     # throughout, and blocks already present are never rewritten. When ChatGPT
     # will read that file too, one paragraph tells it the rules are its own.
     blocks = list(BLOCKS)
-    chatgpt_reads = (a.assistant in ("chatgpt", "both")
-                     or (vault / "AGENTS.md").exists() or (vault / "AGENTS.md").is_symlink())
+    # "Will read it" means the owner chose ChatGPT, or AGENTS.md is a link to
+    # this file. An AGENTS.md that is a file of its own, in a wiki for Claude
+    # alone, is the owner's, kept for some other tool: their CLAUDE.md gains
+    # nothing on its account.
+    chosen = a.assistant
+    if chosen is None:
+        # run by hand: the choice on record, read as the installer and the
+        # updater read it (first line, spaces dropped, the exact word)
+        try:
+            first = (Path.home() / ".config" / "moblee" / "assistant").read_text(errors="replace").split("\n", 1)[0]
+            chosen = "".join(first.split())
+        except OSError:
+            chosen = None
+    chatgpt_reads = (chosen in ("chatgpt", "both") or (vault / "AGENTS.md").is_symlink())
     if chatgpt_reads and "where Claude is the maintainer" in original:
         blocks.append(READER_BLOCK)
 

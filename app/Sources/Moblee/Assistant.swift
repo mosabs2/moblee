@@ -46,8 +46,33 @@ enum Assistant: String, CaseIterable, Identifiable {
         return Assistant(rawValue: word)
     }
 
-    /// What the scripts will take the choice to be.
-    static func onRecord(home: URL) -> Assistant { stored(home: home) ?? .claude }
+    /// What the scripts will take the choice to be: the word on record; with
+    /// none, what the wiki's own rules files show; and failing that, Claude.
+    static func onRecord(home: URL) -> Assistant { stored(home: home) ?? inferred(home: home) ?? .claude }
+
+    /// The choice file can be lost (a tidy-up, a new Mac filled from a backup
+    /// of the wiki alone). The shape of the rules files does not say which
+    /// assistant a wiki is for, with one exception the scripts also make: a
+    /// real AGENTS.md beside a CLAUDE.md that is absent, or only a link, is how
+    /// a wiki for ChatGPT alone is laid down, and nothing else is laid down so.
+    static func inferred(home: URL) -> Assistant? {
+        let record = home.appendingPathComponent(".config/moblee/vault-path")
+        guard let text = try? String(contentsOf: record, encoding: .utf8) else { return nil }
+        let path = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !path.isEmpty else { return nil }
+        return inferred(vault: URL(fileURLWithPath: path, isDirectory: true))
+    }
+
+    static func inferred(vault: URL) -> Assistant? {
+        // Asked of the name itself, never of what a link points at.
+        func kind(_ name: String) -> FileAttributeType? {
+            (try? FileManager.default.attributesOfItem(atPath: vault.appendingPathComponent(name).path))?[.type]
+                as? FileAttributeType
+        }
+        let claude = kind("CLAUDE.md")
+        guard kind("AGENTS.md") == .typeRegular, claude == nil || claude == .typeSymbolicLink else { return nil }
+        return .chatgpt
+    }
 
     /// An update asks the question first only when no choice is on record.
     static func mustAsk(home: URL) -> Bool { stored(home: home) == nil }
@@ -71,10 +96,28 @@ enum ChatGPTApp {
         return NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID)
     }
 
-    static var installed: Bool { location != nil }
+    /// An app called ChatGPT is not enough. The one Moblee needs carries
+    /// ChatGPT's agent inside it (`Contents/Resources/codex`), which is what
+    /// runs hooks and what the check-up's proof starts. An older ChatGPT app,
+    /// for chatting only, sits at the same place under the same name and has
+    /// neither the Hooks settings nor the agent.
+    enum State: Equatable { case ready, older, missing }
 
-    /// `codex://new?path=<absolute path>`, the link OpenAI documents for
-    /// opening a folder from outside. Everything in the path but letters,
+    static func state(of app: URL?) -> State {
+        guard let app, FileManager.default.fileExists(atPath: app.path) else { return .missing }
+        let agent = app.appendingPathComponent("Contents/Resources/codex").path
+        return FileManager.default.isExecutableFile(atPath: agent) ? .ready : .older
+    }
+
+    static var state: State { state(of: location) }
+
+    static var installed: Bool { state == .ready }
+
+    static let olderSentence = "Your ChatGPT app is an older one. Get the newest from chatgpt.com/download."
+
+    /// `codex://new?path=<absolute path>`. The `codex` link scheme is
+    /// registered by the ChatGPT app on the Mac this was built on; untested
+    /// until the testdev run. Everything in the path but letters,
     /// digits, `-._~` and `/` is percent-encoded. Nil for a path that is not
     /// absolute, which the link does not take.
     static func link(toFolder folder: String) -> URL? {
@@ -161,6 +204,7 @@ struct AssistantScreen: View {
         guard showingNeeds else { return "Which assistant do you use?" }
         if !checkup.asked.isEmpty && !checkup.readyToGoOn { return "Install it from the page that opened, then come back here." }
         if checkup.readyToGoOn { return "Your Mac is ready." }
+        if checkup.chatgptIsOlder { return ChatGPTApp.olderSentence }
         return checkup.needs.count == 1 ? "Your Mac needs this first. Tap Get." : "Your Mac needs these first. Tap Get."
     }
 

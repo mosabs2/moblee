@@ -68,10 +68,25 @@ final class HomeModel: ObservableObject {
     /// The owner put the proof off ("Later") in this opening of the app.
     @Published var trustSetAside = false
 
+    /// Only for an owner whose wiki is for ChatGPT, alone or with Claude: a
+    /// note left from before a change to Claude alone is not theirs to answer.
     func refreshTrust(home: URL) {
-        let now = Trust.pending(home: home)
+        let now = Trust.pending(home: home, for: assistant)
         if now != trustPending { trustPending = now }
     }
+
+    /// The Change control is there only when changing can be done safely: not
+    /// on a wiki newer than this app (the change is made by this app's updater,
+    /// which would put older files over newer ones), and not while something
+    /// is being added (the updater and the checklist write the same settings).
+    var canChangeAssistant: Bool {
+        !wikiIsNewerThanApp && !tiles.contains { $0.state == .running }
+    }
+
+    /// The guard looks off, and the wiki is newer than this app. This app's
+    /// copies are the older ones and its idea of "on" may be out of date, so it
+    /// does not repair: the owner is sent for the newest Moblee.
+    var repairIsForANewerMoblee: Bool { safetyOff && wikiIsNewerThanApp }
 
     private(set) var vault: URL?
     private var home: URL = FileManager.default.homeDirectoryForCurrentUser
@@ -104,8 +119,13 @@ final class HomeModel: ObservableObject {
         guard let text = try? String(contentsOf: record, encoding: .utf8) else { return nil }
         let url = URL(fileURLWithPath: text.trimmingCharacters(in: .whitespacesAndNewlines), isDirectory: true)
         let fm = FileManager.default
-        // A wiki made for ChatGPT alone keeps its rules in AGENTS.md, the name
-        // ChatGPT reads, and has no CLAUDE.md.
+        // The rules file is CLAUDE.md, AGENTS.md, or one of them with the other
+        // a link to it (for ChatGPT alone: a real AGENTS.md, and CLAUDE.md a
+        // link, so that a Moblee from before ChatGPT still sees a wiki here and
+        // does not build a second one; for both: the other way round). Any of
+        // these marks a wiki, and a link that some sync tool dropped changes
+        // nothing. Which assistant the wiki is for is not read from this shape
+        // but from the choice on record (see `Assistant.onRecord`).
         guard fm.fileExists(atPath: url.appendingPathComponent("CLAUDE.md").path)
                 || fm.fileExists(atPath: url.appendingPathComponent("AGENTS.md").path),
               fm.fileExists(atPath: url.appendingPathComponent("wiki").path) else { return nil }
@@ -220,7 +240,7 @@ final class HomeModel: ObservableObject {
             var entered = false
             if let file = Self.json(home.appendingPathComponent(".codex/hooks.json")),
                let hooks = (file["hooks"] as? [String: Any])?["PreToolUse"] as? [[String: Any]] {
-                for entry in hooks where entry["matcher"] as? String == "Bash|apply_patch" {
+                for entry in hooks where Self.coversBothWays(entry["matcher"] as? String) {
                     for h in (entry["hooks"] as? [[String: Any]] ?? []) {
                         if (h["command"] as? String ?? "").contains(".codex/hooks/bash-guard.py") { entered = true }
                     }
@@ -240,6 +260,16 @@ final class HomeModel: ObservableObject {
             || (!Self.isNewer(packVersion, than: wikiVersion) && !Self.isNewer(wikiVersion, than: packVersion))
         guardStale = !safetyOff && versionsLevel && !guardIsMoblees() && !repairSetAside
         needsRepair = safetyOff || guardStale || (versionsLevel && !skillsAreMoblees() && !repairSetAside)
+    }
+
+    /// ChatGPT can delete in two ways, by a shell command (`Bash`) and with its
+    /// file-editing tool (`apply_patch`), and the guard's entry must name both.
+    /// This Moblee writes exactly `Bash|apply_patch`. A later one may name
+    /// more tools beside them; that is still "on", and an app that called it
+    /// "off" would press an older entry and an older guard on a newer wiki.
+    static func coversBothWays(_ matcher: String?) -> Bool {
+        let named = Set((matcher ?? "").split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) })
+        return named.contains("Bash") && named.contains("apply_patch")
     }
 
     /// The owner said "Not now" to a Repair that is about copies differing, not
@@ -582,11 +612,22 @@ final class HomeModel: ObservableObject {
     }
 
     func repair(then: @escaping @MainActor () -> Void) {
+        // Never from this pack onto a wiki a newer Moblee made, whatever the
+        // guard's state: the screen does not offer it, and this refuses it.
+        guard !wikiIsNewerThanApp else { then(); return }
         guard let pack, let vault else { repairFailed = true; then(); return }
+        // The assistant is named to both scripts as the app read it. Left to
+        // read the record themselves they do not all read it alike (one takes
+        // the first line, another the whole file; one minds capitals, another
+        // does not), and a repair for a different assistant than the screen
+        // checked would either not mend what was found or stop on a word it
+        // does not know, every time, with no way past.
+        let who = assistant.rawValue
         // The safety layer first, then Moblee's own skills (whatever was sitting
         // under one of their names is moved to the backups folder, never deleted).
         EngineTask.output(of: "/usr/bin/python3",
-                          [pack.appendingPathComponent("safety/install-safety.py").path, "--vault", vault.path],
+                          [pack.appendingPathComponent("safety/install-safety.py").path, "--vault", vault.path,
+                           "--assistant", who],
                           home: home) { [weak self] code, data in
             guard let self else { return }
             // A repair that put a new guard in place for ChatGPT says, on a line
@@ -597,7 +638,8 @@ final class HomeModel: ObservableObject {
                 self.trustSetAside = false
             }
             EngineTask.output(of: "/bin/bash",
-                              [pack.appendingPathComponent("scripts/install-skills.sh").path, "--update"],
+                              [pack.appendingPathComponent("scripts/install-skills.sh").path, "--update",
+                               "--assistant", who],
                               home: self.home) { [weak self] code2, _ in
                 guard let self else { return }
                 self.checkSafety()

@@ -10,7 +10,7 @@ How the owner works day to day, how they like the assistant to work with them, a
 
 *(Filled in during the "get me started" conversation, in the owner's words: where their mail, calendar and notes live, what they read, watch and make, what they repeat. Leave blank rather than guess.)*
 
-## How Claude talks with the owner
+## How the assistant talks with the owner
 
 *(Short replies or full ones, spoken or not, and anything else the owner has asked for. Until something is written here, replies are short: two or three lines, one question at a time.)*
 

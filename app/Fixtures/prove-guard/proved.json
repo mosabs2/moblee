@@ -1,0 +1,22 @@
+[
+  {
+    "level": "OK",
+    "text": "This wiki is set up to be used with ChatGPT.",
+    "guide": null
+  },
+  {
+    "level": "OK",
+    "text": "The delete guard is installed for ChatGPT, entered in its hooks file, and is this Moblee's own copy.",
+    "guide": null
+  },
+  {
+    "level": "OK",
+    "text": "Proved: the delete guard is running in ChatGPT. Asked to remove a folder and delete a page in a scratch wiki, ChatGPT was refused both times and both are still there. The scratch wiki used for the test is left at ~/.cache/moblee/prove-guard-20260920-231502; nothing in it matters.",
+    "guide": null
+  },
+  {
+    "level": "OK",
+    "text": "The last install ran to the end.",
+    "guide": null
+  }
+]

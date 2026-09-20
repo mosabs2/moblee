@@ -117,6 +117,10 @@ enum Snapshots {
         draw(scene(.welcome) { $0.offerMove = true }, "00a-move-to-applications", to: folder)
         draw(scene(.welcome), "00-welcome", to: folder)
         draw(scene(.checkup), "01-checkup", to: folder)
+        // a ChatGPT app that is an older one, with no agent inside it
+        Checkup.pretendOlderChatGPT = true
+        draw(scene(.checkup) { $0.assistant = .chatgpt }, "01b-checkup-older-chatgpt", to: folder)
+        Checkup.pretendOlderChatGPT = false
         draw(scene(.name), "02-name-empty", to: folder)
         draw(scene(.name) { $0.ownerName = "Sam" }, "03-name-typed", to: folder)
         draw(scene(.promise) { $0.ownerName = "Sam" }, "03b-promise", to: folder)
@@ -193,6 +197,15 @@ enum Snapshots {
         draw(homeScene { $0.homeModel.tiles = sample; $0.homeModel.assistant = .both }, "08b-home-waiting-both", to: folder)
         draw(homeScene { $0.homeModel.assistant = .chatgpt }, "10b-home-chatgpt", to: folder)
         draw(homeScene { f in f.mode = .update; f.askingAssistant = true }, "15a-update-asks-assistant", to: folder)
+        // a wiki that a newer Moblee made: no Change, and no Repair from this app
+        draw(homeScene { f in
+            f.homeModel.tiles = sample; f.homeModel.assistant = .both
+            f.homeModel.wikiVersion = "0.9.1"; f.homeModel.packVersion = "0.9.0"
+        }, "08c-home-wiki-newer", to: folder)
+        draw(homeScene { f in
+            f.homeModel.wikiVersion = "0.9.1"; f.homeModel.packVersion = "0.9.0"
+            f.homeModel.safetyOff = true; f.homeModel.needsRepair = true
+        }, "12b-home-repair-wiki-newer", to: folder)
         draw(homeScene { $0.homeModel.wikiVersion = "0.7.0" }, "11-home-update", to: folder)
         draw(homeScene { $0.homeModel.needsRepair = true }, "12-home-repair", to: folder)
         draw(homeScene { $0.homeModel.tiles = sample; $0.homeModel.explaining = sample[1] }, "13-explain-terminal", to: folder)

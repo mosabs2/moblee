@@ -30,7 +30,7 @@ What goes wrong with a Moblee wiki, how to confirm it, what fixes it and who doe
 
 ## F07. Claude says it cannot write to `~/.claude/`
 
-**With Claude:** **Why:** Claude Code protects that folder by design. **Fix:** nothing is broken. Skills, hooks and settings go in through the Moblee app or a Terminal line the owner runs. Never coach the owner to approve a prompt they do not understand. **With ChatGPT:** the folders are `~/.agents/` and `~/.codex/`, and in its default mode ChatGPT's sandbox stops it writing outside the wiki folder. Nothing is broken, and the fix is the same.
+**With Claude:** **Why:** Claude Code protects that folder by design. **Fix:** nothing is broken. Skills, hooks and settings go in through the Moblee app or a Terminal line the owner runs. Never coach the owner to approve a prompt they do not understand. **With ChatGPT:** the folders are `~/.agents/` and `~/.codex/`, and in its default mode ChatGPT's sandbox asks the owner before anything is written outside the wiki folder. Nothing is broken, and the fix is the same: the owner says no to the request, and the change goes in through the Moblee app or a Terminal line. The one exception is `brand.css`, which the `design-your-brand` skill edits at the owner's request.
 
 ## F08. After adding a connection, Claude has forgotten the conversation
 
@@ -106,28 +106,30 @@ What goes wrong with a Moblee wiki, how to confirm it, what fixes it and who doe
 
 ## F26. ChatGPT has not been told to trust the delete guard, or the guard has been updated since it was
 
-**What the owner sees:** nothing, and that is the trouble. ChatGPT does not run a newly installed or changed hook until the owner has reviewed it. Until then the guard is skipped, nothing on screen says so, and a deletion that should have been refused goes through. **Confirms it:** the check-up says it cannot see whether the guard has been trusted; run with `--prove-guard` it says "The delete guard is not running in ChatGPT". **Why:** Moblee has just been installed for ChatGPT, or an update or a Repair has changed the guard. ChatGPT asks again after every change. **Fix, owner, five clicks in ChatGPT:**
+**What the owner sees:** nothing, and that is the trouble. ChatGPT does not run a newly installed or changed hook until the owner has reviewed it. Until then the guard is skipped, nothing on screen says so, and a deletion that should have been refused goes through. **Confirms it:** the check-up says it cannot see whether the guard has been trusted; run with `--prove-guard` it says "The delete guard is not running in ChatGPT". **Why:** Moblee has just been installed for ChatGPT, or an update or a Repair has changed the guard. The steps must be done again after every such change, and ChatGPT does not remind the owner. **Fix, owner, five steps in ChatGPT:**
 
-1. Open the ChatGPT menu.
-2. Choose Settings.
-3. Choose Hooks, under the Coding heading.
-4. Open "User config".
-5. Press Trust beside the hook whose command ends `bash-guard.py`, and turn its switch on.
+1. Open the ChatGPT menu and choose Settings.
+2. Choose Hooks, under the heading Coding.
+3. Open "User config".
+4. Press Trust beside the hook that ends `bash-guard.py`.
+5. Turn its switch on.
 
-**The proof, owner:** in a Terminal window of their own, with the Moblee folder's real path filled in:
+If ChatGPT is open, quit it and open it again afterwards, so that it reads the whole rules file.
+
+**The proof, owner:** in the Moblee app, press Prove the guard on the home screen. Without the app, in a Terminal window of their own, with the Moblee folder's real path filled in:
 
 ```bash
 python3 "<moblee folder>/scripts/moblee-doctor.py" --prove-guard
 ```
 
-It asks ChatGPT to try two deletions in a scratch wiki. It can take up to three minutes, and the owner's wiki is not touched. "Proved" means ChatGPT was refused and both things are still there. "CANNOT TELL" means neither proved nor disproved (ChatGPT was not signed in, was not found, or was too slow): look at the Hooks page by eye and run it again. Until it is proved, the assistant takes extra care: no clean-ups, no moves out of the vault.
+It asks ChatGPT's agent to try two deletions in a scratch wiki. It can take up to three minutes, it uses a little of the owner's ChatGPT allowance, and the owner's wiki is not touched. "Proved" means the agent was refused and both things are still there. "CANNOT TELL" means neither proved nor disproved (ChatGPT was not signed in, was not found, or was too slow): look at the Hooks page by eye and run it again. Until it is proved, the assistant takes extra care: no clean-ups, no moves out of the vault.
 
-**What the proof does and does not promise.** With Claude, the promise that the assistant cannot delete stands as written. With ChatGPT it holds once the hook is trusted and proven. OpenAI describes hooks as a guardrail and not a complete boundary, and a hook that crashes lets the command through. ChatGPT's own sandbox is a second layer: in its default mode the agent cannot write outside the wiki folder, has no network, and cannot change `.git`. The sandbox does not stop a deletion inside the wiki. The guard does.
+**What the proof does and does not promise.** With Claude, the promise that the assistant cannot delete stands as written. With ChatGPT it holds once the hook is trusted and proven. OpenAI describes hooks as a guardrail and not a complete boundary, and a hook that crashes or takes too long lets the command through. ChatGPT's own sandbox is a second layer: in its default mode the agent does not write outside the wiki folder and the Mac's temporary folders, or use the network, without asking the owner, and it cannot change `.git`. The sandbox does not stop a deletion inside the wiki. The guard does.
 
 ## F27. ChatGPT reads only the start of the wiki's rules file
 
-**Confirms it:** the check-up says the setting `project_doc_max_bytes` is not in `~/.codex/config.toml`, or that the rules file is longer than ChatGPT reads. **What it means:** ChatGPT reads the wiki's rules from `AGENTS.md`, and by default only the first 32 KiB of it. Whatever lies past that point is never seen, so a rule near the end of the file is not followed and nothing says so. Moblee's installer raises the limit; here the setting is missing. **Fix, owner:** the next update adds it (F11). **Meanwhile, assistant:** tell the owner in one line, and if the check-up says the file is over the limit, offer the `compact` skill to shorten it. The assistant does not edit `~/.codex/config.toml`.
+**Confirms it:** the check-up says the setting `project_doc_max_bytes` is not in `~/.codex/config.toml`, or that the rules file is longer than ChatGPT reads. **What it means:** ChatGPT reads the wiki's rules from `AGENTS.md`, and by default only the first 32 KiB of it. Whatever lies past that point is never seen, so a rule near the end of the file is not followed and nothing says so. Moblee's installer raises the limit; here the setting is missing. **Fix, owner:** the next update adds it (F11); if ChatGPT is open, the owner quits it and opens it again afterwards, so that it reads the whole rules file. **Meanwhile, assistant:** tell the owner in one line, and if the check-up says the file is over the limit, offer the `compact` skill to shorten it. The assistant does not edit `~/.codex/config.toml`.
 
 ## F28. The wiki has a CLAUDE.md and an AGENTS.md that are separate files
 
-**Confirms it:** the check-up says the two are separate files and can drift apart. **Why it matters:** Claude reads `CLAUDE.md` and ChatGPT reads `AGENTS.md`. As two files they are edited apart, Moblee keeps only `CLAUDE.md` up to date, and the two assistants end up following different rules. **What the layout for both should be:** `CLAUDE.md` is the real file and `AGENTS.md` is a link to it, so there is one set of rules. **Fix:** the updater run with `--assistant both` makes that layout, and it never chooses between two real files, so the second one is set aside first. Assistant, with the owner's yes: compare the two files and tell the owner what differs; fold anything found only in `AGENTS.md` into `CLAUDE.md`; move `AGENTS.md` into `archive/` under a dated name (nothing is deleted); commit. Owner, in Terminal: `bash "<moblee folder>/scripts/update.sh" --assistant both`, which adds `AGENTS.md` back as a link to `CLAUDE.md` (an owner who uses ChatGPT alone leaves the option off; the link is added just the same). Run the check-up again to confirm.
+**Confirms it:** the check-up says the two are separate files and can drift apart. **Why it matters:** Claude reads `CLAUDE.md` and ChatGPT reads `AGENTS.md`. As two files they are edited apart, Moblee keeps only `CLAUDE.md` up to date, and the two assistants end up following different rules. **What the layout should be:** one real file, with the other name as a link to it, so there is one set of rules. A wiki made for both has `CLAUDE.md` as the real file; one made for ChatGPT alone has `AGENTS.md` as the real file and `CLAUDE.md` as the link; after a change of assistant the updater keeps whichever is real and links the other. **Fix:** the updater run with `--assistant both` makes that layout, and it never chooses between two real files, so the second one is set aside first. Assistant, with the owner's yes: compare the two files and tell the owner what differs; fold anything found only in `AGENTS.md` into `CLAUDE.md`; move `AGENTS.md` into `archive/` under a dated name (nothing is deleted); commit. Owner, in Terminal: `bash "<moblee folder>/scripts/update.sh" --assistant both`, which adds `AGENTS.md` back as a link to `CLAUDE.md` (an owner who uses ChatGPT alone leaves the option off; the link is added just the same). Run the check-up again to confirm.

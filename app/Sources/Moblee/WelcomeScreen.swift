@@ -44,7 +44,8 @@ struct TalkDiagram: View {
                     .opacity(appeared ? 1 : 0)
 
                 node("person.fill", "You", x: xs[0], y: y, delay: 0.0)
-                node("sparkles", "Claude", x: xs[1], y: y, delay: 0.15)
+                // Which assistant is asked three screens on, so none is named here.
+                node("sparkles", "Your assistant", x: xs[1], y: y, delay: 0.15)
                 node("books.vertical.fill", "Your wiki", x: xs[2], y: y, delay: 0.3)
             }
         }

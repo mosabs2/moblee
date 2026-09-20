@@ -12,7 +12,7 @@ By this point you have a working Moblee vault and the skills installed. This doc
 
 A typical day might use both: Cowork during the day for whatever comes up, Claude Code in the evening for the bigger sessions.
 
-**With ChatGPT:** Open the ChatGPT app, choose Work at the top, and open the vault's folder as a project. <!-- verify on testdev --> ChatGPT reads the vault's rules from `AGENTS.md`. Its sandbox protects the vault's `.git` folder, so ChatGPT asks you to approve each commit. That is expected.
+**With ChatGPT:** Open ChatGPT, choose Work, and open your wiki folder. <!-- verify on testdev --> ChatGPT reads the vault's rules from `AGENTS.md`. Its sandbox protects the vault's `.git` folder, so ChatGPT asks you to approve each commit. That is expected.
 
 ## The standard task flow
 
@@ -48,9 +48,10 @@ Here are some examples of the kinds of things you might say, and what your assis
 A few things require explicit permission. Your assistant will pause and ask before:
 
 - Creating a new top-level wiki page. (The convention is that new domains need your sign-off; subfolder pages and edits to existing pages don't.)
-- Deleting any file. (Your assistant will rename or archive on its own; deletion needs you to confirm.)
 - Making changes to `CLAUDE.md` itself. (The schema is yours; your assistant proposes edits, you accept them.)
 - Pushing to a remote git server. (With Claude, local commits happen automatically; with ChatGPT you approve each one. Pushes do not happen without asking.)
+
+Deleting a file is different: your assistant never does it, with or without a yes. It renames or archives on its own, and if something should go it tells you what and where, and you remove it yourself (`09-safety.md`).
 
 If your assistant is being too cautious or too aggressive, edit `CLAUDE.md` and adjust the rule. The schema is the source of truth for behaviour; change it and your assistant changes.
 

@@ -34,10 +34,10 @@ mkdir -p "$WORK/home-draw" "$WORK/home-rehearse" "$WORK/home-drive"
 export MOBLEE_PRACTICE=1
 
 "$BIN" --home "$WORK/home-draw" --snapshot "$WORK/screens" > "$WORK/draw.txt" 2>&1
-[[ "$(ls "$WORK/screens" 2>/dev/null | grep -c '\.png$')" == "38" ]] && ok "thirty-eight screens drawn to picture files ($WORK/screens)" || bad "thirty-eight screens drawn (see $WORK/draw.txt)"
+[[ "$(ls "$WORK/screens" 2>/dev/null | grep -c '\.png$')" == "41" ]] && ok "forty-one screens drawn to picture files ($WORK/screens)" || bad "forty-one screens drawn (see $WORK/draw.txt)"
 "$BIN" --dark --home "$WORK/home-draw" --snapshot "$WORK/screens-dark" > "$WORK/draw-dark.txt" 2>&1
-[[ "$(ls "$WORK/screens-dark" 2>/dev/null | grep -c '\.png$')" == "38" ]] && ok "and the same thirty-eight in dark mode ($WORK/screens-dark)" || bad "thirty-eight dark screens drawn (see $WORK/draw-dark.txt)"
-for s in 03c-assistant-unanswered 06b-trust-steps 06e-trust-proved 07b-handoff-chatgpt 07c-handoff-both 10b-home-chatgpt 15a-update-asks-assistant; do
+[[ "$(ls "$WORK/screens-dark" 2>/dev/null | grep -c '\.png$')" == "41" ]] && ok "and the same forty-one in dark mode ($WORK/screens-dark)" || bad "forty-one dark screens drawn (see $WORK/draw-dark.txt)"
+for s in 01b-checkup-older-chatgpt 03c-assistant-unanswered 06b-trust-steps 06e-trust-proved 07b-handoff-chatgpt 07c-handoff-both 08c-home-wiki-newer 10b-home-chatgpt 12b-home-repair-wiki-newer 15a-update-asks-assistant; do
   [[ -s "$WORK/screens/$s.png" ]] || bad "  drawn: $s"
 done
 [[ ! -e "$WORK/home-draw/.claude" && ! -e "$WORK/home-draw/.codex" && ! -e "$WORK/home-draw/.config" ]] && ok "drawing screens installs nothing" || bad "drawing screens installs nothing"
@@ -47,13 +47,25 @@ done
 # no choice is on record), what the updater is then told, how the line that says
 # ChatGPT is waiting for the owner's trust is taken, how lines that are not
 # understood are ignored, how the proof's findings are read, and the link into
-# ChatGPT. It writes only inside its own practice home.
+# ChatGPT. Also: that Change, Update and Repair are all refused on a wiki newer
+# than the app; that a Trust note left from before a change to Claude alone is
+# not shown; what each way of leaving the Trust screen does to that note; what
+# is read from the wiki's rules files when the choice file is lost; and a
+# ChatGPT app with no agent inside it. The proof's findings are read from samples
+# of the check-up's own output (app/Fixtures/prove-guard), and the check-up inside
+# the app is read to see that it still says what the samples say. It writes only
+# inside its own practice home.
 mkdir -p "$WORK/home-logic"
-"$BIN" --home "$WORK/home-logic" --check-logic > "$WORK/logic.txt" 2>&1
+"$BIN" --home "$WORK/home-logic" --check-logic --fixtures "$here/../Fixtures" > "$WORK/logic.txt" 2>&1
 RC=$?
 [[ $RC -eq 0 ]] && grep -q "^logic: every check held" "$WORK/logic.txt" && ! grep -q "^logic: FAILED" "$WORK/logic.txt" && ok "the app's decisions about the assistant hold (see $WORK/logic.txt)" || bad "the app's decisions about the assistant hold (exit $RC; see $WORK/logic.txt)"
 grep -q "^logic: ok: with no choice on record, an update asks the question first" "$WORK/logic.txt" && grep -q "^logic: ok: and the updater is told nothing, so the record stands" "$WORK/logic.txt" && ok "  an update asks which assistant only on a Mac with no choice on record, and otherwise tells the updater nothing" || bad "  when an update asks which assistant"
 grep -q "^logic: ok: lines that are not understood are ignored" "$WORK/logic.txt" && ok "  progress lines that are not understood are still ignored" || bad "  progress lines that are not understood are still ignored"
+grep -q "^logic: ok: on a wiki newer than this app, Change is hidden" "$WORK/logic.txt" && grep -q "^logic: ok: and neither Change nor Update can start this app's older updater" "$WORK/logic.txt" && grep -q "^logic: ok: a guard that looks off on a newer wiki is not this app's to repair" "$WORK/logic.txt" && ok "  on a wiki newer than the app, Change, Update and Repair are all refused" || bad "  on a wiki newer than the app, Change, Update and Repair are all refused"
+grep -q "^logic: ok: a waiting note is not shown to an owner whose choice is Claude alone" "$WORK/logic.txt" && grep -q "^logic: ok: Later on the steps leaves the step waiting" "$WORK/logic.txt" && ok "  the Trust step waits through Later on the steps, and is not shown to an owner of Claude alone" || bad "  the Trust note"
+grep -q "^logic: ok: with no choice on record and a wiki laid down for ChatGPT alone, the choice is read as ChatGPT" "$WORK/logic.txt" && grep -q "^logic: ok: a choice on record is believed over the shape of the files" "$WORK/logic.txt" && ok "  a lost choice file is made good from the wiki's rules files, and a kept one is believed over them" || bad "  a lost choice file"
+grep -q "^logic: ok: a ChatGPT app with no agent inside is an older one, not a ready one" "$WORK/logic.txt" && ok "  a ChatGPT app with no agent inside it is not taken for a ready one" || bad "  a ChatGPT app with no agent inside it"
+grep -q "^logic: ok: the check-up's own sample not-running.json is read as notRunning" "$WORK/logic.txt" && grep -q "^logic: ok: the check-up in this app's pack still opens its proved line" "$WORK/logic.txt" && ok "  the proof is read from the check-up's own samples, and the check-up in the app still says what they say" || bad "  the proof's samples"
 [[ ! -e "$WORK/home-logic/.claude" && ! -e "$WORK/home-logic/.codex" && ! -e "$WORK/home-logic/Wiki" ]] && ok "  and checking them installs nothing" || bad "  checking the decisions installs nothing"
 ( unset MOBLEE_PRACTICE; "$BIN" --check-logic > "$WORK/logic-refused.txt" 2>&1 ); [[ $? -eq 2 ]] && ok "  without a practice run the check is refused" || bad "  without a practice run the logic check is refused"
 

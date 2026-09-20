@@ -137,6 +137,8 @@ def build_fixture():
     write(os.path.join(other, "wiki", "P.md"), "# P\n")
     os.makedirs(os.path.join(other, "outputs"))
     write(os.path.join(tmpdir, "scratch.txt"), "scratch\n")
+    # a page with a dollar sign in its name: a patch takes the name literally
+    write(os.path.join(vault, "wiki", "Budget $5k.md"), "# Budget\n")
     return root, vault, tmpdir
 
 
@@ -432,6 +434,19 @@ BLOCK = [
     ("ssh with unknown option -4", "ssh -4 host rm -rf x"),
     ("ssh -o then rm", "ssh -o StrictHostKeyChecking=no host 'rm -rf x'"),
     ("hook stdin with cwd field", "rm -rf wiki"),
+    # a shell or interpreter with nothing to run sits open; ChatGPT's agent can
+    # type into it afterwards (write_stdin) without the hook being asked again
+    ("bare bash", "bash"),
+    ("bare sh -s, nothing on stdin", "sh -s"),
+    ("bash -l, a login shell with nothing to run", "bash -l"),
+    ("bash -i", "bash -i"),
+    ("bare zsh after a harmless step", "ls wiki && zsh"),
+    ("exec bash", "exec bash"),
+    ("bare python3", "python3"),
+    ("python3 - with nothing on stdin", "python3 -"),
+    ("python3 -i keeps the session open after the script", "python3 -i scripts/ok.py"),
+    ("bare node", "node"),
+    ("bare lua", "lua"),
 ]
 
 # (label, command) — every one must exit 0.
@@ -546,6 +561,17 @@ ALLOW = [
     ("open -a Finder", "open -a Finder wiki"),
     ("command -v rm", "command -v rm"),
     ("date", "date '+%Y-%m-%d %H:%M %z'"),
+    # the bare-session rule must leave every ordinary form alone
+    ("bash --version", "bash --version"),
+    ("python3 --version", "python3 --version"),
+    ("python3 -V", "python3 -V"),
+    ("node -v", "node -v"),
+    ("python3 - with a clean heredoc body", "python3 - <<'EOF'\nprint(1)\nEOF"),
+    ("python3 with a clean heredoc body", "python3 <<'EOF'\nprint(1)\nEOF"),
+    ("sh -s with a clean heredoc body", "sh -s <<'EOF'\nls wiki\nEOF"),
+    ("bash with a clean here-string", "bash <<< 'ls wiki'"),
+    ("echo piped into bash", "echo 'ls wiki' | bash"),
+    ("python3 -u script", "python3 -u scripts/ok.py"),
 ]
 
 # Reviewer candidates deliberately NOT blocked (documented in the report);
@@ -630,6 +656,51 @@ PATCH = [
     ("AGENTS.md wiki: patch deletes its page", "apply_patch", patch("*** Delete File: P.md"), "agents-wiki", 2),
     ("AGENTS.md wiki: write over AGENTS.md", "Bash", "echo x > ../AGENTS.md", "agents-wiki", 2),
     ("other tools still pass", "update_plan", "anything", "vault", 0),
+    # Codex's patch reader trims a line before looking for a header, except
+    # inside an Update hunk, where an indented line is the page's own text.
+    ("patch: delete line indented by a space", "apply_patch", patch(" *** Delete File: wiki/A.md"), "vault", 2),
+    ("patch: delete line indented by a tab", "apply_patch", patch("\t*** Delete File: wiki/A.md"), "vault", 2),
+    ("patch: indented add over an existing page", "apply_patch", patch("  *** Add File: wiki/A.md", "+# emptied"), "vault", 2),
+    ("patch: indented delete after an add", "apply_patch",
+     patch("*** Add File: wiki/New Page.md", "+# New", "   *** Delete File: wiki/Index.md"), "vault", 2),
+    ("patch: delete line in another letter case", "apply_patch", patch("*** delete file: wiki/A.md"), "vault", 2),
+    ("patch: an edit whose kept line quotes a delete line", "apply_patch",
+     patch("*** Update File: wiki/A.md", "@@", " *** Delete File: wiki/Index.md", "-# A", "+# A, edited"), "vault", 0),
+    # a new file may be claimed once per patch
+    ("patch: move a page, then add over the new name", "apply_patch",
+     patch("*** Update File: wiki/A.md", "*** Move to: wiki/New.md", "*** Add File: wiki/New.md", "+# replaced"), "vault", 2),
+    ("patch: two moves onto one new name", "apply_patch",
+     patch("*** Update File: wiki/A.md", "*** Move to: wiki/New.md",
+           "*** Update File: wiki/Index.md", "*** Move to: wiki/New.md"), "vault", 2),
+    ("patch: the same new file added twice", "apply_patch",
+     patch("*** Add File: wiki/New.md", "+# one", "*** Add File: wiki/new.MD", "+# two"), "vault", 2),
+    # paths are literal: no ~ and no $VAR
+    ("patch: add over a page with a dollar sign in its name", "apply_patch",
+     patch("*** Add File: wiki/Budget $5k.md", "+# emptied"), "vault", 2),
+    ("patch: add a new page with a dollar sign in its name", "apply_patch",
+     patch("*** Add File: wiki/Cost $9 new.md", "+# New"), "vault", 0),
+    ("patch: NUL byte in an earlier delete line", "apply_patch",
+     patch("*** Delete File: {TMPDIR}/x\x00y", "*** Delete File: wiki/A.md"), "vault", 2),
+    ("patch: NUL byte in an add line, then a delete", "apply_patch",
+     patch("*** Add File: wiki/n\x00.md", "+x", "*** Delete File: wiki/A.md"), "vault", 2),
+    # through the shell, one spelling only: a quoted heredoc of its own, no cd
+    ("patch through the shell: cd then a heredoc add over a page", "Bash",
+     "cd wiki && apply_patch <<'EOF'\n" + patch("*** Add File: A.md", "+# emptied") + "\nEOF", "vault", 2),
+    ("patch through the shell: $'...' argument", "Bash",
+     "apply_patch $'*** Begin Patch\\n*** Delete File: wiki/A.md\\n*** End Patch'", "vault", 2),
+    ("patch through the shell: quoted argument over several lines", "Bash",
+     "apply_patch \"" + patch("*** Update File: wiki/A.md", "@@", "-# A", "+# A, edited") + "\"", "vault", 2),
+    ("patch through the shell: piped in", "Bash",
+     "printf '%s\\n' '*** Begin Patch' '*** Delete File: wiki/A.md' '*** End Patch' | apply_patch", "vault", 2),
+    ("patch through the shell: read from a file", "Bash", "apply_patch < {TMPDIR}/p.patch", "vault", 2),
+    ("patch through the shell: read by command substitution", "Bash",
+     "apply_patch \"$(cat {TMPDIR}/p.patch)\"", "vault", 2),
+    ("patch through the shell: unquoted heredoc holding a variable", "Bash",
+     "apply_patch <<EOF\n" + patch("*** Add File: wiki/$NAME.md", "+x") + "\nEOF", "vault", 2),
+    ("patch through the shell: indented delete in a heredoc", "Bash",
+     "apply_patch <<'EOF'\n" + patch(" *** Delete File: wiki/A.md") + "\nEOF", "vault", 2),
+    ("patch through the shell: heredoc adding a new page", "Bash",
+     "apply_patch <<'EOF'\n" + patch("*** Add File: wiki/From Shell.md", "+# New") + "\nEOF", "vault", 0),
 ]
 
 

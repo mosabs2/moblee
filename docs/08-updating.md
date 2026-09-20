@@ -34,7 +34,15 @@ Running the updater twice is safe. Each step checks what is already there and sk
 
 ## With ChatGPT: after an update that changes the guard
 
-ChatGPT runs the delete guard only while you have trusted it, and it asks again whenever the guard changes. So after an update that changes the guard, ChatGPT skips the guard until you press Trust again, and nothing on screen says so. The updater prints the steps when they are due: open the ChatGPT menu, choose Settings, choose Hooks (under the Coding heading), open "User config", press Trust beside the hook whose command ends `bash-guard.py`, and turn its switch on.
+ChatGPT runs the delete guard only while you have trusted it. After an update that changes the guard, ChatGPT skips the guard until you press Trust again, and nothing on screen says so. ChatGPT will not remind you. The updater prints the steps when they are due:
+
+1. Open the ChatGPT menu and choose Settings.
+2. Choose Hooks, under the heading Coding.
+3. Open "User config".
+4. Press Trust beside the hook that ends `bash-guard.py`.
+5. Turn its switch on.
+
+If ChatGPT is open, quit it and open it again afterwards, so that it reads the whole rules file.
 
 Then prove the guard with the check-up, from the Moblee folder:
 
@@ -42,7 +50,7 @@ Then prove the guard with the check-up, from the Moblee folder:
 python3 scripts/moblee-doctor.py --prove-guard
 ```
 
-It asks ChatGPT to remove a folder and delete a page in a scratch wiki, away from your own, and reports the guard as proved only if ChatGPT was refused. `docs/09-safety.md` says more.
+In the Moblee app, press Prove the guard on the home screen. The proof asks ChatGPT's agent to remove a folder and delete a page in a scratch wiki, away from your own, and reports the guard as proved only if it was refused. It uses a little of your ChatGPT allowance. `docs/09-safety.md` says more.
 
 ## Changing which assistant the wiki is for
 
@@ -52,7 +60,7 @@ The updater remembers the assistant you chose at install. To change it, name the
 bash scripts/update.sh --assistant both
 ```
 
-The rules file follows the choice: `CLAUDE.md` for Claude, `AGENTS.md` for ChatGPT, and for both, `CLAUDE.md` with `AGENTS.md` as a link to it. The guard and the skills are installed for the assistant you add, and nothing is removed from the one you had. If you add ChatGPT, the Trust step above is yours to do.
+A new wiki has `CLAUDE.md` for Claude; for ChatGPT alone, `AGENTS.md` with `CLAUDE.md` as a link to it; and for both, `CLAUDE.md` with `AGENTS.md` as a link to it. After a change of assistant the updater keeps whichever of the two is the real file and makes the other a link to it, so both assistants read one set of rules. The guard and the skills are installed for the assistant you add, and nothing is removed from the one you had. If you add ChatGPT, the Trust step above is yours to do.
 
 ## The checklist, any time
 
