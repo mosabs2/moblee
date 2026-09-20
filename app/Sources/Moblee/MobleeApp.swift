@@ -47,7 +47,7 @@ enum Practice {
     static let on = ProcessInfo.processInfo.environment["MOBLEE_PRACTICE"] == "1"
     static let args: [String] = on ? CommandLine.arguments : []
     static let switches: Set<String> = ["--home", "--pack", "--pretend-missing", "--snapshot", "--rehearse",
-                                        "--self-drive", "--dark", "--owner", "--step", "--fresh"]
+                                        "--self-drive", "--dark", "--owner", "--step", "--fresh", "--icon"]
 }
 
 /// Quitting half-way through a build or an update would leave it half done, so

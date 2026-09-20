@@ -36,6 +36,7 @@ fi
 mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources/pack"
 cp "$binary" "$bundle/Contents/MacOS/Moblee"
 cp "$app_src/Info.plist" "$bundle/Contents/Info.plist"
+if [ -f "$app_src/Moblee.icns" ]; then cp "$app_src/Moblee.icns" "$bundle/Contents/Resources/Moblee.icns"; fi
 
 # the pack, as committed, without the app's own source
 git -C "$pack_root" archive --format=tar HEAD -- . ':(exclude)app' \
