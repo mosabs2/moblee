@@ -229,7 +229,7 @@ python3 "$SCRIPT_DIR/seed-memory.py" --vault "$VAULT" | sed 's/^/   /' \
   || echo "   (starting memories not seeded; harmless)"
 python3 "$SCRIPT_DIR/add-habits-page.py" --vault "$VAULT" | sed 's/^/   /' \
   || echo "   (Habits and Tools page not added; ask Claude to create it from the template)"
-# A wiki made before 0.8.0 still has a first log entry headed "YYYY-MM-DD".
+# A wiki made before 0.8.1 still has a first log entry headed "YYYY-MM-DD".
 # It is dated from the wiki's first commit; a line already written over is left
 # alone. The change is left for the owner's next commit, like their own work.
 python3 "$SCRIPT_DIR/stamp-starter-dates.py" --vault "$VAULT" --from-history | sed 's/^/   /' \

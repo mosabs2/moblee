@@ -640,7 +640,8 @@ def install_google():
     rule("Google: sign in (only you can do this)")
     say("Google connects through your Claude account, in the browser.")
     say("")
-    say("  1. A page opens: claude.ai, Settings, Connectors.")
+    say("  1. A page opens: claude.ai, Settings, Connectors. If it says Connectors has moved")
+    say("     to Customise (seen September 2026), click Customise, then Connectors.")
     say("     If it asks you to log in, use the same Claude account as Claude Code.")
     say("  2. Find Gmail and click Connect. Sign in with your Google account and")
     say("     allow what Google asks.")
@@ -947,7 +948,8 @@ def install_generation():
     say("prices before you pay for anything. Moblee takes no money and sets no plan.")
     say("")
     say("  1. If you do not have an ElevenLabs account, make one at elevenlabs.io.")
-    say("  2. A page opens: claude.ai, Settings, Connectors.")
+    say("  2. A page opens: claude.ai, Settings, Connectors. If it says Connectors has moved")
+    say("     to Customise (seen September 2026), click Customise, then Connectors.")
     say("  3. Find ElevenLabs, click Connect, and sign in with your ElevenLabs account.")
     say("  4. Come back to this window.")
     say("")
@@ -1159,12 +1161,12 @@ def how(key: str) -> str:
 # seventy characters.
 CLICKS = {
     "google": [
-        ["Connectors", "The page opens. If not: in Claude, Settings, then Connectors"],
+        ["Connectors", "The page opens. If it says moved: Customise, then Connectors"],
         ["Switch on three", "Gmail, Google Calendar, Google Drive. Connect, then sign in"],
         ["Check it worked", "Ask Claude: what is on my calendar today?"],
     ],
     "generation": [
-        ["Connectors", "The page opens. If not: in Claude, Settings, then Connectors"],
+        ["Connectors", "The page opens. If it says moved: Customise, then Connectors"],
         ["ElevenLabs", "Press Connect and sign in. Paying is your choice, on their site"],
         ["Check it worked", "Ask Claude: can you see ElevenLabs?"],
     ],

@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.8.0 (19 September 2026) (unreleased)
+## v0.8.1 (20 September 2026) (unreleased)
 
 The app and companion release. v0.7.0 made the owner the one who installs, which meant Terminal for everyone, and its first conversation ended in a command to run there. It also treated getting to know the owner as one conversation and the occasional review. This release gives the owner an app to install, update and add things with, and turns the first conversation into a standing guide that grows the wiki with them, one step at a time. The principle is unchanged: the owner runs every installer, nothing is pasted into Claude as instructions, Claude never installs anything or edits its own settings, and nothing deletes. Mac only. A paid Claude plan is needed for the Code tab in Claude's app.
 
@@ -38,6 +38,20 @@ The signed app was run end to end on a new macOS account with nothing on it, and
 - **`log-append.py` keeps the minutes of a zone that has them** (`+0530`); it used to cut every zone to the hour, which would have put entries in the wrong hour for India, Iran, Nepal and others. The vault rules show the form by example.
 - **`setup-state.json`** holds the whole list of what works under `working`, where it held only the last run's; the misleading `chosen` is gone (`last_run_items` says what it is).
 - **Housekeeping commits leave an un-ingested source alone**: the companion commits only the two files its request touches, and the vault rules say the same for any commit that is not an ingest.
+
+A reviewer who had seen none of the reasoning then read those fixes cold, and a second run was made on the same account with the fixed build. From those:
+
+- **The move to Applications never leaves an owner without an app.** The new copy is made beside its destination under a temporary name, checked, and has its download mark cleared, before an older Moblee is set aside or the opened one goes to the Bin; a failure before that point changes nothing. It never moves onto itself, leaves alone anything called Moblee that is not Moblee, uses a Moblee already in Applications that is the same or newer, stays open with a plain sentence if the copy will not open, and sets the older one aside under a name that can be seen in the Bin ("Moblee older" and its version).
+- **The app keeps `~/.config/moblee/package-path` pointing at the Moblee folder it is using.** On the second run a newer build settled its pack in a new folder while the note still named the old one, so the check-up compared the guard and the skills with stale copies and raised two false alarms (F02, F23).
+- **A delete guard that is switched on but older than this Moblee's is offered for Repair**, as a missing skill already was, so the app and the check-up agree. An older guard does not know the newer pack's own scripts.
+- **`app/scripts/release-app.sh` refuses to build from uncommitted work or with stale guard hashes**, since the app carries the pack as last committed; and `safety/release-hashes.py --help` prints help where it used to rewrite the hashes.
+- **The Terminal window's shell is ended only when Terminal opened it for that file** (it is under ten seconds old), never a shell someone was already working in, and "Finished" is said only when the step finished.
+- **An older wiki with no git history keeps its placeholder log header**, because today's date on the log's first entry would put the log out of order for ever; the script also keeps a file's own line endings and leaves alone a file it cannot read as text.
+- **A sweep that could not see a connection says so in the saved record**, and a damaged record or note is started afresh, never a crash. The owner's Done answers the one asking it was given for.
+- **Claude's Connectors page has moved** (seen September 2026: "Connectors has moved to Customise"). The cards, the Terminal steps and `docs/10-connections.md` say what to click when that page appears.
+- The dashboard's inbox count leaves out the starter's note by its exact name, so an owner's own "how-to" file is counted; the galaxy skill and the install guide say what the code now does.
+
+The number 0.8.0 was carried by the builds tested on that account and was never published; the published release is 0.8.1, so that the account's wiki, made at 0.8.0, is brought level by the app's own Update button.
 
 ### Verified
 

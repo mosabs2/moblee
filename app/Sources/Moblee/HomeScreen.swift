@@ -112,6 +112,7 @@ struct HomeScreen: View {
         ScreenFrame(sentence: home.repairFailed ? "That did not work. Tell Claude: run a check-up."
                         : (repairing ? "Putting it right…"
                            : (home.safetyOff ? "The safety guard is off. Switch it back on."
+                              : home.guardStale ? "The safety guard is an older one. Bring it up to date."
                                              : "One of Moblee's skills is missing. Put it back.")),
                     buttonTitle: home.repairFailed ? "Open Claude" : "Repair",
                     buttonEnabled: !repairing, showsBack: false,
@@ -120,7 +121,7 @@ struct HomeScreen: View {
                         repairing = true
                         home.repair { repairing = false }
                     }) {
-            Image(systemName: home.safetyOff ? "lock.shield.fill" : "graduationcap.fill")
+            Image(systemName: home.safetyOff || home.guardStale ? "lock.shield.fill" : "graduationcap.fill")
                 .font(.system(size: 96)).foregroundStyle(home.repairFailed ? .red : Theme.waiting)
                 .accessibilityHidden(true)
         }
@@ -268,7 +269,7 @@ struct ExplainScreen: View {
             } else {
                 HStack(alignment: .top, spacing: 18) {
                     HandoffCard(number: 1, symbol: "gearshape.fill", title: "Connectors",
-                                detail: "The page opens. If not: in Claude, Settings, then Connectors")
+                                detail: "The page opens. If it says moved: Customise, then Connectors")
                     HandoffCard(number: 2, symbol: "link", title: "Connect \(tile.key)",
                                 detail: tile.paid ? "Press Connect and sign in. Paying is your choice"
                                                   : "Find it, press Connect, sign in with your own account")
