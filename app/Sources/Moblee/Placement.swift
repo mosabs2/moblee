@@ -182,7 +182,13 @@ enum Placement {
         // Only now is anything the owner had moved. If giving the new copy its
         // name fails, the older one stays where it is.
         if somethingThere {
-            let old = folder.appendingPathComponent(".Moblee-outgoing-\(UUID().uuidString.prefix(8)).app", isDirectory: true)
+            // A name the owner can see and understand: it is what they will find
+            // in the Bin if they ever want the older one back, and a hidden
+            // name would be invisible there.
+            var old = folder.appendingPathComponent("Moblee older \(version(of: to)).app", isDirectory: true)
+            if fm.fileExists(atPath: old.path) {
+                old = folder.appendingPathComponent("Moblee older \(version(of: to)) \(UUID().uuidString.prefix(4)).app", isDirectory: true)
+            }
             try fm.moveItem(at: to, to: old)
             do { try fm.moveItem(at: incoming, to: to) }
             catch {
