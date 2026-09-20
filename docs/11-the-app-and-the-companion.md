@@ -6,13 +6,15 @@ The app is offered on the Releases page of the GitHub repository when a signed b
 
 ## What the app shows, and when
 
+**Opened from anywhere but Applications, it first offers to move itself there.** A downloaded app opened from Downloads is run by macOS out of a temporary copy, so it cannot be found by name later and goes when Downloads is tidied. One button copies Moblee to Applications (or to the Applications folder in your home folder, on an account that may not write to the shared one), puts the copy you opened in the Bin, where it can be got back, and reopens. "Not now" carries on as before and asks again next time.
+
 **On a Mac with no wiki yet, it installs one.** Each screen has one picture, one sentence and one button. It checks what the Mac needs, asks what Claude should call you, builds the wiki, and ends by showing how to open Claude in it and say "get me started". `docs/02-install.md` describes each screen.
 
 **On a Mac that already has a wiki, it opens a home screen.**
 
 - If the app carries a newer Moblee than your wiki has, it offers the update first.
 - If the delete guard is missing, it shows a Repair button that switches it back on.
-- If you and Claude have agreed to add something, it shows tiles, each with the reason in your own words, the time, the space, the cost, and an Add button. Some items the app adds by itself, some need a Terminal window that it opens for you, and some are connected by clicks in Claude's own app (`docs/10-connections.md`).
+- If you and Claude have agreed to add something, it shows tiles, each with the reason in your own words, the time, the space, the cost, and an Add button. Some items the app adds by itself, some need a Terminal window that it opens for you, and some are connected by clicks in Claude's own app (`docs/10-connections.md`). For those the app shows three cards first (where to go in Claude, what to switch on by name, and the question to ask Claude that proves it worked), and the tile is finished by you pressing Done, because a connection made inside Claude can only be seen from inside Claude.
 - If nothing is waiting, it says so, and its button opens Claude.
 
 A skill Claude has written for you appears as a tile too. Pressing Add copies it to where Claude keeps its skills; an older copy is moved to `~/.config/moblee/backups/`. The app reads a small list in your wiki, `.moblee/requests.json`, and never writes to your wiki.
