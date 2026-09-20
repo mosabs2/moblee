@@ -18,7 +18,9 @@ struct HandoffScreen: View {
     }
 
     /// Claude's screen is as it has always been, word for word. ChatGPT's app
-    /// can be opened at a folder from outside (a link OpenAI documents), but if
+    /// may open at a folder from outside (by a `codex://` link, a scheme
+    /// registered by the ChatGPT app on the Mac this was built on; untested
+    /// until the testdev run), but if
     /// the link is not taken the app is simply opened, so the sentence says
     /// what to do in words that are true either way. With both, there is a
     /// button for each.

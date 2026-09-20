@@ -32,7 +32,7 @@ claude
 
 This starts a Claude Code session inside the vault. Claude immediately reads `CLAUDE.md` and `wiki/_context.md` so it knows your conventions and current working state.
 
-**With ChatGPT:** Open the ChatGPT app, choose Work at the top, and open the vault's folder as a project. <!-- verify on testdev --> ChatGPT reads your conventions from `AGENTS.md`.
+**With ChatGPT:** Open ChatGPT, choose Work, and open your wiki folder. <!-- verify on testdev --> ChatGPT reads your conventions from `AGENTS.md`.
 
 ## Step 3: ask for the ingest
 

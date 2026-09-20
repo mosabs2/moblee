@@ -1,0 +1,17 @@
+[
+  {
+    "level": "OK",
+    "text": "This wiki is set up to be used with ChatGPT.",
+    "guide": null
+  },
+  {
+    "level": "PROBLEM",
+    "text": "The delete guard is not installed for ChatGPT.",
+    "guide": "F02"
+  },
+  {
+    "level": "CANNOT TELL",
+    "text": "The guard was not put to the test in ChatGPT, because its files are not in place there yet; that comes first.",
+    "guide": null
+  }
+]

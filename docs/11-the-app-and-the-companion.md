@@ -10,7 +10,7 @@ The app is offered on the Releases page of the GitHub repository, signed and not
 
 **Opened from anywhere but Applications, it first offers to move itself there.** A downloaded app opened from Downloads is run by macOS out of a temporary copy, so it cannot be found by name later and goes when Downloads is tidied. One button copies Moblee to Applications (or to the Applications folder in your home folder, on an account that may not write to the shared one), puts the copy you opened in the Bin, where it can be got back, and reopens. "Not now" carries on as before and asks again next time.
 
-**On a Mac with no wiki yet, it installs one.** Each screen has one picture, one sentence and one button. It checks what the Mac needs, asks what Claude should call you, builds the wiki, and ends by showing how to open Claude in it and say "get me started". `docs/02-install.md` describes each screen.
+**On a Mac with no wiki yet, it installs one.** Each screen has one picture, one sentence and one button. It checks what the Mac needs, asks what your assistant should call you and which assistant you use, builds the wiki, and ends by showing how to open your assistant in it and say "get me started". With ChatGPT it shows the Trust step before that last screen. `docs/02-install.md` describes each screen.
 
 **On a Mac that already has a wiki, it opens a home screen.**
 
@@ -37,7 +37,7 @@ What your assistant learns about you is kept in your wiki, where you can read it
 
 ## When something seems wrong
 
-Tell your assistant "something is wrong". It does not guess or start repairing. It runs the check-up, `scripts/moblee-doctor.py`, which changes nothing. Each finding is marked `OK`, `LOOK` or `PROBLEM`, and anything short of `OK` points at a numbered entry in the companion's field guide. The entry says what fixes it and who does the fix: your assistant, inside the wiki, or you, with a button in Moblee or a line in Terminal. With ChatGPT, the check-up cannot see whether you have trusted the delete guard; `python3 scripts/moblee-doctor.py --prove-guard`, run by you from the Moblee folder, proves it (`docs/09-safety.md`).
+Tell your assistant "something is wrong". It does not guess or start repairing. It runs the check-up, `scripts/moblee-doctor.py`, which changes nothing. Each finding is marked `OK`, `LOOK`, `PROBLEM`, `CANNOT SEE` or `CANNOT TELL`, and a `LOOK` or a `PROBLEM` points at a numbered entry in the companion's field guide. `CANNOT SEE` and `CANNOT TELL` mark what the check-up has no way to verify, and the line says how to check. The entry says what fixes it and who does the fix: your assistant, inside the wiki, or you, with a button in Moblee or a line in Terminal. With ChatGPT, the check-up cannot see whether you have trusted the delete guard; `python3 scripts/moblee-doctor.py --prove-guard`, run by you from the Moblee folder, proves it (`docs/09-safety.md`). In the Moblee app, press Prove the guard on the home screen. The proof uses a little of your ChatGPT allowance.
 
 If no entry fits, your assistant offers to write a report for whoever helps you with Moblee. It goes to `outputs/` in your wiki as `moblee-report-<date>.md`. It holds the state of the setup and nothing from your pages: no names, no page titles, and your home folder written as `~`. Your assistant shows you what it says before you send it.
 

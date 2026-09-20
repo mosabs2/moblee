@@ -33,7 +33,9 @@
 #                Claude reads CLAUDE.md and ChatGPT reads AGENTS.md, so the
 #                template's instruction file is laid down under the name the
 #                chosen assistant reads (for both: CLAUDE.md, with AGENTS.md a
-#                link to it). Asked as a fourth question in a Terminal run that
+#                link to it; for chatgpt: AGENTS.md, with CLAUDE.md a link to
+#                it, so that an older copy of the Moblee app still knows the
+#                wiki). Asked as a fourth question in a Terminal run that
 #                asks the others; otherwise the choice already kept in
 #                ~/.config/moblee/assistant stands, and with none kept, claude.
 #   --progress   also print one line per step for a program to read, each
@@ -60,6 +62,7 @@ while [[ $# -gt 0 ]]; do
     --vault-name)  ARG_VAULT_NAME="${2:-}"; shift 2 ;;
     --location)    ARG_LOCATION="${2:-}"; shift 2 ;;
     --assistant)   ARG_ASSISTANT="${2:-}"; ASSISTANT_FLAG=1; shift; if [[ $# -gt 0 ]]; then shift; fi ;;
+    --assistant=*) ARG_ASSISTANT="${1#--assistant=}"; ASSISTANT_FLAG=1; shift ;;
     --progress)    PROGRESS=1; shift ;;
     *) echo "Unknown option: $1"; exit 2 ;;
   esac
@@ -252,9 +255,24 @@ if [[ -f "$IN_PROGRESS" && -e "$VAULT_LOCATION" && "$(head -1 "$IN_PROGRESS" 2>/
   # of the owner's can be in it yet, since no install ever handed it over.
   RESUME=1
 fi
-# (v0.9) A wiki made for ChatGPT alone carries AGENTS.md where one made for
-# Claude carries CLAUDE.md; either marks a Moblee vault.
-if [[ $RESUME -eq 0 && ( -f "$VAULT_LOCATION/CLAUDE.md" || -f "$VAULT_LOCATION/AGENTS.md" ) && -d "$VAULT_LOCATION/wiki" ]]; then
+# (v0.9) A wiki with history is a wiki in use, whatever the note says: an
+# install that stopped may have been finished some other way (the updater, or
+# the safety step run by itself) and the wiki worked in since. More than the
+# installer's own first commit means it goes to the updater, which writes over
+# nothing, and is never finished "from the top".
+if [[ $RESUME -eq 1 && -d "$VAULT_LOCATION/.git" ]]; then
+  COMMITS="$(git -C "$VAULT_LOCATION" rev-list --count HEAD 2>/dev/null || echo 0)"
+  if [[ "$COMMITS" =~ ^[0-9]+$ && "$COMMITS" -gt 1 ]]; then
+    RESUME=0
+    diary "the unfinished-install note names this wiki, but the wiki has $COMMITS commits, so it is in use; handing over to the updater"
+  fi
+fi
+# (v0.9) A wiki made for ChatGPT alone carries AGENTS.md as its real rules
+# file. CLAUDE.md marks a Moblee vault as it always has; AGENTS.md marks one
+# only beside wiki/Index.md or a VERSION file, since many folders that are not
+# wikis carry an AGENTS.md of their own.
+if [[ $RESUME -eq 0 && -d "$VAULT_LOCATION/wiki" ]] \
+   && [[ -f "$VAULT_LOCATION/CLAUDE.md" || ( -f "$VAULT_LOCATION/AGENTS.md" && ( -f "$VAULT_LOCATION/wiki/Index.md" || -f "$VAULT_LOCATION/VERSION" ) ) ]]; then
   echo ""
   echo "There is already a Moblee vault at $VAULT_LOCATION."
   echo "Nothing there will be overwritten. Bringing it up to this version instead..."
@@ -304,7 +322,33 @@ echo "$ASSISTANT" > "$ASSISTANT_FILE"
 if [[ $RESUME -eq 1 ]]; then
   echo "Finishing the wiki that was started at $VAULT_LOCATION..."
   diary "an earlier install of this wiki stopped part-way; finishing it"
-  cp -R "$VAULT_TEMPLATE/." "$VAULT_LOCATION/"
+  # (v0.9) Finishing never writes over anything: only what is missing is laid
+  # down (-n). If the earlier run laid the rules file down as AGENTS.md, it is
+  # kept: for ChatGPT alone CLAUDE.md is linked to it first, so the template's
+  # own CLAUDE.md is not copied in beside it; for Claude or both it is renamed
+  # to CLAUDE.md, replacing nothing but a link.
+  if [[ -f "$VAULT_LOCATION/AGENTS.md" && ! -L "$VAULT_LOCATION/AGENTS.md" ]] \
+     && [[ -L "$VAULT_LOCATION/CLAUDE.md" || ! -e "$VAULT_LOCATION/CLAUDE.md" ]]; then
+    if [[ "$ASSISTANT" == "chatgpt" ]]; then
+      if [[ ! -L "$VAULT_LOCATION/CLAUDE.md" ]]; then
+        ( cd "$VAULT_LOCATION" && ln -s AGENTS.md CLAUDE.md ) || true
+      fi
+    elif [[ -L "$VAULT_LOCATION/CLAUDE.md" ]]; then
+      mv -f "$VAULT_LOCATION/AGENTS.md" "$VAULT_LOCATION/CLAUDE.md"   # takes the place of the link, and of nothing else
+      diary "    the earlier run's AGENTS.md was renamed to CLAUDE.md (it took the place of the CLAUDE.md link)"
+    else
+      mv -n "$VAULT_LOCATION/AGENTS.md" "$VAULT_LOCATION/CLAUDE.md"
+      diary "    the earlier run's AGENTS.md was renamed to CLAUDE.md"
+    fi
+  fi
+  # some versions of cp count a file they left alone as a failure, so the
+  # result is judged by what is there afterwards
+  cp -Rn "$VAULT_TEMPLATE/." "$VAULT_LOCATION/" || true
+  if [[ ! -f "$VAULT_LOCATION/wiki/Index.md" ]]; then
+    echo "The wiki's starting pages could not be copied to $VAULT_LOCATION."
+    echo "Nothing already there was changed. Check the disk has room and run this again."
+    exit 1
+  fi
 else
   echo "Creating vault at $VAULT_LOCATION..."
   cp -R "$VAULT_TEMPLATE" "$VAULT_LOCATION"
@@ -319,19 +363,39 @@ if [[ -f "$PACKAGE_ROOT/VERSION" ]]; then cp "$PACKAGE_ROOT/VERSION" "$VAULT_LOC
 # Done here, before the placeholders are filled in and before the first commit.
 # The placeholder walk below takes regular files only, so it fills in the real
 # file and never follows or rewrites the link.
+# For ChatGPT alone, CLAUDE.md is then added back as a relative link to
+# AGENTS.md: the Moblee app released before 0.9 knows a wiki only by a
+# CLAUDE.md, and without one would build a second wiki beside this one.
+# Nothing is ever written over here: no -f, and a name already taken is left.
 case "$ASSISTANT" in
   chatgpt)
     if [[ -f "$VAULT_LOCATION/CLAUDE.md" && ! -L "$VAULT_LOCATION/CLAUDE.md" ]]; then
-      mv -f "$VAULT_LOCATION/CLAUDE.md" "$VAULT_LOCATION/AGENTS.md"
-      echo "The wiki's instruction file is AGENTS.md, the name ChatGPT reads."
-      diary "    the instruction file was laid down as AGENTS.md"
+      if [[ -e "$VAULT_LOCATION/AGENTS.md" || -L "$VAULT_LOCATION/AGENTS.md" ]]; then
+        echo "An AGENTS.md is already in the wiki, so it was left as it is and CLAUDE.md was not renamed."
+        diary "    AGENTS.md was already there; left as it is, CLAUDE.md not renamed"
+      else
+        mv -n "$VAULT_LOCATION/CLAUDE.md" "$VAULT_LOCATION/AGENTS.md"
+        echo "The wiki's instruction file is AGENTS.md, the name ChatGPT reads."
+        diary "    the instruction file was laid down as AGENTS.md"
+      fi
+    fi
+    if [[ -f "$VAULT_LOCATION/AGENTS.md" && ! -L "$VAULT_LOCATION/AGENTS.md" ]] \
+       && [[ ! -e "$VAULT_LOCATION/CLAUDE.md" && ! -L "$VAULT_LOCATION/CLAUDE.md" ]]; then
+      if ( cd "$VAULT_LOCATION" && ln -s AGENTS.md CLAUDE.md ); then
+        diary "    CLAUDE.md was laid down as a link to AGENTS.md"
+      else
+        diary "    the CLAUDE.md link could not be made; the next update adds it"
+      fi
     fi
     ;;
   both)
-    if [[ ! -L "$VAULT_LOCATION/AGENTS.md" ]]; then
-      # -f matters only when an unfinished earlier run for ChatGPT alone left
-      # its own copy of the template here; a new wiki has nothing to replace
-      ( cd "$VAULT_LOCATION" && ln -sf CLAUDE.md AGENTS.md )
+    if [[ -L "$VAULT_LOCATION/AGENTS.md" ]]; then
+      :   # the link is there already
+    elif [[ -e "$VAULT_LOCATION/AGENTS.md" ]]; then
+      echo "An AGENTS.md is already in the wiki, so it was left as it is and no link was made."
+      diary "    AGENTS.md was already there as a file of its own; left as it is, no link made"
+    else
+      ( cd "$VAULT_LOCATION" && ln -s CLAUDE.md AGENTS.md )
       echo "The wiki's instruction file is CLAUDE.md, and AGENTS.md points at it for ChatGPT."
       diary "    AGENTS.md was laid down as a link to CLAUDE.md"
     fi
@@ -464,18 +528,36 @@ echo "Installing the safety layer (delete guard and permission rules)..."
 step_start safety
 SAFETY_OUT="$(mktemp)"
 TRUST_NEEDED=0
-if python3 "$PACKAGE_ROOT/safety/install-safety.py" --vault "$VAULT_LOCATION" --assistant "$ASSISTANT" 2>&1 | tee "$SAFETY_OUT"; then
-  step_ok safety
-  # (v0.9) ChatGPT runs a hook only once its owner has trusted it, and only the
-  # owner can do that. The safety installer says when the step is due; it is
-  # passed on at once, so it is not lost if a later step stops, and the closing
-  # summary spells the step out.
-  if grep -q '^@@moblee-trust-needed chatgpt' "$SAFETY_OUT"; then
+# (v0.9) ChatGPT runs a hook only once its owner has trusted it, and only the
+# owner can do that. The safety installer says when the step is due; it is
+# passed on at once, so it is not lost if a later step stops, and the closing
+# summary spells the step out. It is looked for when the safety step failed as
+# well: the guard may be registered before a later part of that step fails,
+# and a second run, finding it registered, would not say so again.
+relay_trust() {
+  if grep -q '^@@moblee-trust-needed chatgpt' "$SAFETY_OUT" 2>/dev/null; then
     TRUST_NEEDED=1
     diary "    ChatGPT's delete guard is in place and waits for the owner to trust it in ChatGPT's settings"
     emit_trust
   fi
+}
+# The five steps only the owner can take, in the same words wherever they are printed.
+print_trust_steps() {
+  local pad="$1"
+  echo "${pad}1. Open the ChatGPT menu and choose Settings."
+  echo "${pad}2. Choose Hooks, under the heading Coding."
+  echo "${pad}3. Open \"User config\"."
+  echo "${pad}4. Press Trust beside the hook that ends bash-guard.py."
+  echo "${pad}5. Turn its switch on."
+  echo "${pad}If ChatGPT was open during this, quit it and open it again so that it reads the whole rules file."
+  echo "${pad}Then prove it: python3 scripts/moblee-doctor.py --prove-guard (run from the Moblee folder; in the Moblee app, press Prove the guard). It uses a little of your ChatGPT allowance."
+  echo "${pad}You must do this again after any Moblee update that changes the guard. ChatGPT will not remind you."
+}
+if python3 "$PACKAGE_ROOT/safety/install-safety.py" --vault "$VAULT_LOCATION" --assistant "$ASSISTANT" 2>&1 | tee "$SAFETY_OUT"; then
+  step_ok safety
+  relay_trust
 else
+  relay_trust
   step_fail safety safety-layer
   diary_tail "$SAFETY_OUT"
   echo ""
@@ -485,6 +567,12 @@ else
   echo "(it will finish the job without touching what is already there), or run"
   echo "the safety step on its own:"
   echo "  python3 \"$PACKAGE_ROOT/safety/install-safety.py\" --vault \"$VAULT_LOCATION\""
+  if [[ $TRUST_NEEDED -eq 1 ]]; then
+    echo ""
+    echo "ChatGPT's delete guard was put in place before the step stopped. One step is"
+    echo "yours alone. Until it is done, the delete guard does not run in ChatGPT:"
+    print_trust_steps "  "
+  fi
   exit 1
 fi
 
@@ -528,7 +616,7 @@ if [[ "$ASSISTANT" != "chatgpt" ]]; then
 fi
 case "$ASSISTANT" in
   chatgpt)
-    echo "Open ChatGPT, choose Work, add your new wiki folder as a project, and"
+    echo "To begin: open ChatGPT, choose Work, and open your wiki folder. Then"
     echo "say: get me started"
     echo "ChatGPT asks how you work and what you read, watch and make, and helps"
     echo "you put your first pages in."
@@ -538,7 +626,7 @@ case "$ASSISTANT" in
     ;;
   both)
     echo "to open Claude or ChatGPT in your new wiki and say: get me started"
-    echo "(in ChatGPT, choose Work and add your new wiki folder as a project first)."
+    echo "(for ChatGPT: open ChatGPT, choose Work, and open your wiki folder)."
     echo "It asks how you use your Mac and what you read, watch and make, then"
     echo "suggests only what fits and gives you one command to install it."
     echo "The extras it installs are set up for Claude; Moblee does not set them"
@@ -551,7 +639,9 @@ case "$ASSISTANT" in
     ;;
 esac
 echo ""
-if [[ -t 0 ]]; then
+# (v0.9) the checklist's items are set up for Claude, so it is not offered to
+# an owner who uses ChatGPT alone
+if [[ -t 0 && "$ASSISTANT" != "chatgpt" ]]; then
   read -r -p "Would you rather choose from the full checklist yourself now? [y/N]: " OPEN_SETUP || OPEN_SETUP="n"  # no answer: do not open
   if [[ "$OPEN_SETUP" =~ ^[Yy]$ ]]; then
     MOBLEE_VAULT="$VAULT_LOCATION" python3 "$SCRIPT_DIR/moblee-setup.py" \
@@ -612,8 +702,8 @@ echo "       $VAULT_LOCATION"
 echo ""
 case "$ASSISTANT" in
   chatgpt)
-    echo "  2. Open ChatGPT, choose Work, add your wiki folder as a project, and say"
-    echo "     \"get me started\". The folder to add is:"
+    echo "  2. To begin: open ChatGPT, choose Work, and open your wiki folder. Then say"
+    echo "     \"get me started\". The folder is:"
     echo "       $VAULT_LOCATION"
     ;;
   both)
@@ -621,7 +711,7 @@ case "$ASSISTANT" in
     echo "     Claude:"
     echo "       cd \"$VAULT_LOCATION\""
     echo "       claude"
-    echo "     ChatGPT: open ChatGPT, choose Work, and add your wiki folder as a project:"
+    echo "     ChatGPT: open ChatGPT, choose Work, and open your wiki folder:"
     echo "       $VAULT_LOCATION"
     ;;
   *)
@@ -632,8 +722,13 @@ case "$ASSISTANT" in
 esac
 echo ""
 echo "  3. Whenever you like, from this Moblee folder:"
-echo "       Choose extras yourself:  python3 scripts/moblee-setup.py"
-echo "       Test that it all works:  python3 scripts/moblee-setup.py --check"
+if [[ "$ASSISTANT" != "chatgpt" ]]; then
+  # the checklist's items are set up for Claude, so it is not offered for ChatGPT alone
+  echo "       Choose extras yourself:  python3 scripts/moblee-setup.py"
+  echo "       Test that it all works:  python3 scripts/moblee-setup.py --check"
+else
+  echo "       Check-up:   python3 scripts/moblee-doctor.py"
+fi
 echo "       Dashboard:  python3 \"$VAULT_LOCATION/dashboard/server.py\"   (then open the printed URL)"
 echo "       Galaxy:     say \"galaxy\" to $ASSISTANT_LABEL in your vault"
 echo ""
@@ -645,18 +740,14 @@ fi
 if [[ "$ASSISTANT" == "chatgpt" || "$ASSISTANT" == "both" ]]; then
   if [[ "$ASSISTANT" == "both" ]]; then echo ""; fi
   echo "  Safety in ChatGPT: the delete guard is installed, and ChatGPT runs it only"
-  echo "  once you have trusted it in ChatGPT's settings. From then on ChatGPT cannot"
-  echo "  delete files in this vault at all; if something must go, ChatGPT tells you"
-  echo "  what and you remove it yourself."
+  echo "  once you have trusted it and you have proved it. A guard that crashes or"
+  echo "  takes too long lets the command through, so the written rule in your wiki"
+  echo "  still matters."
   if [[ $TRUST_NEEDED -eq 1 ]]; then
     echo ""
     echo "  One step is yours alone. Until it is done, the delete guard does not run"
     echo "  in ChatGPT:"
-    echo "    1. In ChatGPT, open the ChatGPT menu and choose Settings."
-    echo "    2. Choose Hooks (under Coding) and open \"User config\"."
-    echo "    3. Press Trust beside the hook whose command ends bash-guard.py."
-    echo "    4. Turn its switch on."
-    echo "  ChatGPT asks for this again whenever Moblee updates the guard."
+    print_trust_steps "    "
     echo ""
   fi
 fi

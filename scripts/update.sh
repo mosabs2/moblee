@@ -10,7 +10,9 @@
 # The assistant (claude, chatgpt or both) is read from ~/.config/moblee/assistant;
 # no file means claude. --assistant changes it, and the instruction file follows
 # by renaming or linking only: CLAUDE.md is what Claude reads, AGENTS.md what
-# ChatGPT reads, and for both AGENTS.md is a link to CLAUDE.md. For Claude the
+# ChatGPT reads, and for both AGENTS.md is a link to CLAUDE.md. For ChatGPT alone
+# AGENTS.md is the real file and CLAUDE.md a link to it, so that an older copy
+# of the Moblee app, which knows a wiki only by its CLAUDE.md, still does. For Claude the
 # skills go to ~/.claude/skills/ and for ChatGPT to ~/.agents/skills/; where the
 # steps below say CLAUDE.md they mean whichever of the two is the real file.
 #
@@ -49,7 +51,8 @@ ARGS=()
 for a in "$@"; do
   if [[ $TAKE_ASSISTANT -eq 1 ]]; then ARG_ASSISTANT="$a"; TAKE_ASSISTANT=0
   elif [[ "$a" == "--progress" ]]; then PROGRESS=1
-  elif [[ "$a" == "--assistant" ]]; then ASSISTANT_FLAG=1; TAKE_ASSISTANT=1
+  elif [[ "$a" == "--assistant" ]]; then ASSISTANT_FLAG=1; TAKE_ASSISTANT=1; ARG_ASSISTANT=""   # with no value after it, it is refused below
+  elif [[ "$a" == --assistant=* ]]; then ASSISTANT_FLAG=1; ARG_ASSISTANT="${a#--assistant=}"
   else ARGS+=("$a"); fi
 done
 set -- ${ARGS[@]+"${ARGS[@]}"}
@@ -114,8 +117,17 @@ if [[ -z "$VAULT" && -f "$HOME/.config/moblee/vault-path" ]]; then
   VAULT="$(cat "$HOME/.config/moblee/vault-path")"
 fi
 VAULT="${VAULT/#\~/$HOME}"
-# (v0.9) a wiki made for ChatGPT alone carries AGENTS.md in place of CLAUDE.md
-if [[ -z "$VAULT" || ! -d "$VAULT/wiki" ]] || [[ ! -f "$VAULT/CLAUDE.md" && ! -f "$VAULT/AGENTS.md" ]]; then
+# (v0.9) A wiki made for ChatGPT alone carries AGENTS.md as its real rules file.
+# CLAUDE.md marks a Moblee vault as it always has; AGENTS.md marks one only
+# beside wiki/Index.md or a VERSION file, since many folders that are not wikis
+# carry an AGENTS.md of their own.
+IS_VAULT=0
+if [[ -n "$VAULT" && -d "$VAULT/wiki" ]]; then
+  if [[ -f "$VAULT/CLAUDE.md" ]]; then IS_VAULT=1
+  elif [[ -f "$VAULT/AGENTS.md" ]] && [[ -f "$VAULT/wiki/Index.md" || -f "$VAULT/VERSION" ]]; then IS_VAULT=1
+  fi
+fi
+if [[ $IS_VAULT -eq 0 ]]; then
   echo "Could not find the vault. Run: bash scripts/update.sh <path to your vault>"
   exit 1
 fi
@@ -133,14 +145,50 @@ OLD_ASSISTANT=""
 if [[ -f "$ASSISTANT_FILE" ]]; then
   OLD_ASSISTANT="$(head -1 "$ASSISTANT_FILE" 2>/dev/null | tr -d '[:space:]' || true)"
 fi
+instr_real()   { [[ -f "$VAULT/$1" && ! -L "$VAULT/$1" ]]; }
+instr_absent() { [[ ! -e "$VAULT/$1" && ! -L "$VAULT/$1" ]]; }
+# A wiki made for ChatGPT alone, told from what is on the disk: AGENTS.md is
+# the real rules file, and CLAUDE.md is either not there or is the link to it
+# that 0.9 lays down. No wiki from before 0.9 looks like this: those all have a
+# real CLAUDE.md. Where CLAUDE.md is a link, two more things are asked, so that
+# an owner of Claude who made such a link by hand is never taken for an owner
+# of ChatGPT: the wiki's VERSION is 0.9 or later, and the permission rules
+# Moblee writes for Claude (.claude/settings.local.json) are not in it.
+looks_made_for_chatgpt() {
+  instr_real AGENTS.md || return 1
+  if instr_absent CLAUDE.md; then return 0; fi
+  [[ -L "$VAULT/CLAUDE.md" && "$VAULT/CLAUDE.md" -ef "$VAULT/AGENTS.md" ]] || return 1
+  [[ ! -f "$VAULT/.claude/settings.local.json" && -f "$VAULT/VERSION" ]] || return 1
+  case "$OLD_VERSION" in
+    0.[0-8]|0.[0-8].*|"before 0.5"|"") return 1 ;;
+  esac
+  return 0
+}
+INFERRED_ASSISTANT=0
 case "$OLD_ASSISTANT" in
   claude|chatgpt|both) ;;
-  *) OLD_ASSISTANT="claude" ;;
+  *)
+    # No choice on record (no file, or a word that is not one of the three).
+    # That means claude, as it always has, except where the wiki itself shows
+    # it was made for ChatGPT alone: a second Mac, or a Mac restored without
+    # its ~/.config folder. Then the wiki is kept for ChatGPT, not turned into
+    # one for Claude, and ChatGPT's guard is kept up to date.
+    if looks_made_for_chatgpt; then
+      OLD_ASSISTANT="chatgpt"; INFERRED_ASSISTANT=1
+    else
+      OLD_ASSISTANT="claude"
+    fi
+    ;;
 esac
 ASSISTANT="$OLD_ASSISTANT"
 if [[ $ASSISTANT_FLAG -eq 1 ]]; then
   ASSISTANT="$ARG_ASSISTANT"
   echo "$ASSISTANT" > "$ASSISTANT_FILE"
+elif [[ $INFERRED_ASSISTANT -eq 1 ]]; then
+  echo "$ASSISTANT" > "$ASSISTANT_FILE"
+  echo "No choice of assistant was on record on this Mac. The wiki is laid out for ChatGPT"
+  echo "alone, so it is kept that way, and the choice has been recorded."
+  diary "no choice of assistant was on record; the wiki is laid out for ChatGPT alone (AGENTS.md is the real rules file), so chatgpt was recorded"
 fi
 diary "assistant: $ASSISTANT"
 if [[ "$ASSISTANT" != "$OLD_ASSISTANT" ]]; then
@@ -270,32 +318,82 @@ fi
 # that serves either assistant: a wiki made for ChatGPT that is now for Claude
 # is renamed and linked as above, and a wiki made for Claude that is now for
 # ChatGPT gains the link. A wiki already laid out for both is left as it is.
-instr_real()   { [[ -f "$VAULT/$1" && ! -L "$VAULT/$1" ]]; }
-instr_absent() { [[ ! -e "$VAULT/$1" && ! -L "$VAULT/$1" ]]; }
+#
+# For ChatGPT alone the layout is the other way about: AGENTS.md is the real
+# file and CLAUDE.md a relative link to it, which an older copy of the Moblee
+# app needs in order to know the wiki. A wiki for ChatGPT alone that lacks the
+# link (made before the link was part of the layout, or the link lost in
+# syncing) gains it. When such a wiki becomes one for Claude or for both, the
+# rename takes the place of that link and of nothing else: CLAUDE.md is
+# checked to be a link, never a file of its own, before it is replaced.
+#
+# RULES_DIRTY=1: the owner had uncommitted changes of their own in AGENTS.md
+# when it was renamed. Their changes travel with the file, and neither name is
+# committed by this run: the rename is left staged for their own next commit.
+RULES_DIRTY=0
+RULES_RENAMED=0
 rename_agents_to_claude() {
+  local over_link=0
+  if [[ -L "$VAULT/CLAUDE.md" ]]; then
+    over_link=1
+  elif [[ -e "$VAULT/CLAUDE.md" ]]; then
+    echo "   (CLAUDE.md is a file of its own, so AGENTS.md was not renamed; nothing was changed.)"
+    return 1
+  fi
   keep_copy "$VAULT/AGENTS.md"
   if [[ -d "$VAULT/.git" ]] && git -C "$VAULT" ls-files --error-unmatch -- AGENTS.md >/dev/null 2>&1; then
-    if ! git -C "$VAULT" mv -- AGENTS.md CLAUDE.md; then
+    local dirty=0
+    if ! git -C "$VAULT" diff --quiet -- AGENTS.md 2>/dev/null || ! git -C "$VAULT" diff --cached --quiet -- AGENTS.md 2>/dev/null; then
+      dirty=1
+    fi
+    # -f only where CLAUDE.md is the link, which the rename then takes the place of
+    if [[ $over_link -eq 1 ]]; then
+      if ! git -C "$VAULT" mv -f -- AGENTS.md CLAUDE.md; then
+        echo "   (AGENTS.md could not be renamed to CLAUDE.md; nothing was changed. The message above says why.)"
+        return 1
+      fi
+    elif ! git -C "$VAULT" mv -- AGENTS.md CLAUDE.md; then
       echo "   (AGENTS.md could not be renamed to CLAUDE.md; nothing was changed. The message above says why.)"
       return 1
     fi
+    if [[ $dirty -eq 1 ]]; then
+      # a commit naming the file would take the owner's unfinished changes with it
+      RULES_DIRTY=1
+      echo "   AGENTS.md renamed to CLAUDE.md. It held changes of yours that were not yet committed, so"
+      echo "   the rename is left for your own next commit, with those changes; nothing of yours was committed."
+      diary "    AGENTS.md held uncommitted changes of the owner's; the rename was left staged, not committed"
     # The rename is committed by itself, naming only these two paths, so that
     # the file's history follows it plainly and none of the owner's other
     # staged work is swept in. If the commit does not go through, the rename
     # stays staged and goes into the updater's own commit at the end.
-    if git -C "$VAULT" commit --quiet -m "moblee: AGENTS.md renamed to CLAUDE.md, so that Claude and ChatGPT read one file" -- AGENTS.md CLAUDE.md >/dev/null 2>&1; then
+    elif git -C "$VAULT" commit --quiet -m "moblee: AGENTS.md renamed to CLAUDE.md, so that Claude and ChatGPT read one file" -- AGENTS.md CLAUDE.md >/dev/null 2>&1; then
       echo "   AGENTS.md renamed to CLAUDE.md (its history goes with it; committed)"
     else
       echo "   AGENTS.md renamed to CLAUDE.md (its history goes with it; committed with the update below)"
     fi
   else
-    if ! mv "$VAULT/AGENTS.md" "$VAULT/CLAUDE.md"; then
+    # mv -f over the link, which a rename replaces as the link it is; -n otherwise
+    if [[ $over_link -eq 1 ]]; then
+      if ! mv -f "$VAULT/AGENTS.md" "$VAULT/CLAUDE.md"; then
+        echo "   (AGENTS.md could not be renamed to CLAUDE.md; nothing was changed. The message above says why.)"
+        return 1
+      fi
+    elif ! mv -n "$VAULT/AGENTS.md" "$VAULT/CLAUDE.md" || [[ -e "$VAULT/AGENTS.md" ]]; then
       echo "   (AGENTS.md could not be renamed to CLAUDE.md; nothing was changed. The message above says why.)"
       return 1
     fi
     echo "   AGENTS.md renamed to CLAUDE.md"
   fi
+  RULES_RENAMED=1
   diary "    the instruction file AGENTS.md was renamed to CLAUDE.md (old copy kept)"
+}
+link_claude_to_agents() {
+  if ( cd "$VAULT" && ln -s AGENTS.md CLAUDE.md ); then
+    echo "   CLAUDE.md added as a link to AGENTS.md, so that an older copy of the Moblee app still knows this wiki"
+    diary "    CLAUDE.md was added as a link to AGENTS.md"
+  else
+    echo "   (the link from CLAUDE.md to AGENTS.md could not be made; run the updater again later)"
+  fi
 }
 link_agents_to_claude() {
   if ( cd "$VAULT" && ln -s CLAUDE.md AGENTS.md ); then
@@ -305,10 +403,18 @@ link_agents_to_claude() {
     echo "   (the link from AGENTS.md to CLAUDE.md could not be made; run the updater again later)"
   fi
 }
-if instr_real AGENTS.md && instr_absent CLAUDE.md; then
+if instr_real AGENTS.md && { instr_absent CLAUDE.md || [[ -L "$VAULT/CLAUDE.md" && "$VAULT/CLAUDE.md" -ef "$VAULT/AGENTS.md" ]]; }; then
   # made for ChatGPT alone
   if [[ "$ASSISTANT" == "claude" || "$ASSISTANT" == "both" ]]; then
-    if rename_agents_to_claude; then link_agents_to_claude; fi
+    # Where CLAUDE.md is already a link to AGENTS.md, either assistant reads
+    # the one text, so the rename is made only when the choice was named on
+    # this run: an owner who made such a link by hand, and changed nothing,
+    # finds it as they left it.
+    if instr_absent CLAUDE.md || [[ $ASSISTANT_FLAG -eq 1 ]]; then
+      if rename_agents_to_claude; then link_agents_to_claude; fi
+    fi
+  elif instr_absent CLAUDE.md; then
+    link_claude_to_agents
   fi
 elif instr_real CLAUDE.md && instr_absent AGENTS.md; then
   # made for Claude alone
@@ -323,9 +429,17 @@ elif instr_real CLAUDE.md && [[ -L "$VAULT/AGENTS.md" ]]; then
   fi
 elif instr_real CLAUDE.md && instr_real AGENTS.md; then
   if [[ "$ASSISTANT" != "claude" ]]; then
-    echo "   CLAUDE.md and AGENTS.md are separate files in this wiki, so both were left as they are."
-    echo "   ChatGPT reads AGENTS.md and Moblee keeps CLAUDE.md up to date."
-    diary "    CLAUDE.md and AGENTS.md are separate files here; both left as they are"
+    echo "   CLAUDE.md and AGENTS.md are two separate files in this wiki. Both were left as they are,"
+    echo "   and nothing was written over. ChatGPT reads AGENTS.md only, and Moblee writes its rules and"
+    echo "   rule updates into CLAUDE.md only, so ChatGPT is not getting Moblee's rules or its updates"
+    echo "   until the two are made one."
+    if cmp -s "$VAULT/CLAUDE.md" "$VAULT/AGENTS.md"; then
+      echo "   The two are the same, word for word: most likely AGENTS.md was a link to CLAUDE.md and the"
+      echo "   link was lost in syncing, which left a copy in its place."
+    fi
+    echo "   The field guide, entry F28, says how to put it right (skills/companion/field-guide.md in the"
+    echo "   Moblee folder)."
+    diary "    CLAUDE.md and AGENTS.md are separate files here; both left as they are; ChatGPT is not getting Moblee's rule updates (field guide F28)"
   fi
 fi
 INSTR_NAME="$(instruction_name)"
@@ -348,7 +462,32 @@ echo "4. Safety layer"
 # says on a line of its own when ChatGPT's guard waits for the owner's trust
 SAFETY_OUT="$(mktemp)"
 TRUST_NEEDED=0
+# ChatGPT runs a hook only once its owner has trusted it, and only the owner can
+# do that. It is passed on at once, so it is not lost if a later step stops (a
+# second run would not say it again), and spelled out in the closing summary.
+# It is looked for when the safety step failed as well: the guard may be
+# registered before a later part of that step fails.
+relay_trust() {
+  if grep -q '^@@moblee-trust-needed chatgpt' "$SAFETY_OUT" 2>/dev/null; then
+    TRUST_NEEDED=1
+    diary "    ChatGPT's delete guard is in place and waits for the owner to trust it in ChatGPT's settings"
+    emit_trust
+  fi
+}
+# The five steps only the owner can take, in the same words wherever they are printed.
+print_trust_steps() {
+  local pad="$1"
+  echo "${pad}1. Open the ChatGPT menu and choose Settings."
+  echo "${pad}2. Choose Hooks, under the heading Coding."
+  echo "${pad}3. Open \"User config\"."
+  echo "${pad}4. Press Trust beside the hook that ends bash-guard.py."
+  echo "${pad}5. Turn its switch on."
+  echo "${pad}If ChatGPT was open during this, quit it and open it again so that it reads the whole rules file."
+  echo "${pad}Then prove it: python3 scripts/moblee-doctor.py --prove-guard (run from the Moblee folder; in the Moblee app, press Prove the guard). It uses a little of your ChatGPT allowance."
+  echo "${pad}You must do this again after any Moblee update that changes the guard. ChatGPT will not remind you."
+}
 if ! python3 "$PACKAGE_ROOT/safety/install-safety.py" --vault "$VAULT" --assistant "$ASSISTANT" | tee "$SAFETY_OUT" | sed 's/^/   /'; then
+  relay_trust
   echo ""
   echo "The safety layer did not install, so the updater stopped here."
   echo "Steps 1 to 3 have already run: the vault tooling, the commit gate and the"
@@ -356,16 +495,15 @@ if ! python3 "$PACKAGE_ROOT/safety/install-safety.py" --vault "$VAULT" --assista
   echo "$INSTR_NAME, the identity file, the schedules and VERSION are unchanged."
   echo "The message above says why. Fix it and run the updater again; it is safe"
   echo "to repeat and carries on from here."
+  if [[ $TRUST_NEEDED -eq 1 ]]; then
+    echo ""
+    echo "ChatGPT's delete guard was put in place before the step stopped. One step is"
+    echo "yours alone. Until it is done, the delete guard does not run in ChatGPT:"
+    print_trust_steps "  "
+  fi
   exit 1
 fi
-# ChatGPT runs a hook only once its owner has trusted it, and only the owner can
-# do that. It is passed on at once, so it is not lost if a later step stops (a
-# second run would not say it again), and spelled out in the closing summary.
-if grep -q '^@@moblee-trust-needed chatgpt' "$SAFETY_OUT"; then
-  TRUST_NEEDED=1
-  diary "    ChatGPT's delete guard is in place and waits for the owner to trust it in ChatGPT's settings"
-  emit_trust
-fi
+relay_trust
 
 # ----- 6. CLAUDE.md (AGENTS.md in a wiki made for ChatGPT alone) --------------
 ustep rules
@@ -386,6 +524,11 @@ echo "6. Identity file and starting memories"
 # Written by a script that creates the file only if absent (never overwrites).
 python3 "$SCRIPT_DIR/add-identity.py" --vault "$VAULT" --assistant "$ASSISTANT" | sed 's/^/   /' \
   || echo "   (Identity.md not added; ask $ASSISTANT_LABEL to create it from the template)"
+# (v0.9) the page the starting memories go to for ChatGPT is committed by this
+# run only when this run made it; once it exists it is the owner's and the
+# assistant's to add to, and any later addition is left for their own commit
+MEMORY_PAGE_NEW=0
+if [[ ! -e "$VAULT/wiki/Wiki Operations/Assistant Memory.md" ]]; then MEMORY_PAGE_NEW=1; fi
 python3 "$SCRIPT_DIR/seed-memory.py" --vault "$VAULT" --assistant "$ASSISTANT" | sed 's/^/   /' \
   || echo "   (starting memories not seeded; harmless)"
 python3 "$SCRIPT_DIR/add-habits-page.py" --vault "$VAULT" | sed 's/^/   /' \
@@ -492,24 +635,45 @@ if [[ -d "$VAULT/.git" ]]; then
     # (v0.9) AGENTS.md sits beside CLAUDE.md: whichever of the two exists is
     # staged (-L as well, since AGENTS.md may be a link), and so is the page
     # the starting memories are written to for ChatGPT.
+    # The commit names its paths, so anything else the owner had staged stays
+    # staged for their own commit and is not swept into this one.
+    COMMIT_PATHS=()
     for p in scripts dashboard VERSION CLAUDE.md AGENTS.md .gitignore .claude wiki/Identity.md "wiki/Wiki Operations/Moblee Learning Path.md" "wiki/Wiki Operations/Habits and Tools.md" "wiki/Wiki Operations/Assistant Memory.md"; do
       # in a wiki for Claude alone, an AGENTS.md that is a file of its own is the
       # owner's, kept for some other tool, and is left for them to commit
       if [[ "$p" == "AGENTS.md" && "$ASSISTANT" == "claude" && ! -L "$p" ]]; then continue; fi
-      if [[ -e "$p" || -L "$p" ]]; then git add -A -- "$p" 2>/dev/null || true; fi
+      # a rules file renamed while it held the owner's uncommitted changes is
+      # left, under both names, for the owner's own next commit
+      if [[ $RULES_DIRTY -eq 1 && ( "$p" == "CLAUDE.md" || "$p" == "AGENTS.md" ) ]]; then continue; fi
+      # the ChatGPT memory page goes in only when this run made it
+      if [[ "$p" == "wiki/Wiki Operations/Assistant Memory.md" && $MEMORY_PAGE_NEW -eq 0 ]]; then continue; fi
+      if [[ -e "$p" || -L "$p" ]]; then
+        git add -A -- "$p" 2>/dev/null || true
+        # named in the commit only if git now knows it: a path git ignores
+        # would otherwise make the whole commit fail
+        if git ls-files --error-unmatch -- "$p" >/dev/null 2>&1; then COMMIT_PATHS+=("$p"); fi
+      fi
     done
+    # AGENTS.md renamed above, its own commit not made and the link not made
+    # either: the old name's removal belongs in this commit with the new name
+    if [[ $RULES_RENAMED -eq 1 && $RULES_DIRTY -eq 0 && ! -e AGENTS.md && ! -L AGENTS.md ]] && ! git diff --cached --quiet -- AGENTS.md 2>/dev/null; then
+      COMMIT_PATHS+=("AGENTS.md")
+    fi
     # the starter pages the updater dated, where the owner had no uncommitted work of their own
     for p in ${STAMP_CLEAN[@]+"${STAMP_CLEAN[@]}"}; do
-      if [[ -e "$p" ]]; then git add -- "$p" 2>/dev/null || true; fi
+      if [[ -e "$p" ]]; then
+        git add -- "$p" 2>/dev/null || true
+        if git ls-files --error-unmatch -- "$p" >/dev/null 2>&1; then COMMIT_PATHS+=("$p"); fi
+      fi
     done
-    if git diff --cached --quiet; then
+    if [[ ${#COMMIT_PATHS[@]} -eq 0 ]] || git diff --cached --quiet -- "${COMMIT_PATHS[@]}"; then
       if [[ "$OLD_VERSION" == "$NEW_VERSION" ]]; then
         echo "   already at $NEW_VERSION; nothing to change"
       else
         echo "   nothing new to commit"
       fi
     else
-      git commit --quiet -m "moblee: updated from $OLD_VERSION to $NEW_VERSION$STAMP_NOTE" \
+      git commit --quiet -m "moblee: updated from $OLD_VERSION to $NEW_VERSION$STAMP_NOTE" -- "${COMMIT_PATHS[@]}" \
         && echo "   committed: moblee: updated from $OLD_VERSION to $NEW_VERSION" \
         || echo "   (commit did not go through; ask $ASSISTANT_LABEL to commit the update)"
     fi
@@ -518,6 +682,18 @@ fi
 
 if [[ -n "$USTEP" ]]; then emit "$USTEP" ok; diary "update step $USTEP_N of $USTEP_TOTAL, $USTEP: done"; USTEP=""; fi
 diary "=== Moblee update finished ==="
+# (v0.9) An install of this wiki that stopped part-way has now been finished by
+# the updater, so its note is closed. Left open, a later run of the installer
+# would take the wiki for one still being made and finish it "from the top".
+IN_PROGRESS="$HOME/.config/moblee/in-progress"
+if [[ -f "$IN_PROGRESS" ]] && ! grep -q "^finished " "$IN_PROGRESS" 2>/dev/null; then
+  IN_PROGRESS_VAULT="$(head -1 "$IN_PROGRESS" 2>/dev/null || true)"
+  # the same folder, however the two were written
+  if [[ -n "$IN_PROGRESS_VAULT" ]] && [[ "$IN_PROGRESS_VAULT" == "$VAULT" || "$IN_PROGRESS_VAULT" -ef "$VAULT" ]]; then
+    echo "finished $(date '+%Y-%m-%d %H:%M') (by the updater)" >> "$IN_PROGRESS" 2>/dev/null || true
+    diary "the unfinished-install note for this wiki was closed"
+  fi
+fi
 if [[ $PROGRESS -eq 1 ]]; then
   printf '@@moblee {"step":"done","state":"ok","n":%d,"of":%d}\n' "$USTEP_TOTAL" "$USTEP_TOTAL"
 fi
@@ -534,11 +710,7 @@ echo ""
 if [[ $TRUST_NEEDED -eq 1 ]]; then
   echo "One step is yours alone. Until it is done, the delete guard does not run"
   echo "in ChatGPT:"
-  echo "  1. In ChatGPT, open the ChatGPT menu and choose Settings."
-  echo "  2. Choose Hooks (under Coding) and open \"User config\"."
-  echo "  3. Press Trust beside the hook whose command ends bash-guard.py."
-  echo "  4. Turn its switch on."
-  echo "ChatGPT asks for this again whenever Moblee updates the guard."
+  print_trust_steps "  "
   echo ""
 fi
 # ----- the checklist (v0.6; from v0.7 nothing is ticked in advance) ----------
@@ -549,16 +721,16 @@ fi
 if [[ -f "$SCRIPT_DIR/moblee-setup.py" ]]; then
   case "$ASSISTANT" in
     chatgpt)
-      echo "To carry on: open ChatGPT, choose Work, add your wiki folder as a project"
-      echo "if it is not there yet, and say: get me started (if you have never done it)."
+      echo "To carry on: open ChatGPT, choose Work, and open your wiki folder. Then say:"
+      echo "get me started (if you have never done it)."
       echo "Moblee's optional extras (Calendar, Mail, Google, videos and the rest) are"
       echo "set up for Claude. Moblee does not set them up for ChatGPT yet."
       ;;
     both)
       echo "New in this version: your assistant can suggest which extras suit you. Open"
-      echo "Claude or ChatGPT in your wiki (in ChatGPT, choose Work and add your wiki"
-      echo "folder as a project if it is not there yet) and say: review my setup (or,"
-      echo "if you have never done it, get me started). It asks how you use your Mac,"
+      echo "Claude or ChatGPT in your wiki (for ChatGPT: open ChatGPT, choose Work, and"
+      echo "open your wiki folder) and say: review my setup (or, if you have never"
+      echo "done it, get me started). It asks how you use your Mac,"
       echo "suggests only what fits and gives you one command to install it."
       echo "The extras it installs are set up for Claude; Moblee does not set them"
       echo "up for ChatGPT yet."
@@ -570,7 +742,9 @@ if [[ -f "$SCRIPT_DIR/moblee-setup.py" ]]; then
       echo "and gives you one command to install it."
       ;;
   esac
-  if [[ -t 0 ]]; then
+  # (v0.9) the checklist's items are set up for Claude, so it is not offered to
+  # an owner who uses ChatGPT alone
+  if [[ -t 0 && "$ASSISTANT" != "chatgpt" ]]; then
     read -r -p "Would you rather choose from the full checklist yourself now? [y/N]: " OPEN_SETUP || OPEN_SETUP="n"  # no answer: do not open
     if [[ "$OPEN_SETUP" =~ ^[Yy]$ ]]; then
       MOBLEE_VAULT="$VAULT" python3 "$SCRIPT_DIR/moblee-setup.py" \

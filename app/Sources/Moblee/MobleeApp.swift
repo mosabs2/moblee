@@ -52,7 +52,7 @@ enum Practice {
     static let args: [String] = on ? CommandLine.arguments : []
     static let switches: Set<String> = ["--home", "--pack", "--pretend-missing", "--snapshot", "--rehearse",
                                         "--self-drive", "--dark", "--owner", "--step", "--fresh", "--icon",
-                                        "--move-to", "--move-break", "--check-logic"]
+                                        "--move-to", "--move-break", "--check-logic", "--fixtures"]
 }
 
 /// Quitting half-way through a build or an update would leave it half done, so
@@ -69,6 +69,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    /// A proof of the guard still running when the window closes is ended with
+    /// everything it started: nobody is left to read its answer, and it would
+    /// go on using the owner's ChatGPT allowance for minutes.
+    func applicationWillTerminate(_ notification: Notification) {
+        MainActor.assumeIsolated { GuardProof.stop() }
+    }
 }
 
 /// The screens, in the order the owner meets them.
@@ -126,6 +133,14 @@ final class Flow: ObservableObject {
     var trustStart: TrustScreen.Stage = .steps
 
     func beginUpdate(changingAssistant: Bool = false) {
+        // The updater this app carries is never run on a wiki that a newer
+        // Moblee made or updated: it would put older tools, skills and guard
+        // over newer ones and write its own, older, version into the wiki. No
+        // screen offers it then; this is the same refusal where it cannot be
+        // walked round. Nor is the assistant changed while something is being
+        // added, since both would be writing the same settings at once.
+        if homeModel.wikiIsNewerThanApp { return }
+        if changingAssistant && !homeModel.canChangeAssistant { return }
         install.phase = .idle
         updateAssistant = nil
         askingAssistant = changingAssistant || Assistant.mustAsk(home: home)

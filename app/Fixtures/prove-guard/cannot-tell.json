@@ -1,0 +1,22 @@
+[
+  {
+    "level": "OK",
+    "text": "This wiki is set up to be used with ChatGPT.",
+    "guide": null
+  },
+  {
+    "level": "OK",
+    "text": "The delete guard is installed for ChatGPT, entered in its hooks file, and is this Moblee's own copy.",
+    "guide": null
+  },
+  {
+    "level": "CANNOT TELL",
+    "text": "ChatGPT is not signed in on this Mac, so the guard could not be proved. Sign in to ChatGPT and run this again. To check: in ChatGPT, open the ChatGPT menu, choose Settings, choose Hooks (under Coding), open \"User config\", and find the hook whose command ends bash-guard.py. If a Trust button shows beside it, press it, and make sure its switch is on.",
+    "guide": null
+  },
+  {
+    "level": "OK",
+    "text": "The last install ran to the end.",
+    "guide": null
+  }
+]

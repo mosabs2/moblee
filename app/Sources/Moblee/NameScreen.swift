@@ -8,15 +8,9 @@ struct NameScreen: View {
     @Environment(\.stillPicture) private var still
 
     /// The question of which assistant comes after this one, so the sentence
-    /// names Claude, as it always has, unless the owner has already said
-    /// otherwise (at the check-up, or by coming back from the next screen).
-    private var question: String {
-        switch flow.assistant {
-        case .chatgpt: return "What should ChatGPT call you?"
-        case .both: return "What should your assistant call you?"
-        default: return "What should Claude call you?"
-        }
-    }
+    /// names none, and reads the same for everyone.
+    static let words = "What should your assistant call you?"
+    private var question: String { Self.words }
 
     var body: some View {
         ScreenFrame(
@@ -81,20 +75,32 @@ struct PromiseScreen: View {
         let place = flow.resumePlace ?? flow.chosenPlace ?? flow.freeLocation()
         let words = Self.words(for: flow.assistant ?? .claude)
         ScreenFrame(
-            sentence: "Here is what Moblee will make. Nothing else is touched.",
+            sentence: words.sentence,
             buttonTitle: flow.resumePlace == nil ? "Make it" : "Finish it",
             spoken: "Here is what Moblee will make. One: a folder for your wiki, called \(place.name). "
                 + "Two: a guard, \(words.guardSpoken). "
-                + "Three: \(words.skillsSpoken). Nothing else on your Mac is touched.",
+                + "Three: \(words.skillsSpoken). \(words.closingSpoken)",
             action: flow.next
         ) {
-            HStack(alignment: .top, spacing: 18) {
-                HandoffCard(number: 1, symbol: "folder.fill", title: "Your wiki",
-                            detail: "A folder called “\(place.name)” inside “Wiki”, in your home folder")
-                HandoffCard(number: 2, symbol: "lock.shield.fill", title: "A guard",
-                            detail: words.guardCard)
-                HandoffCard(number: 3, symbol: "graduationcap.fill", title: words.skillsTitle,
-                            detail: words.skillsCard)
+            VStack(spacing: 8) {
+                HStack(alignment: .top, spacing: 18) {
+                    HandoffCard(number: 1, symbol: "folder.fill", title: "Your wiki",
+                                detail: "A folder called “\(place.name)” inside “Wiki”, in your home folder")
+                    HandoffCard(number: 2, symbol: "lock.shield.fill", title: "A guard",
+                                detail: words.guardCard)
+                    HandoffCard(number: 3, symbol: "graduationcap.fill", title: words.skillsTitle,
+                                detail: words.skillsCard)
+                }
+                // With ChatGPT one more thing is touched, and the screen that
+                // says "nothing else" says what it is. It sits under the cards
+                // because the sentence above has room for two lines, not four.
+                if let alsoTouched = words.alsoTouched {
+                    Text(alsoTouched)
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(Color.primary.opacity(0.8))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .padding(.horizontal, 30)
         }
@@ -102,7 +108,17 @@ struct PromiseScreen: View {
 
     struct Words {
         let guardCard, guardSpoken, skillsTitle, skillsCard, skillsSpoken: String
+        /// The sentence at the top, and how "Read it to me" ends.
+        var sentence = "Here is what Moblee will make. Nothing else is touched."
+        var closingSpoken = "Nothing else on your Mac is touched."
+        /// Shown under the cards when something besides the three is touched.
+        var alsoTouched: String? = nil
     }
+
+    /// For ChatGPT the installer adds one line to ChatGPT's own settings
+    /// (`project_doc_max_bytes` in `~/.codex/config.toml`), so "nothing else is
+    /// touched" would not be true on its own.
+    static let chatgptSetting = "One setting is added in ChatGPT's own folder, so it can read your whole rules file. Nothing else is touched."
 
     /// Claude's words are as they have always been. With ChatGPT the guard's
     /// promise holds once the owner has trusted it there, and the card says so:
@@ -116,17 +132,23 @@ struct PromiseScreen: View {
                          skillsCard: "What Claude needs to keep your wiki",
                          skillsSpoken: "the skills Claude needs to keep it")
         case .chatgpt:
-            return Words(guardCard: "So ChatGPT cannot delete anything in it, once you trust it there",
-                         guardSpoken: "so ChatGPT cannot delete anything in it, once you have trusted it there",
+            return Words(guardCard: "So ChatGPT cannot delete anything in it, once you have pressed Trust in ChatGPT",
+                         guardSpoken: "so ChatGPT cannot delete anything in it, once you have pressed Trust in ChatGPT",
                          skillsTitle: "ChatGPT's skills",
                          skillsCard: "What ChatGPT needs to keep your wiki",
-                         skillsSpoken: "the skills ChatGPT needs to keep it")
+                         skillsSpoken: "the skills ChatGPT needs to keep it",
+                         sentence: "Here is what Moblee will make.",
+                         closingSpoken: chatgptSetting,
+                         alsoTouched: chatgptSetting)
         case .both:
-            return Words(guardCard: "So neither can delete anything in it. ChatGPT needs you to trust it first",
-                         guardSpoken: "so neither assistant can delete anything in it. ChatGPT needs you to trust it first",
+            return Words(guardCard: "So neither can delete anything in it. In ChatGPT you press Trust first",
+                         guardSpoken: "so neither assistant can delete anything in it. In ChatGPT you press Trust first",
                          skillsTitle: "The skills",
                          skillsCard: "What each assistant needs to keep your wiki",
-                         skillsSpoken: "the skills each assistant needs to keep it")
+                         skillsSpoken: "the skills each assistant needs to keep it",
+                         sentence: "Here is what Moblee will make.",
+                         closingSpoken: chatgptSetting,
+                         alsoTouched: chatgptSetting)
         }
     }
 }

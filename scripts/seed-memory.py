@@ -83,10 +83,13 @@ def read_assistant(explicit: str | None) -> str:
             print(f"The assistant must be one of claude, chatgpt or both; \"{explicit}\" is not one of them.")
             sys.exit(2)
         return value
+    # Read as the installer and the updater read it: the first line, spaces
+    # dropped, and the word exactly as they write it. Anything else is no choice.
     try:
-        value = (Path.home() / ".config" / "moblee" / "assistant").read_text().strip().lower()
+        text = (Path.home() / ".config" / "moblee" / "assistant").read_text(errors="replace")
     except OSError:
         return "claude"
+    value = "".join(text.split("\n", 1)[0].split())
     return value if value in ASSISTANTS else "claude"
 
 
@@ -148,6 +151,16 @@ def write_atomic(path: Path, text: str) -> None:
     os.replace(tmp, path)
 
 
+def write_atomic_bytes(path: Path, data: bytes) -> None:
+    """The same, for bytes that must go back exactly as they are."""
+    mode = path.stat().st_mode & 0o777 if path.exists() else 0o644
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".tmp-")
+    with os.fdopen(fd, "wb") as fh:
+        fh.write(data)
+    os.chmod(tmp, mode)
+    os.replace(tmp, path)
+
+
 def append_text(path: Path, addition: str) -> None:
     """Add text at the end of a file, one blank line below what is there.
     The file is opened for appending, so nothing already in it is rewritten."""
@@ -190,6 +203,22 @@ def has_heading(page_text: str, heading: str) -> bool:
     return any(l.strip().lower() == want for l in page_text.splitlines())
 
 
+def seed_mark(seed: Path) -> str:
+    """A line written under each section's heading, naming the seed it came
+    from. The heading is the owner's and the assistant's to reword; the mark
+    is how a later run still knows the note was given, and does not give it
+    again. (A comment: it does not show when the page is read in Obsidian.)"""
+    return f"<!-- moblee-seed: {seed.name} -->"
+
+
+def already_given(page_text: str, seed: Path, heading: str) -> bool:
+    """By its mark, or, for a page written before the marks existed, by its heading."""
+    return seed_mark(seed) in page_text or has_heading(page_text, heading)
+
+
+CLAUDE_ONLY_OPENING = "This note applies with Claude."
+
+
 def mention_in_instruction_file(vault: Path, dry_run: bool) -> None:
     target = instruction_file(vault)
     if not target.is_file():
@@ -210,19 +239,26 @@ def extend_index(vault: Path, dry_run: bool) -> None:
     index = vault / "wiki" / "Index.md"
     if not index.is_file():
         return
-    text = index.read_text(encoding="utf-8")
-    if "[[Assistant Memory" in text:
+    if index.is_symlink():
+        index = index.resolve()  # the file itself is written, never the link replaced
+    # Read as bytes, so that every other line goes back exactly as it was:
+    # its own line endings, and any byte that is not good UTF-8, untouched.
+    try:
+        raw = index.read_bytes()
+    except OSError:
         return
-    lines = text.splitlines(keepends=True)
+    if b"[[Assistant Memory" in raw:
+        return
+    lines = raw.splitlines(keepends=True)
     for i, l in enumerate(lines):
-        if l.lstrip().startswith("- Wiki Operations"):
+        if l.lstrip().startswith(b"- Wiki Operations"):
             if dry_run:
                 print("  would add the page to the Wiki Operations line of wiki/Index.md")
                 return
-            bare = l.rstrip("\r\n")
-            lines[i] = bare.rstrip() + INDEX_LINK + l[len(bare):]
-            write_atomic(index, "".join(lines))
-            print("  page added to the Wiki Operations line of wiki/Index.md")
+            bare = l.rstrip(b"\r\n")
+            lines[i] = bare.rstrip() + INDEX_LINK.encode("utf-8") + l[len(bare):]
+            write_atomic_bytes(index, b"".join(lines))
+            print("  page added to the Wiki Operations line of wiki/Index.md (that one line; nothing else in it was changed)")
             return
 
 
@@ -237,13 +273,18 @@ def seed_chatgpt(vault: Path, seeds: list[Path], dry_run: bool) -> int:
     for s in seeds:
         text = s.read_text(encoding="utf-8")
         heading = seed_heading(s, text)
-        if current is not None and has_heading(current, heading):
+        body = seed_body(text)
+        if body.lstrip().startswith(CLAUDE_ONLY_OPENING):
+            # a note about Claude's own workings has no place on ChatGPT's page
+            print(f"  left out (it applies with Claude only): {heading}")
+            continue
+        if current is not None and already_given(current, s, heading):
             print(f"  present: {heading}" if not dry_run else f"  present {heading}")
             continue
         if dry_run:
             print(f"  would add {heading}")
             continue
-        sections.append(f"## {heading}\n\n{seed_body(text)}\n")
+        sections.append(f"## {heading}\n{seed_mark(s)}\n\n{body}\n")
         print(f"  added: {heading}")
     if not dry_run:
         if current is None:

@@ -35,6 +35,7 @@ import os
 import plistlib
 import re
 import shutil
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -64,12 +65,17 @@ UNSEEN, UNSURE = "CANNOT SEE", "CANNOT TELL"
 ASSISTANTS = ("claude", "chatgpt", "both")
 ASSISTANT_NAMES = {"claude": "Claude", "chatgpt": "ChatGPT", "both": "Claude and ChatGPT"}
 
-TRUST_WHERE = ('in ChatGPT, open the ChatGPT menu, choose Settings, choose Hooks (under Coding), '
-               'open "User config", and find the hook whose command ends bash-guard.py')
-TRUST_CHECK = ("To check: " + TRUST_WHERE + ". If a Trust button shows beside it, press it, "
-               "and make sure its switch is on.")
-TRUST_FIX = ("To put it right: " + TRUST_WHERE + ", press Trust beside it and turn its switch on. "
-             "ChatGPT asks for this again whenever Moblee updates the guard.")
+# The five steps only the owner can take, in the same words wherever Moblee prints them.
+TRUST_STEPS = ('1. Open the ChatGPT menu and choose Settings. 2. Choose Hooks, under the heading Coding. '
+               '3. Open "User config". 4. Press Trust beside the hook that ends bash-guard.py. '
+               '5. Turn its switch on. If ChatGPT was open during this, quit it and open it again so that '
+               'it reads the whole rules file.')
+TRUST_PROVE = ("Then prove it: python3 scripts/moblee-doctor.py --prove-guard (run from the Moblee folder; "
+               "in the Moblee app, press Prove the guard). It uses a little of your ChatGPT allowance.")
+TRUST_AGAIN = ("You must do this again after any Moblee update that changes the guard. "
+               "ChatGPT will not remind you.")
+TRUST_CHECK = "To check, and to put it right if need be: " + TRUST_STEPS + " " + TRUST_AGAIN
+TRUST_FIX = "To put it right: " + TRUST_STEPS + " " + TRUST_AGAIN
 
 
 def tidy(text: str) -> str:
@@ -121,11 +127,47 @@ def read_assistant(explicit: str | None = None) -> str:
     one word in ~/.config/moblee/assistant; no file means claude."""
     if explicit:
         return explicit
+    return choice_on_record() or "claude"
+
+
+def choice_on_record() -> str | None:
+    """The word in ~/.config/moblee/assistant, read as the installer and the
+    updater read it: the first line, spaces dropped, and the word exactly as
+    they write it. No file, or anything else in it, is no choice (None)."""
     try:
-        word = (CONFIG / "assistant").read_text().strip().lower()
+        text = (CONFIG / "assistant").read_text(errors="replace")
     except OSError:
-        return "claude"
-    return word if word in ASSISTANTS else "claude"
+        return None
+    word = "".join(text.split("\n", 1)[0].split())
+    return word if word in ASSISTANTS else None
+
+
+def looks_made_for_chatgpt(vault: Path | None) -> bool:
+    """A wiki made for ChatGPT alone, told from what is on the disk, as the
+    updater tells it: AGENTS.md is the real rules file, and CLAUDE.md is either
+    not there or is the link to it that 0.9 lays down. Where CLAUDE.md is a
+    link, the wiki's VERSION must be 0.9 or later and Claude's permission
+    rules must not be in it, so that an owner of Claude who made such a link
+    by hand is never taken for an owner of ChatGPT."""
+    if vault is None:
+        return False
+    claude_md, agents_md = vault / "CLAUDE.md", vault / "AGENTS.md"
+    if not (agents_md.is_file() and not agents_md.is_symlink()):
+        return False
+    if not claude_md.exists() and not claude_md.is_symlink():
+        return True
+    try:
+        if not (claude_md.is_symlink() and os.path.samefile(str(claude_md), str(agents_md))):
+            return False
+    except OSError:
+        return False
+    if (vault / ".claude" / "settings.local.json").is_file() or not (vault / "VERSION").is_file():
+        return False
+    try:
+        version = (vault / "VERSION").read_text(errors="replace").strip()
+    except OSError:
+        return False
+    return bool(version) and not re.match(r"0\.[0-8](\.|$)", version)
 
 
 def instruction_file(vault: Path) -> Path:
@@ -446,14 +488,55 @@ def check_codex_instructions(f: Findings, vault: Path | None, assistant: str, li
             f.add(PROBLEM, "The wiki has no instruction file (AGENTS.md), so ChatGPT starts without the wiki's instructions.")
         return
     real = instruction_file(vault)  # the file Moblee's own scripts keep up to date
-    same = claude_md.is_file() and os.path.samefile(str(claude_md), str(agents_md))
-    if claude_md.is_file() and not same:
-        f.add(LOOK, "CLAUDE.md and AGENTS.md are two separate files, so what the two assistants are told can drift "
+    try:
+        same = claude_md.is_file() and os.path.samefile(str(claude_md), str(agents_md))
+    except OSError:
+        same = False
+    claude_real = claude_md.is_file() and not claude_md.is_symlink()
+    agents_real = not agents_md.is_symlink()
+    if claude_real and agents_real:
+        # Two files of their own. Moblee's scripts write to CLAUDE.md; ChatGPT reads the other.
+        try:
+            equal = claude_md.read_bytes() == agents_md.read_bytes()
+        except OSError:
+            equal = False
+        f.add(PROBLEM, "CLAUDE.md and AGENTS.md are two separate files. ChatGPT reads AGENTS.md only, and Moblee writes "
+                       "its rules and rule updates into CLAUDE.md only, so ChatGPT is not getting Moblee's rules or "
+                       "its updates until the two are made one."
+                       + (" The two are the same, word for word: most likely AGENTS.md was a link to CLAUDE.md and the "
+                          "link was lost in syncing, which left a copy in its place." if equal else "")
+                       + " Moblee's own arrangement for both assistants is AGENTS.md as a link to CLAUDE.md.", "F28")
+    elif claude_md.is_file() and not same:
+        f.add(LOOK, "CLAUDE.md and AGENTS.md do not lead to the same file, so what the two assistants are told can drift "
                     f"apart; Moblee keeps {real.name} up to date. Moblee's own arrangement for both assistants is "
                     "AGENTS.md as a link to CLAUDE.md.", "F28")
     elif assistant == "both" and not claude_md.is_file():
         f.add(PROBLEM, "The wiki is set up for both assistants but has no CLAUDE.md, so Claude starts without the "
                        "wiki's instructions. An update with both assistants chosen adds it.", "F11")
+    elif assistant == "chatgpt" and agents_real and not claude_md.exists() and not claude_md.is_symlink():
+        f.add(LOOK, "The wiki has no CLAUDE.md link beside AGENTS.md. ChatGPT does not need one, but an older copy of "
+                    "the Moblee app would not recognise this wiki; the next update adds it.", "F11")
+    # A rules file that holds almost nothing: most often a link that a syncing
+    # tool turned into a small file whose whole text is the other file's name.
+    for md, other in ((agents_md, "CLAUDE.md"), (claude_md, "AGENTS.md")):
+        if not (md.is_file() and not md.is_symlink()):
+            continue
+        try:
+            raw = md.read_bytes()
+        except OSError:
+            continue
+        if len(raw) < 200 or raw.strip() == other.encode():
+            stub = raw.strip() == other.encode()
+            f.add(PROBLEM, f"{md.name} holds almost nothing ({len(raw):,} bytes)"
+                           + (f": its whole text is the name {other}, which is what a link looks like once a syncing "
+                              "tool has turned it into a file" if stub else "")
+                           + (". ChatGPT reads this file, so it starts without the wiki's instructions."
+                              if md.name == "AGENTS.md" else
+                              ". Moblee's scripts take it for the rules file, so rule updates would go to it and not "
+                              "to the real one.")
+                           + " Nothing was changed.", "F28")
+            if md.name == "AGENTS.md":
+                return  # the size line below would call this file fine
     try:
         size = agents_md.stat().st_size
     except OSError:
@@ -483,9 +566,52 @@ def run_quiet(cmd: list, timeout: int) -> tuple[int, str]:
     notices from the owner's own hooks. A timeout is the caller's to catch."""
     env = dict(os.environ)
     env["NUDGE_SILENT"] = "1"
-    p = subprocess.run(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                       text=True, errors="replace", timeout=timeout, env=env)
-    return p.returncode, p.stdout or ""
+    # A session of its own, so that a run that overstays is ended together with
+    # everything it started (its shell, any helper programs of the owner's),
+    # and nothing is left running and using the owner's allowance.
+    p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                         text=True, errors="replace", env=env, start_new_session=True)
+
+    # The Moblee app ends a proof by ending this check-up. The agent is in a
+    # session of its own, so it is ended here, by hand, when that happens.
+    def ended(signum, frame):  # noqa: ARG001
+        raise SystemExit(1)
+
+    before = signal.signal(signal.SIGTERM, ended)
+    try:
+        out, _ = p.communicate(timeout=timeout)
+    except BaseException:  # a timeout, or the check-up itself being ended: the agent does not outlive either
+        end_group(p)
+        raise
+    finally:
+        signal.signal(signal.SIGTERM, before if before is not None else signal.SIG_DFL)
+    return p.returncode, out or ""
+
+
+def end_group(p: subprocess.Popen) -> None:
+    """End a program started by run_quiet, and everything it started. What it
+    had printed so far is let go; the caller judges by what is on the disk."""
+    try:
+        os.killpg(p.pid, signal.SIGTERM)
+    except OSError:
+        pass
+    try:
+        p.wait(timeout=5)
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+    try:
+        os.killpg(p.pid, signal.SIGKILL)  # whatever is left of the group
+    except OSError:
+        pass
+    try:
+        if p.stdout:
+            p.stdout.close()
+    except OSError:
+        pass
+    try:
+        p.wait(timeout=5)
+    except (subprocess.TimeoutExpired, OSError):
+        pass
 
 
 PROVE_PROMPT = ("Do two things in order and report exactly what happened for each, quoting any refusal "
@@ -493,6 +619,40 @@ PROVE_PROMPT = ("Do two things in order and report exactly what happened for eac
                 "One: run the shell command: rmdir emptydir  "
                 "Two: delete the file wiki/page.md using your apply_patch file-editing tool, not the shell")
 SIGNED_OUT = ("not logged in", "not signed in", "please log in", "please sign in", "401 unauthorized", "codex login")
+
+
+ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+# The line ChatGPT's agent itself writes when a hook refuses a tool call, as seen
+# in real runs (20 September 2026):
+#   2026-09-20T20:42:57.853625Z ERROR codex_core::tools::router: error=Command blocked by PreToolUse hook: Blocked by ...
+# It begins with a time and the word ERROR. The model's own account of what
+# happened never does, and is never taken as evidence.
+ROUTER_REFUSAL = re.compile(r"^\d{4}-\d\d-\d\dt\S+\s+error\s+\S+\s+error=command blocked by pretooluse hook:(.*)$")  # matched against the line in small letters
+
+
+def read_refusals(out: str) -> tuple[bool, bool, int]:
+    """What the agent's own program printed about refusals, and nothing the
+    model said: (the shell's rmdir was refused by the guard, the file-editing
+    tool's delete was refused by the guard, how many "hook: PreToolUse Blocked"
+    lines there were). A refusal counts for a route only when its line names
+    the guard (bash-guard.py) and that route, so that another hook's refusal,
+    or a refusal of one route alone, is never taken for proof of both."""
+    shell = patch = False
+    blocked = 0
+    for line in out.splitlines():
+        low = ANSI.sub("", line).strip().lower()
+        if low == "hook: pretooluse blocked":
+            blocked += 1
+            continue
+        m = ROUTER_REFUSAL.match(low)
+        if not m or "bash-guard.py" not in m.group(1):
+            continue
+        said = m.group(1)
+        if "apply_patch" in said or "delete file" in said:
+            patch = True
+        elif "rmdir" in said:
+            shell = True
+    return shell, patch, blocked
 
 
 def prove_guard(f: Findings, announce: bool) -> None:
@@ -520,13 +680,23 @@ def prove_guard(f: Findings, announce: bool) -> None:
         # both, anything under ~/.cache is a throwaway it rightly lets go.
         (scratch / "wiki").mkdir(parents=True)
         folder.mkdir()
-        (scratch / "AGENTS.md").write_text("# Scratch wiki\n\nMade by the Moblee check-up to prove the delete guard. "
+        # Neither file says what is being tested or what is expected to happen:
+        # the agent reads them, and one told that a refusal is expected may not
+        # try at all, or may describe a refusal that never took place.
+        (scratch / "AGENTS.md").write_text("# Scratch wiki\n\nA scratch folder made by Moblee. "
                                            "Nothing here matters and nothing here is the owner's.\n")
-        page.write_text("# Scratch page\n\nThe check-up asks for this page to be deleted. The guard should refuse.\n")
+        page.write_text("# Scratch page\n\nA page with nothing on it that matters.\n")
     except OSError as exc:
         f.add(UNSURE, f"The scratch wiki for the test could not be made ({exc}), so the guard could not be proved. " + TRUST_CHECK)
         return
     left = f" The scratch wiki used for the test is left at {scratch}; nothing in it matters."
+    try:
+        earlier = sorted(p.name for p in scratch.parent.glob("prove-guard-*") if p.is_dir() and p != scratch)
+    except OSError:
+        earlier = []
+    if earlier:
+        left += (f" Moblee never removes these; {len(earlier)} from earlier tests are beside it"
+                 f" (the latest: {', '.join(earlier[-3:])}) and can be removed by hand.")
     if announce:
         print("Asking ChatGPT to try two deletions in a scratch wiki. This can take up to three minutes.",
               file=sys.stderr, flush=True)
@@ -548,15 +718,26 @@ def prove_guard(f: Findings, announce: bool) -> None:
         f.add(UNSURE, "ChatGPT did not finish within three minutes, so the guard could not be proved this time. "
                       "Nothing was deleted. " + TRUST_CHECK + left)
         return
-    low = out.lower()
-    if "pretooluse blocked" in low or "blocked by pretooluse hook" in low:
-        both = sum(1 for l in low.splitlines() if l.strip() == "hook: pretooluse blocked") >= 2
-        f.add(OK, "Proved: the delete guard is running in ChatGPT. Asked to remove a folder and delete a page in a "
-                  "scratch wiki, ChatGPT was refused" + (" both times" if both else "") + " and both are still there." + left)
+    shell_refused, patch_refused, blocked_lines = read_refusals(out)
+    if shell_refused and patch_refused and blocked_lines >= 2:
+        f.add(OK, "Proved: asked through ChatGPT's agent to remove a folder and delete a page in a scratch wiki, "
+                  "it was refused both times and both are still there." + left)
         return
+    low = out.lower()
     if any(s in low for s in SIGNED_OUT):
         f.add(UNSURE, "ChatGPT does not seem to be signed in on this Mac, so the guard could not be proved. "
                       "Sign in to ChatGPT and run this again. " + TRUST_CHECK + left)
+        return
+    if shell_refused or patch_refused or blocked_lines:
+        seen = ("the shell command (rmdir) was refused, but no refusal of the file-editing tool's delete was seen"
+                if shell_refused and not patch_refused else
+                "the file-editing tool's delete was refused, but no refusal of the shell command (rmdir) was seen"
+                if patch_refused and not shell_refused else
+                "a refusal was seen, but not one that can be tied to each of the two ways of deleting")
+        f.add(UNSURE, "The folder and the page are both still there, but the guard is proved only when ChatGPT's agent "
+                      f"is seen to be refused both ways, and here {seen}. ChatGPT may not have tried one of them, or an "
+                      "older guard that watches the shell alone may have done the refusing. The guard is neither "
+                      "proved nor disproved. " + TRUST_CHECK + left)
         return
     f.add(UNSURE, "The folder and the page are both still there, but ChatGPT's output shows no refusal by the guard, "
                   "so it may simply not have tried. The guard is neither proved nor disproved. " + TRUST_CHECK + left)
@@ -572,8 +753,7 @@ def check_chatgpt(f: Findings, vault: Path | None, pack: Path | None, assistant:
                       "that comes first.")
     elif in_place:
         f.add(UNSEEN, "Whether the delete guard has been trusted in ChatGPT cannot be seen from its files, and ChatGPT "
-                      "skips the guard until it has. " + TRUST_CHECK + " Running this check-up with --prove-guard "
-                      "puts it to the test.", "F26")
+                      "skips the guard until it has. " + TRUST_CHECK + " " + TRUST_PROVE, "F26")
     limit, key_present = check_codex_limit(f)
     check_codex_instructions(f, vault, assistant, limit, key_present)
     check_skills(f, pack, CODEX_SKILLS, "ChatGPT")
@@ -610,10 +790,24 @@ def main() -> int:
 
     f = Findings()
     vault, pack = find_vault(args.vault), find_pack()
-    assistant = read_assistant(args.assistant)
+    # No choice on record means claude, as it always has, except where the wiki
+    # itself shows it was made for ChatGPT alone (a second Mac, or a Mac
+    # restored without its ~/.config folder): then ChatGPT's checks are the
+    # ones that matter, and the updater reads the wiki the same way.
+    inferred = False
+    if args.assistant:
+        assistant = args.assistant
+    else:
+        assistant = choice_on_record()
+        if assistant is None:
+            inferred = looks_made_for_chatgpt(vault)
+            assistant = "chatgpt" if inferred else "claude"
     wants_claude = assistant in ("claude", "both")
     wants_chatgpt = assistant in ("chatgpt", "both")
     f.add(OK, f"This wiki is set up to be used with {ASSISTANT_NAMES[assistant]}.")
+    if inferred:
+        f.add(LOOK, "No choice of assistant is on record on this Mac. The wiki is laid out for ChatGPT alone "
+                    "(AGENTS.md is its real rules file), so it was checked as one. The next update records the choice.", "F11")
     if wants_claude:
         settings = check_settings(f, vault)
         check_guard(f, settings, pack)
@@ -645,7 +839,7 @@ def main() -> int:
         if not bad and not unseen:
             print("Everything looks right.")
         elif not bad:
-            print(f"Nothing was seen to be wrong. {len(unseen)} thing(s) cannot be seen from here; the line says how to check.")
+            print("Nothing was seen to be wrong, but some things cannot be seen from here; each such line says how to check.")
         else:
             print(f"{len(bad)} thing(s) to look at. The field guide (skills/companion/field-guide.md) explains each."
                   + (f" {len(unseen)} more cannot be seen from here; the line says how to check." if unseen else ""))
@@ -672,7 +866,7 @@ def main() -> int:
         body += [f"- **{r['level']}** {anon(r['text'])}" + (f" (field guide {r['guide']})" if r["guide"] and r["level"] != OK else "")
                  for r in f.rows]
         body += ["", "## What the owner noticed", "",
-                 "*(Claude writes here, in the owner's words, what seemed wrong, leaving out names and page titles, and nothing else.)*", ""]
+                 "*(your assistant writes here, in the owner's words, what seemed wrong, leaving out names and page titles, and nothing else.)*", ""]
         path.write_text("\n".join(body))
         print(f"\nReport written to {tidy(path)}")
     return 0

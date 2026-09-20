@@ -28,7 +28,7 @@ The **context layer** is `wiki/_context.md`, the working state of the wiki: what
 
 The **index layer** is `wiki/Index.md`, a compact catalogue of every top-level page. One short line per page, organised by category. Index is for navigation; chronology lives in the log.
 
-The four canonical files (`CLAUDE.md`, `Index.md`, `_context.md`, `log.md`) each own one role and do not duplicate one another. Keeping them separate, and not folding one into another, is what keeps the system queryable and easy to maintain. A fifth file, `wiki/Identity.md`, sets how your assistant works with you: it checks before it claims, it challenges rather than flatters, and it never deletes without your yes.
+The four canonical files (`CLAUDE.md`, `Index.md`, `_context.md`, `log.md`) each own one role and do not duplicate one another. Keeping them separate, and not folding one into another, is what keeps the system queryable and easy to maintain. A fifth file, `wiki/Identity.md`, sets how your assistant works with you: it checks before it claims, it challenges rather than flatters, and it never deletes; if something should go, it tells you, and you remove it yourself.
 
 ## Why it works
 

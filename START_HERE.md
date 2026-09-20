@@ -28,7 +28,7 @@ If it is somewhere else, type `cd ` (with the space), drag the folder from Finde
 bash scripts/install.sh
 ```
 
-It asks for your name, a name for your wiki, where to put it (the suggested place is fine) and which assistant you will use. It then builds the wiki, turns on the safety layer (your assistant cannot delete anything in your wiki; if something should go, it tells you what and where, and you remove it yourself) and installs the core skills. It ends with "Done" and your next steps. `docs/02-install.md` walks through every question and message.
+It asks for your name, a name for your wiki, where to put it (the suggested place is fine) and which assistant you will use. It then builds the wiki, puts the safety layer in place (with Claude, your assistant cannot delete anything in your wiki from that moment; with ChatGPT, once you have done the Trust step below; if something should go, it tells you what and where, and you remove it yourself) and installs the core skills. It ends with "Done" and your next steps. `docs/02-install.md` walks through every question and message.
 
 **With ChatGPT, one more step is yours.** ChatGPT does not run the delete guard until you press Trust beside it in ChatGPT's settings, and until then nothing on screen says the guard is off. The installer prints the steps, and `docs/09-safety.md` gives them with a way to prove the guard is working.
 
@@ -42,7 +42,7 @@ In Obsidian, choose Open folder as vault and pick the folder the installer made.
 
 **With Claude:** Back in Terminal, go into your wiki's folder and start Claude (the installer prints both lines for you). If you used the app, its last screen shows three clicks in Claude's own app instead: click Code (which needs a paid Claude plan) and pick your wiki's folder.
 
-**With ChatGPT:** Open the ChatGPT app, choose Work at the top, and open your wiki's folder as a project. <!-- verify on testdev -->
+**With ChatGPT:** Open ChatGPT, choose Work, and open your wiki folder. <!-- verify on testdev -->
 
 Then say:
 

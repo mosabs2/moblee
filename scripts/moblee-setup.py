@@ -126,10 +126,13 @@ def assistant_choice() -> str:
     """The owner's assistant: claude, chatgpt or both. The installer keeps it
     as one word in ~/.config/moblee/assistant; no file means claude. Read only
     to choose what the checklist says about itself; nothing else depends on it."""
+    # Read as the installer and the updater read it: the first line, spaces
+    # dropped, and the word exactly as they write it. Anything else is no choice.
     try:
-        word = (CONFIG_DIR / "assistant").read_text().strip().lower()
+        text = (CONFIG_DIR / "assistant").read_text(errors="replace")
     except (OSError, ValueError):
         return "claude"
+    word = "".join(text.split("\n", 1)[0].split())
     return word if word in ("claude", "chatgpt", "both") else "claude"
 
 

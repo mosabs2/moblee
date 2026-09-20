@@ -8,7 +8,7 @@ description: Walk the user through defining their personal brand identity (colou
 A short interview skill that captures the user's personal visual identity (primary colour, secondary colour, gradient, typography, optional monogram or logo) and writes the answers into two places:
 
 1. A new or refreshed `wiki/Brand Reference.md` page in the user's vault, documenting the brand in human-readable form.
-2. The CSS custom properties at the top of `~/.claude/skills/wiki-to-pdf/brand.css`, so every subsequent PDF renders in the new brand without further configuration. **With ChatGPT:** the file is `~/.agents/skills/wiki-to-pdf/brand.css`; use that path wherever this skill names the other, the Brand Reference page included. It is outside the wiki folder, so ChatGPT asks the owner to approve the edit; say so before making it.
+2. The CSS custom properties at the top of `~/.claude/skills/wiki-to-pdf/brand.css`, so every subsequent PDF renders in the new brand without further configuration. **With ChatGPT:** the file is `~/.agents/skills/wiki-to-pdf/brand.css`; use that path wherever this skill names the other, the Brand Reference page included. It is outside the wiki folder, so ChatGPT asks the owner to approve the edit; say so before making it. This file is the one exception to the rule that the assistant never writes in its own skills folder: edit `brand.css` and nothing else there, and ask for no other approval in that folder.
 
 The skill is conversational, not declarative. It works through six short stages, asking one question at a time and offering thoughtful defaults when the user has no strong preference.
 

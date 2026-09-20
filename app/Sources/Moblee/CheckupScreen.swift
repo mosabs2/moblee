@@ -63,6 +63,8 @@ final class Checkup: ObservableObject {
     static var knownBeforeDrawing: Bool?
 
     init() {
+        // The picture of the older-app case is of a check-up that looks for ChatGPT.
+        if Self.pretendOlderChatGPT { kinds = [.developerTools, .chatgpt, .obsidian] }
         if let known = Self.knownBeforeDrawing {
             toolsInstalled = known
             apply()
@@ -120,6 +122,22 @@ final class Checkup: ObservableObject {
         }
     }
 
+    /// ChatGPT is being looked for, and the ChatGPT app on this Mac is an
+    /// older one that has no agent inside it: the screen then says so, since
+    /// "ChatGPT is missing" would puzzle an owner who can see it in Applications.
+    var chatgptIsOlder: Bool {
+        kinds.contains(.chatgpt) && present["ChatGPT"] == false && chatgptState == .older
+    }
+
+    /// Picture-file drawing can show the older-app case without one on the Mac.
+    static var pretendOlderChatGPT = false
+
+    private var chatgptState: ChatGPTApp.State {
+        if Self.pretendOlderChatGPT || pretendMissing.contains("chatgpt-older") { return .older }
+        if pretendMissing.contains("chatgpt") { return .missing }
+        return ChatGPTApp.state
+    }
+
     private func isThere(_ kind: Need.Kind) -> Bool {
         switch kind {
         case .developerTools:
@@ -127,7 +145,7 @@ final class Checkup: ObservableObject {
         case .claude:
             return !pretendMissing.contains("claude") && Self.appInstalled("com.anthropic.claudefordesktop")
         case .chatgpt:
-            return !pretendMissing.contains("chatgpt") && ChatGPTApp.installed
+            return chatgptState == .ready
         case .obsidian:
             return !pretendMissing.contains("obsidian") && Self.appInstalled("md.obsidian")
         }
@@ -199,7 +217,7 @@ struct CheckupScreen: View {
             sentence: checkup.readyToGoOn
                 ? "Your Mac is ready."
                 : (checkup.asked.isEmpty
-                   ? "Your Mac needs these first. Tap Get."
+                   ? (checkup.chatgptIsOlder ? ChatGPTApp.olderSentence : "Your Mac needs these first. Tap Get.")
                    : "Say yes in the window that opened. It takes a few minutes."),
             buttonTitle: "Next",
             buttonEnabled: checkup.readyToGoOn,

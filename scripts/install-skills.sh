@@ -64,11 +64,15 @@ set -- ${REST[@]+"${REST[@]}"}
 if [[ $ASSISTANT_GIVEN -eq 0 ]]; then
   # the owner's choice, kept as one word by the installer; no file means claude
   CHOICE_FILE="$HOME/.config/moblee/assistant"
+  # read as the installer and the updater read it: the first line, spaces
+  # dropped, and the word exactly as they write it (small letters); anything
+  # else counts as no choice
   if [[ -f "$CHOICE_FILE" ]]; then
-    read -r ASSISTANT < "$CHOICE_FILE" || true
+    ASSISTANT="$(head -1 "$CHOICE_FILE" 2>/dev/null | tr -d '[:space:]' || true)"
   fi
+else
+  ASSISTANT="$(printf '%s' "$ASSISTANT" | tr '[:upper:]' '[:lower:]')"
 fi
-ASSISTANT="$(printf '%s' "$ASSISTANT" | tr '[:upper:]' '[:lower:]')"
 case "$ASSISTANT" in
   claude|chatgpt|both) ;;
   *)
@@ -104,16 +108,32 @@ BACKUP_ROOT="$HOME/.config/moblee/backups/$(date '+%Y%m%d-%H%M%S')"
 DEST_NAMES=()
 DEST_DIRS=()
 DEST_BACKUPS=()
+DEST_KINDS=()
 if [[ "$ASSISTANT" == "claude" || "$ASSISTANT" == "both" ]]; then
   DEST_NAMES+=("Claude")
   DEST_DIRS+=("$HOME/.claude/skills")
   DEST_BACKUPS+=("$BACKUP_ROOT/skills")
+  DEST_KINDS+=("claude")
 fi
 if [[ "$ASSISTANT" == "chatgpt" || "$ASSISTANT" == "both" ]]; then
   DEST_NAMES+=("ChatGPT")
   DEST_DIRS+=("$HOME/.agents/skills")
   DEST_BACKUPS+=("$BACKUP_ROOT/skills-chatgpt")
+  DEST_KINDS+=("chatgpt")
 fi
+# The names Moblee has itself put into ~/.agents/skills, one to a line. That
+# folder is shared with other tools, so only a skill named here is ever moved
+# aside to make way for a newer copy; see install_into below.
+AGENTS_RECORD="$HOME/.config/moblee/skills-chatgpt"
+ours_in_agents() {
+  [[ -f "$AGENTS_RECORD" ]] && grep -qxF -- "$1" "$AGENTS_RECORD" 2>/dev/null
+}
+record_in_agents() {
+  if ! ours_in_agents "$1"; then
+    mkdir -p "$HOME/.config/moblee"
+    echo "$1" >> "$AGENTS_RECORD" 2>/dev/null || true
+  fi
+}
 case "$ASSISTANT" in
   claude)  WHO="Claude" ;;
   chatgpt) WHO="ChatGPT" ;;
@@ -164,9 +184,22 @@ install_into() {
     fi
 
     dst="$SKILLS_DST/$name"
+    # (v0.9) ~/.agents/skills is shared with other tools, and Moblee put nothing
+    # there before 0.9. A skill of the same name found there that is not this
+    # Moblee's copy is replaced on --update only if it is known to be Moblee's:
+    # a record of the names Moblee has installed there is kept beside the
+    # choice (~/.config/moblee/skills-chatgpt). Anything else is left alone and
+    # reported, as the safe install has always done.
+    if [[ -d "$dst" && $FORCE -eq 1 && "$DEST_KIND" == "chatgpt" ]] && ! ours_in_agents "$name" \
+       && ! diff -rq -x .DS_Store "$entry" "$dst" >/dev/null 2>&1; then
+      SKIPPED+=("$name (a different skill of this name is already installed; it was left alone)")
+      DIFFERENT+=("$name")
+      continue
+    fi
     if [[ -d "$dst" && $FORCE -eq 0 ]]; then
       if diff -rq -x .DS_Store "$entry" "$dst" >/dev/null 2>&1; then
         SAME+=("$name")          # this Moblee's own copy is already there: nothing to do
+        if [[ "$DEST_KIND" == "chatgpt" ]]; then record_in_agents "$name"; fi
       else
         # A different skill already has this name: an older Moblee's copy, or
         # something of the owner's own. It is left exactly as it is, and that is
@@ -186,15 +219,18 @@ install_into() {
 
     cp -R "$entry" "$dst"
     INSTALLED+=("$name")
+    if [[ "$DEST_KIND" == "chatgpt" ]]; then record_in_agents "$name"; fi
   done
 
   # ----- skills that have been renamed or folded into another -----------------
   # Left in place, an old skill would answer to the same phrases as its successor.
   # Once the successor is installed, the old copy is moved to the backups folder
-  # (never deleted). "old:new" pairs.
+  # (never deleted). "old:new" pairs. For Claude's folder only: the old skills
+  # were only ever installed there, so one of the same name in the folder
+  # ChatGPT shares with other tools is somebody else's and is left alone.
   for pair in "get-started:companion"; do
     old="${pair%%:*}"; new="${pair##*:}"
-    if [[ -d "$SKILLS_DST/$old" && -d "$SKILLS_DST/$new" ]]; then
+    if [[ "$DEST_KIND" == "claude" && -d "$SKILLS_DST/$old" && -d "$SKILLS_DST/$new" ]]; then
       mkdir -p "$BACKUP_DIR"
       mv "$SKILLS_DST/$old" "$BACKUP_DIR/$old"
       KEPT=1
@@ -227,7 +263,21 @@ install_into() {
     done
   fi
 
-  if [[ ${#DIFFERENT[@]} -gt 0 ]]; then
+  if [[ ${#DIFFERENT[@]} -gt 0 && "$DEST_KIND" == "chatgpt" ]]; then
+    echo ""
+    echo "Moblee's own copy of these skills was NOT installed for ChatGPT, because a"
+    echo "different skill already has the name in ~/.agents/skills, a folder other"
+    echo "tools share: ${DIFFERENT[*]}"
+    echo "Nothing of yours was touched. To use Moblee's copy, move yours out of that"
+    echo "folder yourself and run this again."
+    if [[ $FORCE -eq 0 ]]; then
+      echo "(A copy that an earlier Moblee put there itself is replaced, and kept in the"
+      echo "backups folder, by:  bash scripts/install-skills.sh --update)"
+      ANY_DIFFERENT=1
+    fi
+    # On --update this is said and the run carries on: the updater must reach
+    # the safety layer, and the check-up names the skills that are missing.
+  elif [[ ${#DIFFERENT[@]} -gt 0 ]]; then
     echo ""
     echo "Moblee's own copy of these skills was NOT installed, because a different"
     echo "skill already has the name: ${DIFFERENT[*]}"
@@ -245,6 +295,7 @@ i=0
 while [[ $i -lt ${#DEST_DIRS[@]} ]]; do
   SKILLS_DST="${DEST_DIRS[$i]}"
   BACKUP_DIR="${DEST_BACKUPS[$i]}"
+  DEST_KIND="${DEST_KINDS[$i]}"
   if [[ ${#DEST_DIRS[@]} -gt 1 ]]; then
     if [[ $i -gt 0 ]]; then
       echo ""
@@ -279,8 +330,16 @@ if [[ "$INSTALL_DEPS" =~ ^[Yy]$ ]]; then
   # them, so Homebrew decides whether this step can run at all. Checking it
   # first means a Mac without Homebrew skips cleanly instead of failing twice
   # on its way to the same answer.
-  DEPS_LOG="$HOME/.claude/moblee-pdf-setup.log"
-  mkdir -p "$HOME/.claude"   # not there yet when ChatGPT is the only assistant
+  # The log stays where it has always been for an owner of Claude. An owner of
+  # ChatGPT alone has no ~/.claude folder and is not given one: theirs goes
+  # beside Moblee's other records.
+  if [[ "$ASSISTANT" == "chatgpt" ]]; then
+    DEPS_LOG="$HOME/.config/moblee/moblee-pdf-setup.log"
+    mkdir -p "$HOME/.config/moblee"
+  else
+    DEPS_LOG="$HOME/.claude/moblee-pdf-setup.log"
+    mkdir -p "$HOME/.claude"
+  fi
 
   if ! command -v brew >/dev/null 2>&1; then
     echo ""
@@ -349,7 +408,7 @@ if [[ "$ASSISTANT" == "both" ]]; then
   echo ""
 fi
 if [[ "$ASSISTANT" == "chatgpt" || "$ASSISTANT" == "both" ]]; then
-  echo "In ChatGPT, open your wiki's project and type \`@\` in the message box."
+  echo "For ChatGPT: open ChatGPT, choose Work, and open your wiki folder. Then type \`@\` in the message box."
   echo "The installed skills should appear in the list. If they do not, quit"
   echo "ChatGPT and open it again."
 fi

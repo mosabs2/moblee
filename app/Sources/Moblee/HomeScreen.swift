@@ -40,6 +40,8 @@ struct HomeScreen: View {
                 ExplainScreen(tile: tile)
             } else if home.updateAvailable {
                 updatePrompt
+            } else if home.repairIsForANewerMoblee {
+                newerMobleePrompt
             } else if home.needsRepair {
                 repairPrompt
             } else if showsTrust {
@@ -111,9 +113,12 @@ struct HomeScreen: View {
                 }
             }
         }
-        // Top right: the bottom of the screen belongs to the big button and the
-        // quiet one under it, and the top left to the window's own buttons.
-        .overlay(alignment: .topTrailing) {
+        // Bottom right. The window has no title bar of its own, so its top strip
+        // is where the window is dragged by, and a small control put there may
+        // not take a click at all; the top is also where a two-line sentence
+        // reaches. The big button and the quiet one under it sit in the middle
+        // of the bottom, and this corner is free on every home screen.
+        .overlay(alignment: .bottomTrailing) {
             if showsMain && !repairing { assistantControl }
         }
         .onAppear {
@@ -173,6 +178,28 @@ struct HomeScreen: View {
         }
     }
 
+    /// The guard looks off on a wiki that a newer Moblee made. This app's
+    /// copies are older than the wiki's, so it does not offer Repair, and says
+    /// why. There is nothing for it to do, so the button closes it.
+    private var newerMobleePrompt: some View {
+        ScreenFrame(sentence: Self.newerMobleeSentence,
+                    buttonTitle: "Close Moblee", showsBack: false,
+                    action: { if !flow.isTestMode { NSApplication.shared.terminate(nil) } }) {
+            VStack(spacing: 14) {
+                Image(systemName: "arrow.down.app.fill")
+                    .font(.system(size: 96)).foregroundStyle(Theme.waiting)
+                    .accessibilityHidden(true)
+                Text("Your wiki: \(home.wikiVersion)   This Moblee: \(home.packVersion)")
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Your wiki is version \(home.wikiVersion). This Moblee is version \(home.packVersion).")
+            }
+        }
+    }
+
+    static let newerMobleeSentence = "Your wiki is newer than this Moblee, so this one cannot repair its guard. Get the newest Moblee."
+    static let changeNeedsNewest = "To change it, get the newest Moblee."
+
     private func openClaude() {
         if !flow.isTestMode,
            let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.anthropic.claudefordesktop") {
@@ -187,21 +214,46 @@ struct HomeScreen: View {
     /// Small and quiet, in the corner: which assistant the wiki is for, a way
     /// to change it (the question, then the updater with the answer), and, for
     /// an owner who uses ChatGPT, a way to put the guard to the test.
+    ///
+    /// Change is made by this app's updater, so it is not offered on a wiki a
+    /// newer Moblee made (the words say where to go instead), nor while
+    /// something is being added.
     private var assistantControl: some View {
-        HStack(spacing: 10) {
-            Text("Assistant: \(home.assistant.name)")
-                .foregroundStyle(.secondary)
-            Button("Change") { flow.beginUpdate(changingAssistant: true) }
-                .buttonStyle(.plain).foregroundStyle(Theme.accent)
-                .accessibilityIdentifier("change-assistant")
-            if home.assistant.wantsChatGPT {
-                Button("Prove the guard") { trustOpen = true }
-                    .buttonStyle(.plain).foregroundStyle(Theme.accent)
-                    .accessibilityIdentifier("prove-guard")
+        VStack(alignment: .trailing, spacing: 0) {
+            if home.wikiIsNewerThanApp {
+                Text(Self.changeNeedsNewest)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .padding(.trailing, 9)
+            }
+            HStack(spacing: 2) {
+                Text("Assistant: \(home.assistant.name)")
+                    .foregroundStyle(.secondary)
+                    .padding(.trailing, home.canChangeAssistant || home.assistant.wantsChatGPT ? 6 : 9)
+                if home.canChangeAssistant {
+                    cornerButton("Change", id: "change-assistant") { flow.beginUpdate(changingAssistant: true) }
+                }
+                if home.assistant.wantsChatGPT {
+                    cornerButton("Prove the guard", id: "prove-guard") { trustOpen = true }
+                }
             }
         }
         .font(.system(size: 12, weight: .semibold, design: .rounded))
-        .padding(.trailing, 18).padding(.top, 12)
+        // Low enough that the upper line clears the big button, and far enough
+        // right that the lower one clears the quiet button in the middle.
+        .padding(.trailing, 12).padding(.bottom, 4)
+    }
+
+    /// Small words, but a target a finger on a trackpad does not miss: the
+    /// whole padded box takes the click, not the letters alone.
+    private func cornerButton(_ title: String, id: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .padding(.horizontal, 9).padding(.vertical, 6)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).foregroundStyle(Theme.accent)
+        .accessibilityIdentifier(id)
     }
 }
 
@@ -419,6 +471,10 @@ struct UpdateScreen: View {
     }
 
     private func backHome() {
+        // An update that put a new guard in place for ChatGPT asks for the
+        // owner's trust again, even if they put the Trust screen off earlier
+        // in this opening of the app: that was an answer about the old guard.
+        if install.trustNeeded { home.trustSetAside = false }
         home.load(home: flow.home, bundledPack: flow.bundledPack)
         flow.mode = .home
     }
