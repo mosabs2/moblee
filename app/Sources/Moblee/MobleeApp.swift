@@ -48,7 +48,7 @@ enum Practice {
     static let args: [String] = on ? CommandLine.arguments : []
     static let switches: Set<String> = ["--home", "--pack", "--pretend-missing", "--snapshot", "--rehearse",
                                         "--self-drive", "--dark", "--owner", "--step", "--fresh", "--icon",
-                                        "--move-to"]
+                                        "--move-to", "--move-break"]
 }
 
 /// Quitting half-way through a build or an update would leave it half done, so
@@ -88,7 +88,16 @@ final class Flow: ObservableObject {
     /// The app is somewhere it should not stay (Downloads, usually): before
     /// anything else, it offers to move itself to Applications.
     @Published var offerMove: Bool = Placement.shouldOffer
-    var movedTo: URL?
+    var moveOutcome: Placement.Outcome?
+
+    /// The move was made in practice, declined, or could not be made: carry on
+    /// with what the app was opened for. The home screen's own work (settling
+    /// the pack, reading the requests) starts only now, so that a move never
+    /// cuts a half-made copy of the pack off in the middle.
+    func moveSettled() {
+        offerMove = false
+        if mode == .home { homeModel.load(home: home, bundledPack: bundledPack) }
+    }
     @Published var ownerName: String = "" {
         didSet { if oldValue != ownerName { chosenPlace = nil } }   // a new name means a new folder
     }
@@ -123,7 +132,7 @@ final class Flow: ObservableObject {
         AppDelegate.install = install
         if HomeModel.existingVault(home: home) != nil && !args.contains("--fresh") {
             mode = .home
-            homeModel.load(home: home, bundledPack: bundledPack)
+            if !offerMove { homeModel.load(home: home, bundledPack: bundledPack) }
         } else {
             // A wiki that an earlier run started and never finished (the note is
             // written by the installer's first step and marked finished by its

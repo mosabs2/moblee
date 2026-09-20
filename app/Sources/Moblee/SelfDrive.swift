@@ -64,20 +64,33 @@ enum SelfDrive {
         }
 
         // Started with --move-to <practice folder>, the app first offers to move
-        // itself to Applications, as it does when opened from Downloads. The
-        // real button is pressed; the copy must be whole; and nothing else may
-        // have started meanwhile. (A practice move leaves the original where it
-        // is and does not reopen the app; those two lines are the system's own.)
+        // itself to Applications, as it does when opened from Downloads. This
+        // is a short run of its own, made from a scratch copy of the app that
+        // the test script has put in a pretend Downloads: the real button is
+        // pressed and the run ends there, because a moved app goes on living in
+        // a bundle that is now in the Bin, which the real app never does (it
+        // reopens from Applications). The test script reads the folders after.
+        // Everything is the real code but the Mac's own Bin (a scratch folder
+        // stands in) and the reopening.
         if let folder = Placement.practiceFolder {
             await expect("opened outside Applications, the app offers to move itself first") { flow.offerMove }
+            await expect("and nothing else has started behind the offer") { !flow.homeModel.loaded && flow.install.phase == .idle }
             say("move to Applications"); await pause(1.0)
             click(bigButton)
-            await expect("clicking Move it there makes a whole copy and carries on", within: 60) {
-                !flow.offerMove
-                    && FileManager.default.isExecutableFile(atPath: folder.appendingPathComponent("Moblee.app/Contents/MacOS/Moblee").path)
-                    && FileManager.default.fileExists(atPath: folder.appendingPathComponent("Moblee.app/Contents/Resources/pack/scripts/install.sh").path)
+            if Placement.practiceBreak != nil {
+                // The new copy is made to fail its check. The screen must stay,
+                // say so, and leave everything as it was; Carry on then goes on.
+                await pause(6)
+                await expect("a copy that fails its check is not called a move") { flow.offerMove && flow.moveOutcome == nil }
+                click(bigButton)             // "Carry on"
+                await expect("Carry on goes on to the welcome screen") { !flow.offerMove && flow.step == .welcome }
+                say("the broken move changed nothing and the app carried on"); exit(0)
             }
-            await expect("the welcome screen is what follows, untouched") { flow.step == .welcome && flow.mode == .install }
+            await expect("clicking Move it there settles where Moblee lives and carries on", within: 60) {
+                !flow.offerMove && flow.moveOutcome != nil
+            }
+            let there = folder.appendingPathComponent("Moblee.app", isDirectory: true)
+            say(flow.moveOutcome == .moved(there) ? "moved" : "already there, and that one is used"); exit(0)
         }
 
         say("welcome"); await pause(1.5)
@@ -214,7 +227,14 @@ enum SelfDrive {
             flow.homeModel.tiles.first(where: { $0.key == "google" })?.state == .handedOver
         }
         if let g = flow.homeModel.tiles.first(where: { $0.key == "google" }) { flow.homeModel.markDone(g) }
-        await pause(5)                        // longer than one re-read of the requests, which must not undo it
+        // Then the home screen is read afresh, as it is when Moblee is next
+        // opened: the tile must come back as done from the owner's saved word
+        // alone, since nothing else can ever say so for clicks inside Claude.
+        if let i = flow.homeModel.tiles.firstIndex(where: { $0.key == "google" }) { flow.homeModel.tiles[i].state = .waiting }
+        await pause(5)                        // longer than one re-read of the requests
+        await expect("read afresh, the Google tile is still done, from the owner's word alone") {
+            flow.homeModel.tiles.first(where: { $0.key == "google" })?.state == .done
+        }
         let googleState = flow.homeModel.tiles.first(where: { $0.key == "google" })?.state
         say("google ended: \(String(describing: googleState))")
 

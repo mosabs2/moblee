@@ -30,7 +30,9 @@ final class HomeModel: ObservableObject {
         var files: [String] = []       // for a made-to-measure skill: what is in it
         var body: String = ""          // and the whole of what Claude would be told to do
         var steps: [[String]] = []     // for clicks inside Claude: where to go, what to press, how to tell it worked
+        var asked: String = ""         // the date on the request: the owner's Done answers this asking, not every later one
         var id: String { kind.rawValue + ":" + key }
+        var doneKey: String { asked.isEmpty ? id : id + "@" + asked }
 
         var symbol: String {
             switch kind {
@@ -255,6 +257,7 @@ final class HomeModel: ObservableObject {
                             why: why, detail: "A few clicks inside Claude", how: .clicks, paid: false)
             }
             guard var t = tile, !seen.contains(t.id) else { continue }
+            t.asked = Self.plain(r["asked"] as? String ?? "", limit: 20)
             seen.insert(t.id)
             if let old = tiles.first(where: { $0.id == t.id }) {      // keep what is already known
                 t.state = old.state; t.note = old.note
@@ -307,7 +310,7 @@ final class HomeModel: ObservableObject {
     /// A connection is made by clicks inside Claude, where Moblee cannot see.
     /// So the owner says when it is done, and the tile gets out of the way.
     func markDone(_ tile: Tile) {
-        var all = ownerSaidDone(); all.insert(tile.id)
+        var all = ownerSaidDone(); all.insert(tile.doneKey)
         if let data = try? JSONSerialization.data(withJSONObject: ["done": Array(all).sorted()], options: [.prettyPrinted]) {
             try? FileManager.default.createDirectory(at: doneFile.deletingLastPathComponent(), withIntermediateDirectories: true)
             try? data.write(to: doneFile, options: .atomic)
@@ -332,7 +335,7 @@ final class HomeModel: ObservableObject {
                 // Clicks inside Claude happen where neither Moblee nor the pack's
                 // check can see, so there the owner's word is what finishes it.
                 if tiles[i].how == .clicks, tiles[i].state != .done,
-                   ownerSaidDone().contains(tiles[i].id) { tiles[i].state = .done }
+                   ownerSaidDone().contains(tiles[i].doneKey) { tiles[i].state = .done }
             case .skill:
                 let marker = home.appendingPathComponent(".claude/skills/\(tiles[i].key)/.made-for-you")
                 let installed = home.appendingPathComponent(".claude/skills/\(tiles[i].key)/SKILL.md")
@@ -343,7 +346,7 @@ final class HomeModel: ObservableObject {
                     tiles[i].state = .done
                 }
             case .connection:
-                if tiles[i].state != .done, ownerSaidDone().contains(tiles[i].id) { tiles[i].state = .done }
+                if tiles[i].state != .done, ownerSaidDone().contains(tiles[i].doneKey) { tiles[i].state = .done }
             }
         }
     }
@@ -389,6 +392,7 @@ final class HomeModel: ObservableObject {
                   guard e["step"] as? String == tile.key else { return }
                   if e["state"] as? String == "ok" { worked = true }
                   if e["state"] as? String == "fail" { why = Self.plain(e["detail"] as? String ?? "", limit: 160) }
+                  if e["state"] as? String == "unseen" { why = "Moblee cannot see whether this worked. Ask Claude to try it." }
               },
               onEnd: { [weak self] code in
                   self?.tasks[tile.id] = nil
@@ -422,25 +426,33 @@ final class HomeModel: ObservableObject {
     /// The last lines end this window's own shell before it can speak. Left to
     /// exit by itself, Apple's Terminal set-up prints "truncating history
     /// files" and "Deleting expired sessions", which read badly beside a
-    /// promise that nothing is deleted. That shell exists only to run this
-    /// file, and it is ended only when it is what started it, in Terminal.
+    /// promise that nothing is deleted. That shell is ended only when Terminal
+    /// opened it for this file: the file notes, as its first act, whether the
+    /// shell that started it is under ten seconds old. A shell someone was
+    /// already working in (the file run by hand) is older, and is left alone.
     func openTerminal(for tile: Tile) {
         guard let pack, tile.kind == .item, catalogue[tile.key] != nil else { return }
         let dir = home.appendingPathComponent("Library/Application Support/Moblee/run", isDirectory: true)
         let file = dir.appendingPathComponent("add-\(tile.key).command")
         let script = """
         #!/bin/bash
+        opened_for_this=no
+        case "$(ps -o etime= -p "$PPID" 2>/dev/null | tr -d ' ')" in 00:0[0-9]) opened_for_this=yes ;; esac
         clear
         echo "Moblee: adding one item for your wiki."
         echo "If it asks for your Mac password, type it and press Return."
         echo "Nothing shows while you type. That is normal."
         echo ""
         cd '\(pack.path.replacingOccurrences(of: "'", with: "'\\''"))' || exit 1
-        python3 scripts/moblee-setup.py --only \(tile.key) --yes
+        if python3 scripts/moblee-setup.py --only \(tile.key) --yes; then
+          echo ""
+          echo "Finished. Close this window and go back to Moblee."
+        else
+          echo ""
+          echo "That did not finish. Nothing is broken. Close this window and tell Claude."
+        fi
         echo ""
-        echo "Finished. Close this window and go back to Moblee."
-        echo ""
-        if [ "${TERM_PROGRAM:-}" = "Apple_Terminal" ]; then
+        if [ "$opened_for_this" = yes ] && [ "${TERM_PROGRAM:-}" = "Apple_Terminal" ]; then
           case "$(ps -o comm= -p "$PPID" 2>/dev/null)" in
             -zsh|zsh|*/zsh|-bash|bash|*/bash) kill -9 "$PPID" ;;
           esac

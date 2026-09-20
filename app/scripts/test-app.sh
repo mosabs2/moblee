@@ -51,29 +51,59 @@ grep -q "Tom & Sam" "$V/CLAUDE.md" 2>/dev/null && ok "the owner's name arrives a
 "$BIN" --rehearse "$WORK/screens" > "$WORK/refuse.txt" 2>&1
 [[ $? -eq 2 ]] && ok "a rehearsal without a practice home is refused" || bad "a rehearsal without a practice home is refused"
 
-# The download mark macOS puts on a downloaded app, put here on one file of
-# this build, so the move to Applications can be seen to clear it from the copy.
-xattr -w com.apple.quarantine "0081;00000000;Safari;" "$APP/Contents/Info.plist" 2>/dev/null
+# --- the move to Applications -------------------------------------------------
+# As an owner meets it: the app sits in a pretend Downloads carrying the mark
+# macOS puts on anything downloaded, and an OLDER Moblee is already in the
+# pretend Applications. Everything is the app's real code but the Mac's own Bin
+# (a scratch folder stands in) and the reopening.
+DL="$WORK/downloads"; APPS="$WORK/applications"; PBIN="$WORK/practice-bin"
+mkdir -p "$DL" "$APPS" "$WORK/home-move"
+cp -R "$APP" "$DL/Moblee.app"
+xattr -w com.apple.quarantine "0081;00000000;Safari;" "$DL/Moblee.app/Contents/Info.plist" 2>/dev/null
+cp -R "$APP" "$APPS/Moblee.app"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString 0.0.1" "$APPS/Moblee.app/Contents/Info.plist" > /dev/null
+echo "the older one" >> "$APPS/Moblee.app/Contents/old-marker.txt"
+REAL_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
+version_at() { /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$1/Contents/Info.plist" 2>/dev/null; }
+leftovers() { ls -A "$APPS" | grep -c '^\.Moblee-' | tr -d ' '; }
 
-"$BIN" --home "$WORK/home-drive" --move-to "$WORK/applications" --self-drive > "$WORK/drive.txt" 2>&1
+# first, a move whose new copy fails its check: nothing the owner had may change
+"$DL/Moblee.app/Contents/MacOS/Moblee" --home "$WORK/home-move" --move-to "$APPS" --move-break copy --self-drive > "$WORK/move-broken.txt" 2>&1
+RC=$?
+[[ $RC -eq 0 ]] && grep -q "^self-drive: the broken move changed nothing and the app carried on" "$WORK/move-broken.txt" && ok "a move that cannot be completed says so, and the app carries on" || bad "a move that cannot be completed says so (exit $RC; see $WORK/move-broken.txt)"
+[[ "$(version_at "$APPS/Moblee.app")" == "0.0.1" && -f "$APPS/Moblee.app/Contents/old-marker.txt" && ! -e "$PBIN" && -x "$DL/Moblee.app/Contents/MacOS/Moblee" && "$(leftovers)" == "0" ]] && ok "  and it left the older Moblee in Applications, the one in Downloads and the Bin exactly as they were, with no half-made copy behind" || bad "  a failed move changes nothing"
+
+# then the move itself, with the real button
+"$DL/Moblee.app/Contents/MacOS/Moblee" --home "$WORK/home-move" --move-to "$APPS" --self-drive > "$WORK/move.txt" 2>&1
+RC=$?
+MOVED="$APPS/Moblee.app"
+[[ $RC -eq 0 ]] && grep -q "^self-drive: moved" "$WORK/move.txt" && ok "opened outside Applications, the app offers to move itself, and the button moves it" || bad "the app moves itself to Applications (exit $RC; see $WORK/move.txt)"
+grep -q "^self-drive: ok: and nothing else has started behind the offer" "$WORK/move.txt" && ok "  nothing else starts while the offer is on screen" || bad "  nothing else starts while the offer is on screen"
+[[ "$(version_at "$MOVED")" == "$REAL_VERSION" && ! -e "$MOVED/Contents/old-marker.txt" && -x "$MOVED/Contents/MacOS/Moblee" && -f "$MOVED/Contents/Resources/pack/scripts/install.sh" ]] && ok "  the new Moblee is in Applications, whole, in place of the older one" || bad "  the new Moblee is in Applications in place of the older one"
+[[ "$(ls "$PBIN" 2>/dev/null | wc -l | tr -d ' ')" == "2" && -n "$(ls "$PBIN"/*/Contents/old-marker.txt 2>/dev/null)" && ! -e "$DL/Moblee.app" ]] && ok "  the older one and the one that was opened are both in the Bin, where they can be got back; neither is deleted" || bad "  the older one and the opened one go to the Bin"
+codesign --verify --strict "$MOVED" 2>/dev/null && ok "  the moved copy's signature is intact" || bad "  the moved copy's signature is intact"
+xattr -r "$PBIN" 2>/dev/null | grep -q quarantine && ! xattr -r "$MOVED" 2>/dev/null | grep -q quarantine && ok "  the download mark is cleared from the copy (so macOS runs it from where it is)" || bad "  the download mark is cleared from the copy"
+[[ "$(leftovers)" == "0" ]] && ok "  no half-made copy is left behind" || bad "  no half-made copy is left behind"
+# opened again from a fresh Downloads copy of the same version: the one in Applications is used, nothing is copied over it
+mkdir -p "$WORK/downloads2"; cp -R "$APP" "$WORK/downloads2/Moblee.app"; echo "kept" >> "$MOVED/Contents/kept-marker.txt"
+"$WORK/downloads2/Moblee.app/Contents/MacOS/Moblee" --home "$WORK/home-move" --move-to "$APPS" --self-drive > "$WORK/move-again.txt" 2>&1
+grep -q "^self-drive: already there" "$WORK/move-again.txt" && [[ -f "$MOVED/Contents/kept-marker.txt" && -x "$WORK/downloads2/Moblee.app/Contents/MacOS/Moblee" && "$(ls "$PBIN" | wc -l | tr -d ' ')" == "2" ]] && ok "  the same Moblee opened again from Downloads uses the one in Applications and copies nothing over it" || bad "  an equal version is not copied over the one in Applications (see $WORK/move-again.txt)"
+
+# --- every screen, with the real window ---------------------------------------
+"$BIN" --home "$WORK/home-drive" --self-drive > "$WORK/drive.txt" 2>&1
 RC=$?
 [[ $RC -eq 0 ]] && ok "the real window opens every screen and finishes an install" || bad "the real window opens every screen and finishes an install (exit $RC; see $WORK/drive.txt)"
-MOVED="$WORK/applications/Moblee.app"
-grep -q "^self-drive: ok: clicking Move it there makes a whole copy" "$WORK/drive.txt" && [[ -x "$MOVED/Contents/MacOS/Moblee" ]] && ok "opened outside Applications, the app offers to move itself, and the button makes the copy" || bad "the app moves itself to Applications"
-codesign --verify --strict "$MOVED" 2>/dev/null && ok "the moved copy's signature is intact" || bad "the moved copy's signature is intact"
-xattr "$APP/Contents/Info.plist" | grep -q quarantine && ! xattr -r "$MOVED" 2>/dev/null | grep -q quarantine && ok "the download mark is cleared from the copy (so macOS runs it from where it is)" || bad "the download mark is cleared from the copy"
-[[ -x "$BIN" ]] && ok "a practice move leaves the original where it is" || bad "a practice move leaves the original where it is"
-for s in "move to Applications" welcome check-up name build hand-off home; do
+for s in welcome check-up name build hand-off home; do
   grep -q "^self-drive: $s" "$WORK/drive.txt" && ok "  reached: $s" || bad "  reached: $s"
 done
 grep -q "^self-drive: tiles waiting: trips, videos" "$WORK/drive.txt" && ok "home screen shows the two things agreed with Claude" || bad "home screen shows the two things agreed with Claude"
 grep -q "^self-drive: trips ended: .*done" "$WORK/drive.txt" && [[ -f "$WORK/home-drive/.claude/skills/trips/SKILL.md" ]] && ok "pressing Add on a quiet item adds it (the skill is really there)" || bad "pressing Add on a quiet item adds it"
 grep -q "^self-drive: videos ended: .*handedOver" "$WORK/drive.txt" && [[ -x "$WORK/home-drive/Library/Application Support/Moblee/run/add-videos.command" ]] && ok "a Terminal item is explained, then handed over as a command file" || bad "a Terminal item is explained, then handed over as a command file"
 CMD="$WORK/home-drive/Library/Application Support/Moblee/run/add-videos.command"
-grep -q "^python3 scripts/moblee-setup.py --only videos --yes$" "$CMD" && ok "the command file runs the pack's own checklist for that one item, without asking 'Start now?' a third time" || bad "the command file runs the pack's own checklist for that one item"
-bash -n "$CMD" 2>/dev/null && grep -q 'kill -9 "\$PPID"' "$CMD" && grep -q 'Apple_Terminal' "$CMD" && ok "the command file is sound, and ends Terminal's own shell before it can print 'Deleting expired sessions'" || bad "the command file is sound and silences Terminal's closing lines"
+grep -q "^if python3 scripts/moblee-setup.py --only videos --yes; then$" "$CMD" && ok "the command file runs the pack's own checklist for that one item, without asking 'Start now?' a third time" || bad "the command file runs the pack's own checklist for that one item"
+bash -n "$CMD" 2>/dev/null && grep -q 'kill -9 "\$PPID"' "$CMD" && grep -q 'Apple_Terminal' "$CMD" && grep -q 'opened_for_this" = yes' "$CMD" && grep -q 'That did not finish' "$CMD" && ok "the command file is sound, and ends Terminal's own shell before it can print 'Deleting expired sessions'" || bad "the command file is sound and silences Terminal's closing lines"
 grep -q "^self-drive: ok: the three cards are the pack's own" "$WORK/drive.txt" && ok "the Google tile says where to go, what to switch on by name, and how to tell it worked" || bad "the Google tile's three cards"
-grep -q "^self-drive: google ended: .*done" "$WORK/drive.txt" && grep -q '"item:google"' "$WORK/home-drive/.config/moblee/app-state.json" 2>/dev/null && ok "clicks inside Claude are finished by the owner pressing Done, and it stays done" || bad "a clicks item can be marked done"
+grep -q "^self-drive: google ended: .*done" "$WORK/drive.txt" && grep -q '"item:google@2026-09-20"' "$WORK/home-drive/.config/moblee/app-state.json" 2>/dev/null && ok "clicks inside Claude are finished by the owner pressing Done, and it stays done" || bad "a clicks item can be marked done"
 [[ "$(ls "$WORK/home-drive/Library/Application Support/Moblee/run/" | wc -l | tr -d " ")" == "1" ]] && ok "no other command file was written" || bad "no other command file was written"
 grep -q "^self-drive: skill gym-log ended: .*done" "$WORK/drive.txt" && [[ -f "$WORK/home-drive/.claude/skills/gym-log/.made-for-you" && ! -L "$WORK/home-drive/.claude/skills/gym-log" ]] && ok "a skill Claude drafted is shown, then added as ordinary files" || bad "a skill Claude drafted is shown, then added as ordinary files"
 grep -q "^self-drive: skill sneaky: .*blocked" "$WORK/drive.txt" && [[ ! -e "$WORK/home-drive/.claude/skills/sneaky" ]] && ok "a drafted skill that is a link to outside the wiki is refused" || bad "a drafted skill that is a link to outside the wiki is refused"

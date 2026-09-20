@@ -431,9 +431,13 @@ APP_STATE = CONFIG_DIR / "app-state.json"
 def owner_said_done(key: str) -> bool:
     """The owner pressed Done on this item's tile in the Moblee app."""
     try:
-        return f"item:{key}" in json.loads(APP_STATE.read_text()).get("done", [])
+        done = json.loads(APP_STATE.read_text()).get("done", [])
     except (OSError, ValueError, AttributeError):
         return False
+    if not isinstance(done, list):
+        return False
+    # the app writes "item:google@<the date on the request>"; an older app wrote "item:google"
+    return any(isinstance(d, str) and (d == f"item:{key}" or d.startswith(f"item:{key}@")) for d in done)
 
 
 def unseen(key: str):
@@ -1187,8 +1191,9 @@ def summarise(chosen: list, foundations: list, assume_yes: bool = False) -> bool
     for it in chosen:
         say(f"  - {it.title}")
     say("")
-    room = f"{space / 1000:.1f} GB" if space >= 1000 else (f"{space} MB" if space else "almost no")
-    say(f"Expect about {minutes} minutes and {room} of space,")
+    room = (f"{space / 1000:.1f} GB of space" if space >= 1000
+            else (f"{space} MB of space" if space else "almost no space"))
+    say(f"Expect about {minutes} minute{'' if minutes == 1 else 's'} and {room},")
     say("most of it waiting for downloads. Keep the Mac plugged in and awake.")
     signins = [it for it in chosen if it.signin]
     if signins or "homebrew" in foundations:
@@ -1238,12 +1243,16 @@ def final_check(items: list, only: set | None = None) -> list:
     return results
 
 
-def save_state(status: dict, results: list, **extra) -> None:
+def save_state(status: dict, results: list, checked=None, **extra) -> None:
     """The saved record of the last look at each item. `status` holds every
     item, true or false; `unseen` names the ones this script could not see
     either way (a connection made inside the Claude app), so that nothing
     reading the record takes "could not see" for "not working"; `working` is
-    the whole list of what works, not only what the last run touched."""
+    the whole list of what works, not only what the last run touched.
+    `status` may hold None for an item that could not be seen; `checked` names
+    the items really looked at this time (the rest of `status` was carried
+    forward from the last record, and says nothing new). A record that is
+    damaged, or is not the shape expected, is started afresh, never a crash."""
     try:
         state = json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else {}
     except (OSError, ValueError):
@@ -1252,9 +1261,11 @@ def save_state(status: dict, results: list, **extra) -> None:
         state = {}
     for old in ("chosen",):  # held only the last run's items, under a name that read as the full list
         state.pop(old, None)
-    seen_now = {it.key for it, _, _ in results}
-    blind = {it.key for it, ok, _ in results if ok is None}
-    state["unseen"] = sorted((set(state.get("unseen", [])) - seen_now) | blind)
+    looked_at = {it.key for it, _, _ in results} | set(status if checked is None else checked)
+    blind = {it.key for it, ok, _ in results if ok is None} | {k for k in looked_at if status.get(k, False) is None}
+    before = state.get("unseen")
+    before = {k for k in before if isinstance(k, str)} if isinstance(before, list) else set()
+    state["unseen"] = sorted((before - looked_at) | blind)
     state["status"] = {k: bool(v) for k, v in status.items()}
     state["working"] = sorted(k for k, v in state["status"].items() if v)
     state.update(extra)
@@ -1318,7 +1329,7 @@ def main() -> int:
         # keep the saved state current, so the weekly check reads what is true now
         try:
             save_state({it.key: ok for it, ok, _ in results}, results, last_check=STAMP)
-        except OSError:
+        except (OSError, TypeError, ValueError):
             pass  # a state file that cannot be written never fails the check
         say(f"\nThe result is saved at {path}")
         # "cannot see" is not a failure: only something seen to be broken is
@@ -1334,13 +1345,18 @@ def main() -> int:
         # carry the rest forward from the last saved state, so a one-minute item
         # is not kept waiting behind a sweep of everything.
         try:
-            saved = json.loads(STATE_FILE.read_text()).get("status", {}) if STATE_FILE.exists() else {}
+            saved = json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else {}
+            saved = saved.get("status", {}) if isinstance(saved, dict) else {}
         except (OSError, ValueError):
             saved = {}
+        if not isinstance(saved, dict):
+            saved = {}
         status = {it.key: (it.check()[0] if it.key in preset else bool(saved.get(it.key, False))) for it in items}
+        checked = set(preset)
     else:
         say("Looking at what is already working (this can take a minute or two)...")
-        status = {it.key: it.check()[0] for it in items}
+        status = {it.key: it.check()[0] for it in items}   # None: could not be seen, kept as such for the record
+        checked = set(status)
 
     tick = {k.strip() for k in args.tick.split(",") if k.strip()} if args.tick else None
     for asked in (preset, tick):
@@ -1393,7 +1409,7 @@ def main() -> int:
         # say why ("it needs the Chrome item first") and not only that it failed
         emit(it.key, "unseen" if ok is None else ("ok" if ok else "fail"),
              detail=str(detail).replace(str(HOME), "~"))
-    save_state(status, results, last_run=STAMP, last_run_items=[it.key for it in chosen])
+    save_state(status, results, checked=checked, last_run=STAMP, last_run_items=[it.key for it in chosen])
 
     failed = [it for it, ok, _ in results if ok is False]
     blind = [it for it, ok, _ in results if ok is None]

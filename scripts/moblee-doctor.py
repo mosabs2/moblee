@@ -253,7 +253,10 @@ def check_mac(f: Findings) -> None:
     # owner for permission); only the two places the app should be.
     pack = find_pack()
     if pack and "Application Support/Moblee" in str(pack):
-        if (Path("/Applications") / "Moblee.app").exists() or (HOME / "Applications" / "Moblee.app").exists():
+        # Anywhere inside either Applications folder counts, as it does for the
+        # app itself, which makes no offer to move from /Applications/Utilities.
+        places = [Path("/Applications"), HOME / "Applications"]
+        if any((p / "Moblee.app").exists() or any(p.glob("*/Moblee.app")) for p in places if p.is_dir()):
             f.add(OK, "The Moblee app is in Applications.")
         else:
             f.add(LOOK, "The Moblee app is not in Applications, so it may be hard to find again.", "F24")
