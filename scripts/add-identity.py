@@ -19,6 +19,17 @@ HERE = Path(__file__).resolve().parent
 TEMPLATE = HERE.parent / "vault-template" / "wiki" / "Identity.md"
 
 
+def instruction_file(vault: Path) -> Path:
+    """The vault's instruction file: CLAUDE.md if it is a regular file, else
+    AGENTS.md if it is a regular file, else CLAUDE.md. Where both assistants
+    are in use CLAUDE.md is the real file and AGENTS.md is a symlink to it."""
+    for name in ("CLAUDE.md", "AGENTS.md"):
+        p = vault / name
+        if p.is_file() and not p.is_symlink():
+            return p
+    return vault / "CLAUDE.md"
+
+
 def owner_name(vault: Path, explicit: str | None) -> str:
     if explicit:
         return explicit
@@ -29,7 +40,7 @@ def owner_name(vault: Path, explicit: str | None) -> str:
             return r.stdout.strip()
     except OSError:
         pass
-    claude_md = vault / "CLAUDE.md"
+    claude_md = instruction_file(vault)
     if claude_md.exists():
         for line in claude_md.read_text(encoding="utf-8").splitlines():
             head, sep, rest = line.partition("knowledge base for ")
@@ -42,7 +53,9 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--vault", required=True)
     ap.add_argument("--owner")
-    a = ap.parse_args()
+    # Passed by the installer and the updater; nothing here depends on its value.
+    ap.add_argument("--assistant")
+    a, _unknown = ap.parse_known_args()  # a switch this version does not know is ignored
     vault = Path(a.vault).expanduser().resolve()
     dst = vault / "wiki" / "Identity.md"
     if dst.exists():

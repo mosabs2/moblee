@@ -24,6 +24,8 @@ Checks (hard failures block the commit):
   G2  No new log header (or staged `as of` line) is future-dated (> today+1).
   G3  Always-loaded files stay under their caps when staged
       (_context.md ≤ 12k tok, CLAUDE.md ≤ 10k, Index.md ≤ 8k; chars/4).
+      The CLAUDE.md cap applies to the instruction file in use: AGENTS.md
+      where that is the real file, never a symlink to the other.
   G4  Newly added cluster notes carry a `Source:`/`Sources:` line
       (skipped when the vault has no `wiki/* Cluster Notes/` folders).
   G5  No staged non-restricted wiki page adds a wikilink into a restricted
@@ -110,8 +112,20 @@ def find_vault_root() -> Path:
     sys.exit(1)
 
 
+def instruction_file(vault: Path) -> Path:
+    """The vault's instruction file: CLAUDE.md if it is a regular file, else
+    AGENTS.md if it is a regular file, else CLAUDE.md. Where both assistants
+    are in use CLAUDE.md is the real file and AGENTS.md is a symlink to it, so
+    the cap below is applied once, to the real file."""
+    for name in ("CLAUDE.md", "AGENTS.md"):
+        p = vault / name
+        if p.is_file() and not p.is_symlink():
+            return p
+    return vault / "CLAUDE.md"
+
+
 VAULT = find_vault_root()
-CAPS = {"wiki/_context.md": 12000, "CLAUDE.md": 10000, "wiki/Index.md": 8000}
+CAPS = {"wiki/_context.md": 12000, instruction_file(VAULT).name: 10000, "wiki/Index.md": 8000}
 RESTRICTED_DIRS = ("wiki/Private/", "wiki/Ghost Reconstructions/")
 EXEMPT_LINK_SOURCES = {"wiki/log.md", "wiki/Wiki Operations/Context Archive.md",
                        "wiki/Index.md", "wiki/_context.md"}

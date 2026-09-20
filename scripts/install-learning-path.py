@@ -13,7 +13,8 @@ and running it again is safe. It does these things, each only if not already don
      is never replaced, because its Progress list records which lessons have been given.
   2. Adds a line for the page to wiki/Index.md, so the weekly check does not call it an orphan.
   3. Copies the reminder script to scripts/moblee-tip.sh (refreshed if the pack's copy changed).
-  4. Adds the coaching rule to CLAUDE.md, directly after the orient section, so that saying
+  4. Adds the coaching rule to the vault's instruction file (CLAUDE.md, or AGENTS.md in a
+     vault set up for ChatGPT alone), directly after the orient section, so that saying
      "lesson" gives the next lesson and orient mentions it once a day.
   5. On macOS, schedules the reminder with launchd (com.moblee.nightly-tip). Without --hour an
      existing schedule keeps its hour (9 pm for a new one). A changed schedule file is copied to
@@ -109,14 +110,27 @@ def add_tip_script(vault: Path) -> Path:
     return dest
 
 
-def add_coaching_rule(vault: Path) -> None:
-    claude = vault / "CLAUDE.md"
+def instruction_file(vault: Path) -> Path:
+    """The vault's instruction file: CLAUDE.md if it is a regular file, else
+    AGENTS.md if it is a regular file, else CLAUDE.md. Where both assistants
+    are in use CLAUDE.md is the real file and AGENTS.md is a symlink to it, so
+    the real file is the one written and the symlink is never replaced."""
+    for name in ("CLAUDE.md", "AGENTS.md"):
+        p = vault / name
+        if p.is_file() and not p.is_symlink():
+            return p
+    return vault / "CLAUDE.md"
+
+
+def add_coaching_rule(vault: Path, assistant: str | None = None) -> None:
+    claude = instruction_file(vault)
     if not claude.exists():
-        print("CLAUDE.md not found; the coaching rule was not added")
+        missing = "AGENTS.md" if assistant == "chatgpt" else claude.name
+        print(f"{missing} not found; the coaching rule was not added")
         return
     lines = read(claude).splitlines(keepends=True)
     if any(l.startswith(MARKER) for l in lines):
-        print("coaching rule already in CLAUDE.md")
+        print(f"coaching rule already in {claude.name}")
         return
     at = None
     for i, l in enumerate(lines):
@@ -136,7 +150,7 @@ def add_coaching_rule(vault: Path) -> None:
         lines.insert(at, COACHING + "\n")
         where = "after the orient section"
     write_atomic(claude, "".join(lines))
-    print(f"coaching rule added to CLAUDE.md {where}")
+    print(f"coaching rule added to {claude.name} {where}")
 
 
 def backup_plist() -> Path:
@@ -249,11 +263,14 @@ def remove_reminder() -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Add the optional learning path to a Moblee vault.")
-    ap.add_argument("--vault", required=True, help="the vault folder (the one holding CLAUDE.md and wiki/)")
+    ap.add_argument("--vault", required=True, help="the vault folder (the one holding CLAUDE.md or AGENTS.md, and wiki/)")
     ap.add_argument("--hour", type=int, default=None, help="reminder hour, 0 to 23 (default: keep the current one, else 21)")
     ap.add_argument("--no-reminder", action="store_true", help="add the lessons without the evening reminder")
     ap.add_argument("--remove-reminder", action="store_true", help="switch the evening reminder off (the lessons stay)")
-    a = ap.parse_args()
+    # Passed by the installer and the updater. The instruction file is found by what is on
+    # disk, so the value only chooses the name used when no file is found.
+    ap.add_argument("--assistant", default=None, help="claude, chatgpt or both (set by the installer)")
+    a, _unknown = ap.parse_known_args()  # a switch this version does not know is ignored
     if a.remove_reminder:
         return remove_reminder()
     vault = Path(a.vault).expanduser().resolve()
@@ -266,7 +283,7 @@ def main() -> int:
     add_page(vault)
     add_index_line(vault)
     script = add_tip_script(vault)
-    add_coaching_rule(vault)
+    add_coaching_rule(vault, a.assistant)
     rc = 0 if a.no_reminder else schedule_reminder(vault, script, a.hour)
     print('Learning path ready. Open Claude Code in your vault and say "lesson" to begin.')
     return rc
