@@ -55,7 +55,11 @@ grep -q "Tom & Sam" "$V/CLAUDE.md" 2>/dev/null && ok "the owner's name arrives a
 # As an owner meets it: the app sits in a pretend Downloads carrying the mark
 # macOS puts on anything downloaded, and an OLDER Moblee is already in the
 # pretend Applications. Everything is the app's real code but the Mac's own Bin
-# (a scratch folder stands in) and the reopening.
+# (a scratch folder stands in) and the reopening. Run after the walk through
+# every screen, below: three quick openings of the app just before that walk
+# left its window without the keyboard on one Mac, and the typed name never
+# arrived.
+move_checks() {
 DL="$WORK/downloads"; APPS="$WORK/applications"; PBIN="$WORK/practice-bin"
 mkdir -p "$DL" "$APPS" "$WORK/home-move"
 cp -R "$APP" "$DL/Moblee.app"
@@ -88,6 +92,7 @@ xattr -r "$PBIN" 2>/dev/null | grep -q quarantine && ! xattr -r "$MOVED" 2>/dev/
 mkdir -p "$WORK/downloads2"; cp -R "$APP" "$WORK/downloads2/Moblee.app"; echo "kept" >> "$MOVED/Contents/kept-marker.txt"
 "$WORK/downloads2/Moblee.app/Contents/MacOS/Moblee" --home "$WORK/home-move" --move-to "$APPS" --self-drive > "$WORK/move-again.txt" 2>&1
 grep -q "^self-drive: already there" "$WORK/move-again.txt" && [[ -f "$MOVED/Contents/kept-marker.txt" && -x "$WORK/downloads2/Moblee.app/Contents/MacOS/Moblee" && "$(ls "$PBIN" | wc -l | tr -d ' ')" == "2" ]] && ok "  the same Moblee opened again from Downloads uses the one in Applications and copies nothing over it" || bad "  an equal version is not copied over the one in Applications (see $WORK/move-again.txt)"
+}
 
 # --- every screen, with the real window ---------------------------------------
 "$BIN" --home "$WORK/home-drive" --self-drive > "$WORK/drive.txt" 2>&1
@@ -112,6 +117,8 @@ grep -q "nothing smuggled: true" "$WORK/drive.txt" && [[ ! -e /tmp/moblee-pwned 
 "$BIN" --self-drive > "$WORK/refuse2.txt" 2>&1 &
 PID=$!; sleep 3
 if kill -0 $PID 2>/dev/null; then kill $PID; bad "self-drive without a practice home is refused"; else wait $PID; [[ $? -eq 2 ]] && ok "self-drive without a practice home is refused" || bad "self-drive without a practice home is refused"; fi
+
+move_checks
 
 echo ""
 echo "$PASS passed, $FAIL failed. Screens and outputs are in $WORK"
