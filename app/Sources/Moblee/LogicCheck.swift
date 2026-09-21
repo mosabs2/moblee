@@ -215,17 +215,29 @@ enum LogicCheck {
 
         // --- the hand-off's words ---
         let wikiName = "Sam Wiki"
-        check("the hand-off for ChatGPT opens the wiki by the File menu's Open Folder",
+        // ChatGPT's window has a switch at the top, Chat or Work. Only in Work
+        // does the chat run in the opened wiki folder, and the app's button
+        // cannot set it, so the owner is told to, in every form of the words.
+        check("the hand-off for ChatGPT has the owner open the wiki folder, then choose Work, then say the words",
               HandoffScreen.sentence(for: .chatgpt, opened: false)
-                  == "Last step. In ChatGPT's File menu choose Open Folder, pick your wiki folder, then say the words.")
+                  == "Last step. Open your wiki folder in ChatGPT, choose Work at the top, then say the words."
+                  && HandoffScreen.sentence(for: .chatgpt, opened: true)
+                      == "The words are copied. In ChatGPT choose Work at the top, then paste them.")
         let chatgptCards = HandoffScreen.cards(for: .chatgpt, wiki: wikiName)
-        check("and its three pictures say the same: the File menu, the wiki folder, the words",
-              chatgptCards.map(\.title) == ["File menu, Open Folder", "Pick your wiki folder", "Say"]
-                  && chatgptCards[1].detail == "Wiki ▸ Sam Wiki" && chatgptCards[2].detail == "“get me started”")
-        check("for both, ChatGPT's line is the File menu's Open Folder, then the wiki folder",
+        check("and its three pictures say the same: the wiki folder by the File menu's Open Folder, Work not Chat, the words",
+              chatgptCards.map(\.title) == ["Open your wiki folder", "Choose Work", "Say"]
+                  && chatgptCards.map(\.detail) == ["File menu, Open Folder, then Wiki ▸ Sam Wiki",
+                                                    "at the top of the window, not Chat", "“get me started”"])
+        let chatgptSpoken = HandoffScreen.spoken(for: .chatgpt, wiki: wikiName)
+        check("read aloud, ChatGPT's hand-off names Open Folder first and Work before the words",
+              chatgptSpoken == "Last step. In ChatGPT: one, open the File menu, choose Open Folder and pick your wiki folder, "
+                  + "called Sam Wiki. Two, choose Work at the top of the window, not Chat. Three, say: get me started.")
+        check("for both, ChatGPT's line is the File menu's Open Folder, the wiki folder, then Work",
               HandoffScreen.cards(for: .both, wiki: wikiName)[1]
                   == HandoffScreen.Card(symbol: Assistant.chatgpt.symbol, title: "With ChatGPT",
-                                        detail: "In the File menu choose Open Folder, then pick your wiki folder"))
+                                        detail: "File menu, Open Folder, pick your wiki folder, and choose Work at the top")
+                  && HandoffScreen.spoken(for: .both, wiki: wikiName).contains(
+                      "With ChatGPT: in the File menu choose Open Folder, pick your wiki folder, and choose Work at the top."))
         check("Claude's hand-off is word for word as it has always been",
               HandoffScreen.sentence(for: .claude, opened: false) == "Last step. Do these three in Claude."
                   && HandoffScreen.cards(for: .claude, wiki: wikiName).map(\.title) == ["Click Code", "Pick your wiki", "Say"]
@@ -234,16 +246,24 @@ enum LogicCheck {
                   && HandoffScreen.cards(for: .both, wiki: wikiName)[0].detail == "Click Code at the top, then pick your wiki"
                   && HandoffScreen.spoken(for: .claude, wiki: wikiName)
                       == "Last step. In Claude: one, click Code at the top. Two, pick your wiki, called Sam Wiki. Three, say: get me started.")
-        var said: [String] = [Trust.openFirst, Trust.emptyUntilOpened, Trust.folderThenSteps, Trust.afterwards,
-                              TrustScreen.reasonSentence,
-                              TrustScreen.notRunningSentence, TrustScreen.openedTitle] + Trust.steps
-        for a in Assistant.allCases {
-            said += [HandoffScreen.sentence(for: a, opened: false), HandoffScreen.sentence(for: a, opened: true),
-                     HandoffScreen.spoken(for: a, wiki: wikiName)]
-            said += HandoffScreen.cards(for: a, wiki: wikiName).flatMap { [$0.title, $0.detail] }
+        let trustSaid: [String] = [Trust.openFirst, Trust.emptyUntilOpened, Trust.folderThenSteps, Trust.afterwards,
+                                   TrustScreen.reasonSentence,
+                                   TrustScreen.notRunningSentence, TrustScreen.openedTitle] + Trust.steps
+        func handoffSaid(_ a: Assistant) -> [String] {
+            [HandoffScreen.sentence(for: a, opened: false), HandoffScreen.sentence(for: a, opened: true),
+             HandoffScreen.spoken(for: a, wiki: wikiName)]
+                + HandoffScreen.cards(for: a, wiki: wikiName).flatMap { [$0.title, $0.detail] }
         }
-        check("nothing on the Trust screen or the hand-off tells an owner to choose Work or to make a project",
-              !said.contains { $0.contains("Work") || $0.lowercased().contains("project") })
+        let chatgptSaid = handoffSaid(.chatgpt).joined(separator: " ")
+        check("the hand-off for ChatGPT names both Open Folder and Work, on its pictures and read aloud",
+              chatgptSaid.contains("Open Folder") && chatgptSaid.contains("Work")
+                  && chatgptCards.contains { $0.detail.contains("Open Folder") }
+                  && chatgptCards.contains { $0.title.contains("Work") }
+                  && chatgptSpoken.contains("Open Folder") && chatgptSpoken.contains("Work"))
+        check("Work is named to ChatGPT's owner alone: never in Claude's hand-off, never on the Trust screen",
+              !(handoffSaid(.claude) + trustSaid).contains { $0.contains("Work") })
+        check("nothing on the Trust screen or the hand-off tells an owner to make a project",
+              !(trustSaid + Assistant.allCases.flatMap(handoffSaid)).contains { $0.lowercased().contains("project") })
 
         // What each way of leaving the Trust screen does to the note.
         Trust.setPending(true, home: home)

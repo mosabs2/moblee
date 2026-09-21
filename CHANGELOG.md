@@ -35,10 +35,11 @@ The second-assistant release. Until now Moblee set a wiki up for Claude. From th
 The signed app updated a 0.8.1 wiki on an account that had never opened ChatGPT, and the owner's Claude there wrote up what it found from the Mac's files and ChatGPT's own records.
 
 - **The Trust steps led to an empty page.** ChatGPT's Hooks page shows "No hooks found" until a folder has been opened in ChatGPT, whatever hooks are installed. Every set of Trust steps now begins with opening the wiki folder, and the app's Trust screen does the same.
-- **Opening the wiki in ChatGPT** is now given one way everywhere: File menu, Open Folder. The earlier wording led to a project kept elsewhere, where the wiki was an outside folder and every write asked for approval.
+- **Opening the wiki in ChatGPT** is now given one way everywhere: File menu, Open Folder. The earlier wording led to a project kept elsewhere, where the wiki was an outside folder and every write asked for approval. The instructions also say to make sure Work, and not Chat, is chosen at the top of the window before typing, because a message typed while Chat is chosen is answered with an offer to continue in Work, and that continues in a folder of ChatGPT's own, outside the wiki, where the wiki's rules are not read.
 - **Claude could not run the check-up.** The delete guard read the new proof code in `scripts/moblee-doctor.py` as something that deletes. The check-up is now among the pack files the guard knows by their hashes.
 - **The updater's own commit left out its one-line edit to `wiki/Index.md`.** It is included when the owner had no uncommitted changes of their own in that file.
 - **The guard proof's practice wiki** moved from `~/.cache/moblee/` to `~/.config/moblee/prove-guard/`. It was sound where it was, since nothing inside a wiki counts as throwaway, but it no longer sits under a folder where throwaway deletes are allowed.
+- **The guard refuses inside a ChatGPT desktop conversation.** Checked on 21 September 2026 in a Work conversation in the ChatGPT app: a shell delete and a file-edit delete were each stopped by the guard, and both test items survived.
 
 ### How this release was checked
 

@@ -619,7 +619,8 @@ fi
 case "$ASSISTANT" in
   chatgpt)
     echo "To begin: open ChatGPT and, from its File menu, choose Open Folder and"
-    echo "pick your wiki folder. Then say: get me started"
+    echo "pick your wiki folder. Make sure Work is chosen at the top of the window,"
+    echo "and not Chat, before you type. Then say: get me started"
     echo "ChatGPT asks how you work and what you read, watch and make, and helps"
     echo "you put your first pages in."
     echo ""
@@ -629,7 +630,8 @@ case "$ASSISTANT" in
   both)
     echo "to open Claude or ChatGPT in your new wiki and say: get me started"
     echo "(for ChatGPT: open ChatGPT and, from its File menu, choose Open Folder and"
-    echo "pick your wiki folder)."
+    echo "pick your wiki folder; make sure Work is chosen at the top of the window,"
+    echo "and not Chat, before you type)."
     echo "It asks how you use your Mac and what you read, watch and make, then"
     echo "suggests only what fits and gives you one command to install it."
     echo "The extras it installs are set up for Claude; Moblee does not set them"
@@ -706,7 +708,9 @@ echo ""
 case "$ASSISTANT" in
   chatgpt)
     echo "  2. To begin: open ChatGPT and, from its File menu, choose Open Folder and"
-    echo "     pick your wiki folder. Then say \"get me started\". The folder is:"
+    echo "     pick your wiki folder. Make sure Work is chosen at the top of the"
+    echo "     window, and not Chat, before you type. Then say \"get me started\"."
+    echo "     The folder is:"
     echo "       $VAULT_LOCATION"
     ;;
   both)
@@ -715,7 +719,8 @@ case "$ASSISTANT" in
     echo "       cd \"$VAULT_LOCATION\""
     echo "       claude"
     echo "     ChatGPT: open ChatGPT and, from its File menu, choose Open Folder and"
-    echo "     pick your wiki folder:"
+    echo "     pick your wiki folder. Make sure Work is chosen at the top of the"
+    echo "     window, and not Chat, before you type. The folder is:"
     echo "       $VAULT_LOCATION"
     ;;
   *)
