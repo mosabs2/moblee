@@ -117,6 +117,8 @@ Your assistant cannot delete in your vault. A guard refuses the command before i
 
 **With ChatGPT:** this holds once you have trusted the guard and proved it. ChatGPT skips a new or changed guard until you have reviewed it, and nothing on screen says so. There are five steps:
 
+First open your wiki folder in ChatGPT (File menu, Open Folder). Until a folder has been opened in ChatGPT, its Hooks page is empty and does not say why. <!-- verify on testdev -->
+
 1. Open the ChatGPT menu and choose Settings.
 2. Choose Hooks, under the heading Coding.
 3. Open "User config".

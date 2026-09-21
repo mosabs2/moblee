@@ -34,10 +34,10 @@ mkdir -p "$WORK/home-draw" "$WORK/home-rehearse" "$WORK/home-drive"
 export MOBLEE_PRACTICE=1
 
 "$BIN" --home "$WORK/home-draw" --snapshot "$WORK/screens" > "$WORK/draw.txt" 2>&1
-[[ "$(ls "$WORK/screens" 2>/dev/null | grep -c '\.png$')" == "41" ]] && ok "forty-one screens drawn to picture files ($WORK/screens)" || bad "forty-one screens drawn (see $WORK/draw.txt)"
+[[ "$(ls "$WORK/screens" 2>/dev/null | grep -c '\.png$')" == "42" ]] && ok "forty-two screens drawn to picture files ($WORK/screens)" || bad "forty-two screens drawn (see $WORK/draw.txt)"
 "$BIN" --dark --home "$WORK/home-draw" --snapshot "$WORK/screens-dark" > "$WORK/draw-dark.txt" 2>&1
-[[ "$(ls "$WORK/screens-dark" 2>/dev/null | grep -c '\.png$')" == "41" ]] && ok "and the same forty-one in dark mode ($WORK/screens-dark)" || bad "forty-one dark screens drawn (see $WORK/draw-dark.txt)"
-for s in 01b-checkup-older-chatgpt 03c-assistant-unanswered 06b-trust-steps 06e-trust-proved 07b-handoff-chatgpt 07c-handoff-both 08c-home-wiki-newer 10b-home-chatgpt 12b-home-repair-wiki-newer 15a-update-asks-assistant; do
+[[ "$(ls "$WORK/screens-dark" 2>/dev/null | grep -c '\.png$')" == "42" ]] && ok "and the same forty-two in dark mode ($WORK/screens-dark)" || bad "forty-two dark screens drawn (see $WORK/draw-dark.txt)"
+for s in 01b-checkup-older-chatgpt 03c-assistant-unanswered 06a-trust-open-folder 06b-trust-steps 06e-trust-proved 07b-handoff-chatgpt 07c-handoff-both 08c-home-wiki-newer 10b-home-chatgpt 12b-home-repair-wiki-newer 15a-update-asks-assistant; do
   [[ -s "$WORK/screens/$s.png" ]] || bad "  drawn: $s"
 done
 [[ ! -e "$WORK/home-draw/.claude" && ! -e "$WORK/home-draw/.codex" && ! -e "$WORK/home-draw/.config" ]] && ok "drawing screens installs nothing" || bad "drawing screens installs nothing"
@@ -51,7 +51,9 @@ done
 # than the app; that a Trust note left from before a change to Claude alone is
 # not shown; what each way of leaving the Trust screen does to that note; what
 # is read from the wiki's rules files when the choice file is lost; and a
-# ChatGPT app with no agent inside it. The proof's findings are read from samples
+# ChatGPT app with no agent inside it; that the Trust screen begins at opening
+# the wiki folder in ChatGPT, before the five steps; and the hand-off's words
+# (the File menu's Open Folder for ChatGPT, Claude's unchanged). The proof's findings are read from samples
 # of the check-up's own output (app/Fixtures/prove-guard), and the check-up inside
 # the app is read to see that it still says what the samples say. It writes only
 # inside its own practice home.
@@ -63,6 +65,8 @@ grep -q "^logic: ok: with no choice on record, an update asks the question first
 grep -q "^logic: ok: lines that are not understood are ignored" "$WORK/logic.txt" && ok "  progress lines that are not understood are still ignored" || bad "  progress lines that are not understood are still ignored"
 grep -q "^logic: ok: on a wiki newer than this app, Change is hidden" "$WORK/logic.txt" && grep -q "^logic: ok: and neither Change nor Update can start this app's older updater" "$WORK/logic.txt" && grep -q "^logic: ok: a guard that looks off on a newer wiki is not this app's to repair" "$WORK/logic.txt" && ok "  on a wiki newer than the app, Change, Update and Repair are all refused" || bad "  on a wiki newer than the app, Change, Update and Repair are all refused"
 grep -q "^logic: ok: a waiting note is not shown to an owner whose choice is Claude alone" "$WORK/logic.txt" && grep -q "^logic: ok: Later on the steps leaves the step waiting" "$WORK/logic.txt" && ok "  the Trust step waits through Later on the steps, and is not shown to an owner of Claude alone" || bad "  the Trust note"
+grep -q "^logic: ok: the Trust screen begins at opening the wiki folder, before the steps" "$WORK/logic.txt" && grep -q "^logic: ok: a guard seen not running sends the owner to the folder first, then the five steps" "$WORK/logic.txt" && grep -q "^logic: ok: Later on opening the folder leaves the step waiting" "$WORK/logic.txt" && ok "  the wiki folder is opened in ChatGPT before the five steps, and Later there leaves the step waiting" || bad "  the wiki folder is opened in ChatGPT before the five steps"
+grep -q "^logic: ok: the hand-off for ChatGPT opens the wiki by the File menu's Open Folder" "$WORK/logic.txt" && grep -q "^logic: ok: nothing on the Trust screen or the hand-off tells an owner to choose Work or to make a project" "$WORK/logic.txt" && grep -q "^logic: ok: Claude's hand-off is word for word as it has always been" "$WORK/logic.txt" && ok "  the hand-off sends ChatGPT's owner to the File menu's Open Folder, never to Work or a project, and Claude's words are unchanged" || bad "  the hand-off's words"
 grep -q "^logic: ok: with no choice on record and a wiki laid down for ChatGPT alone, the choice is read as ChatGPT" "$WORK/logic.txt" && grep -q "^logic: ok: a choice on record is believed over the shape of the files" "$WORK/logic.txt" && ok "  a lost choice file is made good from the wiki's rules files, and a kept one is believed over them" || bad "  a lost choice file"
 grep -q "^logic: ok: a ChatGPT app with no agent inside is an older one, not a ready one" "$WORK/logic.txt" && ok "  a ChatGPT app with no agent inside it is not taken for a ready one" || bad "  a ChatGPT app with no agent inside it"
 grep -q "^logic: ok: the check-up's own sample not-running.json is read as notRunning" "$WORK/logic.txt" && grep -q "^logic: ok: the check-up in this app's pack still opens its proved line" "$WORK/logic.txt" && ok "  the proof is read from the check-up's own samples, and the check-up in the app still says what they say" || bad "  the proof's samples"

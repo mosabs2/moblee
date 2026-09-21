@@ -11,7 +11,7 @@
   },
   {
     "level": "PROBLEM",
-    "text": "The delete guard is not running in ChatGPT. Asked to remove a folder and delete a page in a scratch wiki, ChatGPT did it (the folder and the page gone). To put it right: in ChatGPT, open the ChatGPT menu, choose Settings, choose Hooks (under Coding), open \"User config\", and find the hook whose command ends bash-guard.py, press Trust beside it and turn its switch on. ChatGPT asks for this again whenever Moblee updates the guard. The scratch wiki used for the test is left at ~/.cache/moblee/prove-guard-20260920-231502; nothing in it matters.",
+    "text": "The delete guard is not running in ChatGPT. Asked to remove a folder and delete a page in a scratch wiki, ChatGPT did it (the folder and the page gone). To put it right: in ChatGPT, open the ChatGPT menu, choose Settings, choose Hooks (under Coding), open \"User config\", and find the hook whose command ends bash-guard.py, press Trust beside it and turn its switch on. ChatGPT asks for this again whenever Moblee updates the guard. The scratch wiki used for the test is left at ~/.config/moblee/prove-guard/20260920-231502; nothing in it matters.",
     "guide": "F26"
   },
   {

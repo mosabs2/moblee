@@ -158,11 +158,14 @@ enum Snapshots {
 
         // the Trust screen and the proof, in each of their states
         let trustStages: [(TrustScreen.Stage, String)] = [
-            (.steps, "06b-trust-steps"), (.offer, "06c-trust-offer"), (.proving, "06d-trust-proving"),
+            (.openFolder, "06a-trust-open-folder"), (.steps, "06b-trust-steps"), (.offer, "06c-trust-offer"), (.proving, "06d-trust-proving"),
             (.proved, "06e-trust-proved"), (.notRunning, "06f-trust-not-running"), (.cannotTell, "06g-trust-cannot-tell"),
         ]
         for (stage, name) in trustStages {
-            draw(scene(.trust) { f in f.assistant = .chatgpt; f.trustStart = stage }, name, to: folder)
+            draw(scene(.trust) { f in
+                f.assistant = .chatgpt; f.trustStart = stage
+                f.install.vaultPath = "/Users/sam/Wiki/Sam Wiki"
+            }, name, to: folder)
         }
 
         // the home screen of a Mac that already has a wiki

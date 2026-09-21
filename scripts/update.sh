@@ -477,6 +477,8 @@ relay_trust() {
 # The five steps only the owner can take, in the same words wherever they are printed.
 print_trust_steps() {
   local pad="$1"
+  # (v0.9) found on a real install: the Hooks page lists nothing until then
+  echo "${pad}First open your wiki folder in ChatGPT (File menu, Open Folder). Until a folder has been opened in ChatGPT, its Hooks page is empty and does not say why."
   echo "${pad}1. Open the ChatGPT menu and choose Settings."
   echo "${pad}2. Choose Hooks, under the heading Coding."
   echo "${pad}3. Open \"User config\"."
@@ -529,8 +531,40 @@ python3 "$SCRIPT_DIR/add-identity.py" --vault "$VAULT" --assistant "$ASSISTANT" 
 # assistant's to add to, and any later addition is left for their own commit
 MEMORY_PAGE_NEW=0
 if [[ ! -e "$VAULT/wiki/Wiki Operations/Assistant Memory.md" ]]; then MEMORY_PAGE_NEW=1; fi
+# (v0.9) For ChatGPT the same step links that page from one line of
+# wiki/Index.md. Whether the Index held uncommitted work of the owner's is
+# looked at before the step runs: a clean Index that the step then changed goes
+# into the updater's own commit, so the wiki is not left with a change nobody
+# committed; an Index the owner was in the middle of changing gets the link too,
+# but is left, whole, for their own next commit.
+INDEX_CLEAN_BEFORE=0
+INDEX_DIRTY_BEFORE=0
+INDEX_SEEDED=0
+INDEX_SUM_BEFORE=""
+if [[ -f "$VAULT/wiki/Index.md" ]]; then
+  INDEX_SUM_BEFORE="$(cksum < "$VAULT/wiki/Index.md" 2>/dev/null || true)"
+  # an Index git does not know is neither: it is left as it always was
+  if [[ -d "$VAULT/.git" ]] && git -C "$VAULT" ls-files --error-unmatch -- wiki/Index.md >/dev/null 2>&1; then
+    if git -C "$VAULT" diff --quiet -- wiki/Index.md 2>/dev/null \
+       && git -C "$VAULT" diff --cached --quiet -- wiki/Index.md 2>/dev/null; then
+      INDEX_CLEAN_BEFORE=1
+    else
+      INDEX_DIRTY_BEFORE=1
+    fi
+  fi
+fi
 python3 "$SCRIPT_DIR/seed-memory.py" --vault "$VAULT" --assistant "$ASSISTANT" | sed 's/^/   /' \
   || echo "   (starting memories not seeded; harmless)"
+if [[ -n "$INDEX_SUM_BEFORE" && -f "$VAULT/wiki/Index.md" ]] \
+   && [[ "$(cksum < "$VAULT/wiki/Index.md" 2>/dev/null || true)" != "$INDEX_SUM_BEFORE" ]]; then
+  if [[ $INDEX_CLEAN_BEFORE -eq 1 ]]; then
+    INDEX_SEEDED=1
+  elif [[ $INDEX_DIRTY_BEFORE -eq 1 ]]; then
+    echo "   wiki/Index.md held changes of yours that were not yet committed, so the new link in it"
+    echo "   is left for your own next commit, with those changes; nothing of yours was committed."
+    diary "    wiki/Index.md held uncommitted changes of the owner's; the link added to it was left for their own commit"
+  fi
+fi
 python3 "$SCRIPT_DIR/add-habits-page.py" --vault "$VAULT" | sed 's/^/   /' \
   || echo "   (Habits and Tools page not added; ask $ASSISTANT_LABEL to create it from the template)"
 # A wiki made before 0.8.1 still has a first log entry headed "YYYY-MM-DD".
@@ -630,8 +664,10 @@ if [[ -d "$VAULT/.git" ]]; then
     # Only what the update touched is committed; the owner's own uncommitted
     # work stays uncommitted, for them and their Claude to commit as they see fit.
     # One path per git add: a single missing path makes git stage nothing at all.
-    # wiki/Index.md is left out on purpose, since it may hold the owner's own
-    # uncommitted edits; a learning-path line added there is committed with them.
+    # wiki/Index.md is left out of the list below on purpose, since it may hold
+    # the owner's own uncommitted edits; a learning-path line added there is
+    # committed with them. (v0.9) It goes in further down in one case only: it
+    # was clean before the starting memories step, and that step changed it.
     # (v0.9) AGENTS.md sits beside CLAUDE.md: whichever of the two exists is
     # staged (-L as well, since AGENTS.md may be a link), and so is the page
     # the starting memories are written to for ChatGPT.
@@ -658,6 +694,12 @@ if [[ -d "$VAULT/.git" ]]; then
     # either: the old name's removal belongs in this commit with the new name
     if [[ $RULES_RENAMED -eq 1 && $RULES_DIRTY -eq 0 && ! -e AGENTS.md && ! -L AGENTS.md ]] && ! git diff --cached --quiet -- AGENTS.md 2>/dev/null; then
       COMMIT_PATHS+=("AGENTS.md")
+    fi
+    # (v0.9) the Index, where the starting memories step added its link and the
+    # owner had no uncommitted work of their own in it beforehand
+    if [[ $INDEX_SEEDED -eq 1 && -e wiki/Index.md ]]; then
+      git add -- wiki/Index.md 2>/dev/null || true
+      if git ls-files --error-unmatch -- wiki/Index.md >/dev/null 2>&1; then COMMIT_PATHS+=("wiki/Index.md"); fi
     fi
     # the starter pages the updater dated, where the owner had no uncommitted work of their own
     for p in ${STAMP_CLEAN[@]+"${STAMP_CLEAN[@]}"}; do
@@ -721,16 +763,16 @@ fi
 if [[ -f "$SCRIPT_DIR/moblee-setup.py" ]]; then
   case "$ASSISTANT" in
     chatgpt)
-      echo "To carry on: open ChatGPT, choose Work, and open your wiki folder. Then say:"
-      echo "get me started (if you have never done it)."
+      echo "To carry on: open ChatGPT and, from its File menu, choose Open Folder and"
+      echo "pick your wiki folder. Then say: get me started (if you have never done it)."
       echo "Moblee's optional extras (Calendar, Mail, Google, videos and the rest) are"
       echo "set up for Claude. Moblee does not set them up for ChatGPT yet."
       ;;
     both)
       echo "New in this version: your assistant can suggest which extras suit you. Open"
-      echo "Claude or ChatGPT in your wiki (for ChatGPT: open ChatGPT, choose Work, and"
-      echo "open your wiki folder) and say: review my setup (or, if you have never"
-      echo "done it, get me started). It asks how you use your Mac,"
+      echo "Claude or ChatGPT in your wiki (for ChatGPT: open ChatGPT and, from its File"
+      echo "menu, choose Open Folder and pick your wiki folder) and say: review my setup"
+      echo "(or, if you have never done it, get me started). It asks how you use your Mac,"
       echo "suggests only what fits and gives you one command to install it."
       echo "The extras it installs are set up for Claude; Moblee does not set them"
       echo "up for ChatGPT yet."

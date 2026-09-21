@@ -12,7 +12,7 @@ By this point you have a working Moblee vault and the skills installed. This doc
 
 A typical day might use both: Cowork during the day for whatever comes up, Claude Code in the evening for the bigger sessions.
 
-**With ChatGPT:** Open ChatGPT, choose Work, and open your wiki folder. <!-- verify on testdev --> ChatGPT reads the vault's rules from `AGENTS.md`. Its sandbox protects the vault's `.git` folder, so ChatGPT asks you to approve each commit. That is expected.
+**With ChatGPT:** Open ChatGPT and, from its File menu, choose Open Folder and pick your wiki folder. <!-- verify on testdev --> ChatGPT reads the vault's rules from `AGENTS.md`. Its sandbox protects the vault's `.git` folder, so ChatGPT asks you to approve each commit. That is expected.
 
 ## The standard task flow
 

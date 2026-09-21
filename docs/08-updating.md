@@ -36,6 +36,8 @@ Running the updater twice is safe. Each step checks what is already there and sk
 
 ChatGPT runs the delete guard only while you have trusted it. After an update that changes the guard, ChatGPT skips the guard until you press Trust again, and nothing on screen says so. ChatGPT will not remind you. The updater prints the steps when they are due:
 
+First open your wiki folder in ChatGPT (File menu, Open Folder). Until a folder has been opened in ChatGPT, its Hooks page is empty and does not say why. <!-- verify on testdev -->
+
 1. Open the ChatGPT menu and choose Settings.
 2. Choose Hooks, under the heading Coding.
 3. Open "User config".

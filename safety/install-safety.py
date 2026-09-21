@@ -638,6 +638,9 @@ def say_trust(trust_needed: bool) -> None:
     else:
         say("The guard runs only while it is trusted in ChatGPT. To check that it is, or to "
             "trust it if you have not yet:")
+    # (v0.9) found on a real install: the Hooks page lists nothing until then
+    say("First open your wiki folder in ChatGPT (File menu, Open Folder). Until a folder has "
+        "been opened in ChatGPT, its Hooks page is empty and does not say why.")
     say("  1. Open the ChatGPT menu and choose Settings.")
     say("  2. Choose Hooks, under the heading Coding.")
     say("  3. Open \"User config\".")

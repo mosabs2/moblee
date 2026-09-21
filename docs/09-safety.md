@@ -18,6 +18,8 @@ With Claude, everything on this page holds from the moment the installer finishe
 
 ChatGPT does not run a newly installed or changed guard until you have reviewed it. Until then the guard is skipped, and nothing on screen says so. The installer and the updater print these steps when they are due:
 
+First open your wiki folder in ChatGPT (File menu, Open Folder). Until a folder has been opened in ChatGPT, its Hooks page is empty and does not say why. <!-- verify on testdev -->
+
 1. Open the ChatGPT menu and choose Settings.
 2. Choose Hooks, under the heading Coding.
 3. Open "User config".

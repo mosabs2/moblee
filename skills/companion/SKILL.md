@@ -55,7 +55,7 @@ Many owners do not enjoy reading. This is about conversation: a summary, an anal
 
 The owner has just installed Moblee. Work through these one at a time, waiting after each. Anything they want to skip is skipped and can be done later.
 
-**Which assistant, and with ChatGPT the guard.** Read `~/.config/moblee/assistant` first (see "Finding things"); if it cannot be read, ask which assistant they use. **With Claude:** nothing more is needed here. **With ChatGPT:** ChatGPT skips a newly installed delete guard until the owner has trusted it, and nothing on screen says so. Straight after step 1, ask the owner to run the proof. In the Moblee app they press Prove the guard on the home screen. Without the app, they run it in a Terminal window of their own (fill in the Moblee folder's real path):
+**Which assistant, and with ChatGPT the guard.** Read `~/.config/moblee/assistant` first (see "Finding things"); if it cannot be read, ask which assistant they use. **With Claude:** nothing more is needed here. **With ChatGPT:** first check your working folder. If it is not the wiki folder (ChatGPT was opened some other way and the wiki is an outside folder), say so once in plain words and give the owner the fix: quit this chat, and in ChatGPT's File menu choose Open Folder and pick the wiki folder. <!-- verify on testdev --> ChatGPT skips a newly installed delete guard until the owner has trusted it, and nothing on screen says so. Straight after step 1, ask the owner to run the proof. In the Moblee app they press Prove the guard on the home screen. Without the app, they run it in a Terminal window of their own (fill in the Moblee folder's real path):
 
 ```bash
 python3 "<moblee folder>/scripts/moblee-doctor.py" --prove-guard

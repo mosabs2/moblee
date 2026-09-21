@@ -94,6 +94,9 @@ struct ScreenFrame<Picture: View>: View {
     var secondAction: (() -> Void)? = nil
     /// What "Read it to me" says, if it should say more than the sentence.
     var spoken: String? = nil
+    /// The room the picture is given. One screen (the proof that found the
+    /// guard not running) has a one-line sentence and a taller picture.
+    var pictureHeight: CGFloat = 280
     let action: () -> Void
     @ViewBuilder let picture: () -> Picture
 
@@ -122,7 +125,7 @@ struct ScreenFrame<Picture: View>: View {
             Spacer(minLength: 14)
             picture()
                 .frame(maxWidth: .infinity)
-                .frame(height: 280)
+                .frame(height: pictureHeight)
             Spacer(minLength: 14)
             HStack {
                 if showsBack && flow.step != .welcome {
