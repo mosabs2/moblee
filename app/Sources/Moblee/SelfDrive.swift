@@ -29,9 +29,21 @@ enum SelfDrive {
         // button that draws but does not work, or a key that does two things,
         // fails here. (Added 20 September 2026: until then this walk drove the
         // model from the inside and never touched a control.)
+        // macOS slows an app it judges to be in the background (App Nap), and a
+        // window covered by another app's stops drawing its slides between
+        // screens. The app that starts this test is usually in front of it, so
+        // a screen could still be half-way in when the walk tapped where its
+        // cards would be. For the length of the walk the app says it is doing
+        // something the user asked for, and its window is kept in front of the
+        // others whether or not macOS lets the app become the active one.
+        let awake = ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiated, .latencyCritical], reason: "Moblee's self-drive test")
+        defer { ProcessInfo.processInfo.endActivity(awake) }
         NSApp.activate(ignoringOtherApps: true)
         await pause(1.0)
         guard let window = NSApp.windows.first(where: { $0.isVisible }) else { say("no window opened"); exit(1) }
+        window.level = .floating
+        window.orderFrontRegardless()
         window.makeKeyAndOrderFront(nil)
         let bigButton = CGPoint(x: window.frame.width / 2, y: 73)     // window coordinates, from the bottom left
 
@@ -169,8 +181,24 @@ enum SelfDrive {
             }
             click(claudeCard); taps += 1
             await pause(0.8)
+            if flow.assistant != .claude {
+                say("tap \(taps) did not reach the card: key window \(window.isKeyWindow), app active \(NSApp.isActive), " +
+                    "window seen \(window.occlusionState.contains(.visible)), step \(flow.step)")
+            }
         }
         say("the Claude card took \(taps) tap(s)")
+        if flow.assistant != .claude && !NSApp.isActive {
+            // macOS decides which app may be in front, and refuses one that the
+            // person at the Mac did not bring forward while they are using
+            // another. A window that is not in front takes a click as "come
+            // forward" and passes nothing to its controls, so the rest of the
+            // walk would fail for a reason that is not the app's. That is said
+            // plainly, with its own exit code, and is never counted as a pass.
+            say("NOT RUN: macOS would not let this window come to the front, because another app is being used. " +
+                "The walk stopped at the question of which assistant; nothing is known to be wrong with the app. " +
+                "Run the test again when nobody is using the Mac.")
+            exit(3)
+        }
         await expect("tapping the Claude card answers the question") { flow.assistant == .claude }
         await pause(0.6)
         click(bigButton)                     // Next, now that it is live

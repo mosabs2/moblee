@@ -130,8 +130,25 @@ grep -q "^self-drive: already there" "$WORK/move-again.txt" && [[ -f "$MOVED/Con
 }
 
 # --- every screen, with the real window ---------------------------------------
-"$BIN" --home "$WORK/home-drive" --self-drive > "$WORK/drive.txt" 2>&1
-RC=$?
+# Started the way Finder starts an app (through `open`), because macOS only
+# lets an app take the front when it was opened that way. Started as a bare
+# program from this script it stays behind whatever the person at the Mac is
+# using, its window is never the key window, and its clicks on the screens'
+# own controls go nowhere, which reads as two dozen failures that are not the
+# app's. `open` does not pass the app's exit code on, so the walk's last line
+# is what says whether it passed.
+open -n -W -a "$APP" --env MOBLEE_PRACTICE=1 --stdout "$WORK/drive.txt" --stderr "$WORK/drive.txt" \
+     --args --home "$WORK/home-drive" --self-drive
+if grep -q "^self-drive: every screen opened, the install finished" "$WORK/drive.txt" && ! grep -q "^self-drive: FAILED" "$WORK/drive.txt"; then RC=0; else RC=1; fi
+if grep -q "^self-drive: NOT RUN" "$WORK/drive.txt"; then
+  echo ""
+  echo "NOT RUN  the live-window walk: macOS would not let the test window come to the front,"
+  echo "         because another app was being used. This is not a pass and not a fault in the"
+  echo "         app. Run the test again when nobody is using the Mac. ($WORK/drive.txt)"
+  echo ""
+  echo "$PASS passed, $FAIL failed, and the live-window walk was not run. Screens and outputs are in $WORK"
+  exit 3
+fi
 [[ $RC -eq 0 ]] && ok "the real window opens every screen and finishes an install" || bad "the real window opens every screen and finishes an install (exit $RC; see $WORK/drive.txt)"
 for s in welcome check-up name assistant build hand-off home; do
   grep -q "^self-drive: $s" "$WORK/drive.txt" && ok "  reached: $s" || bad "  reached: $s"
