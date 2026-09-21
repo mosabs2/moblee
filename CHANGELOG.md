@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.9.0 (unreleased)
+## v0.9.0 (21 September 2026)
 
 The second-assistant release. Until now Moblee set a wiki up for Claude. From this version the owner chooses Claude, ChatGPT or both, at install or at any later update, and the whole pack (installer, updater, app, guard, check-up, guides, lessons and skills) serves that choice. Nothing changes for an owner of Claude who does nothing.
 
