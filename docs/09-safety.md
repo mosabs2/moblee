@@ -16,7 +16,7 @@ With Claude, everything on this page holds from the moment the installer finishe
 
 ## With ChatGPT: the Trust step
 
-ChatGPT does not run a newly installed or changed guard until you have reviewed it. Until then the guard is skipped, and nothing on screen says so. The installer and the updater print these steps when they are due:
+ChatGPT does not run a newly installed guard until you have reviewed it. Until then the guard is skipped, and nothing on screen says so. The installer and the updater print these steps when they are due:
 
 First open your wiki folder in ChatGPT (File menu, Open Folder). Until a folder has been opened in ChatGPT, its Hooks page is empty and does not say why. <!-- verify on testdev -->
 
@@ -28,7 +28,9 @@ First open your wiki folder in ChatGPT (File menu, Open Folder). Until a folder 
 
 If ChatGPT is open, quit it and open it again afterwards, so that it reads the whole rules file.
 
-You must do this again after any Moblee update that changes the guard. ChatGPT will not remind you. Then prove that the guard is live, from the Moblee folder:
+ChatGPT keeps its trust while Moblee's entry in its hooks list stays the same, so an ordinary Moblee update does not need these steps again. If an update ever does need them, Moblee says so at the end of the update and ChatGPT will not remind you. After any update, prove the guard again.
+
+Prove that the guard is live, from the Moblee folder:
 
 ```
 python3 scripts/moblee-doctor.py --prove-guard
@@ -37,6 +39,8 @@ python3 scripts/moblee-doctor.py --prove-guard
 In the Moblee app, press Prove the guard on the home screen.
 
 The check-up asks ChatGPT's agent to remove a folder and delete a page in a scratch wiki, away from your own. It reports the guard as proved only if the agent was refused and both are still there. It can take three minutes and uses a little of your ChatGPT allowance. Without `--prove-guard` the check-up marks the Trust step `CANNOT SEE`, because ChatGPT's files do not show whether you have pressed Trust.
+
+Once the hook is trusted, ChatGPT does not check the guard file itself, so it would not notice if the file were replaced, by Moblee or by anything else. What shows that the file has not been swapped is the check-up, which compares it with the pack's copy and says the guard "is this Moblee's own copy", together with the guard proof.
 
 ## What this means day to day
 
@@ -52,7 +56,7 @@ With ChatGPT you are also asked to approve each commit, because ChatGPT's sandbo
 
 ## The Moblee app and the same principle
 
-From v0.8.1 the Moblee app can install the wiki, update it and add the extras you agreed with Claude. The principle holds, because the app is run by you: every change to Claude's settings still begins with you pressing a button on your own screen, and the app does its work by running the pack's own scripts, the same ones a Terminal user runs. Claude's part is to write down what was agreed in a small file in your wiki; the app reads that file and never writes to your wiki. The checklist has an option, `--yes`, that the app uses to skip the "Start now?" question after you press a tile's Add button. That option is refused when the checklist is started from inside Claude Code, since installing is your act and never Claude's. If the delete guard is ever missing, the app's home screen says "The safety guard is off. Switch it back on." and shows a Repair button, which runs the pack's own safety installer (`safety/install-safety.py`). With ChatGPT the app shows the Trust step on a screen of its own after an install, an update or a repair that changes the guard, and its home screen has a "Prove the guard" button. A skill Claude has drafted for you is copied into `~/.claude/skills/` only when you press Add, and an older copy of the same skill is moved to `~/.config/moblee/backups/`, never deleted.
+From v0.8.1 the Moblee app can install the wiki, update it and add the extras you agreed with Claude. The principle holds, because the app is run by you: every change to Claude's settings still begins with you pressing a button on your own screen, and the app does its work by running the pack's own scripts, the same ones a Terminal user runs. Claude's part is to write down what was agreed in a small file in your wiki; the app reads that file and never writes to your wiki. The checklist has an option, `--yes`, that the app uses to skip the "Start now?" question after you press a tile's Add button. That option is refused when the checklist is started from inside Claude Code, since installing is your act and never Claude's. If the delete guard is ever missing, the app's home screen says "The safety guard is off. Switch it back on." and shows a Repair button, which runs the pack's own safety installer (`safety/install-safety.py`). With ChatGPT the app shows the Trust step on a screen of its own when an install, an update or a repair says the step is needed, and its home screen has a "Prove the guard" button. A skill Claude has drafted for you is copied into `~/.claude/skills/` only when you press Add, and an older copy of the same skill is moved to `~/.config/moblee/backups/`, never deleted.
 
 ## Checking that the guard is on
 

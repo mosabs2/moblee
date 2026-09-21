@@ -76,8 +76,12 @@ TRUST_STEPS = ('First open your wiki folder in ChatGPT (File menu, Open Folder).
                'it reads the whole rules file.')
 TRUST_PROVE = ("Then prove it: python3 scripts/moblee-doctor.py --prove-guard (run from the Moblee folder; "
                "in the Moblee app, press Prove the guard). It uses a little of your ChatGPT allowance.")
-TRUST_AGAIN = ("You must do this again after any Moblee update that changes the guard. "
-               "ChatGPT will not remind you.")
+# ChatGPT keeps its trust by the hook's entry in hooks.json, and takes no account of the guard
+# file the entry runs (seen on a real update, 21 September 2026).
+TRUST_AGAIN = ("ChatGPT keeps its trust while Moblee's entry in its hooks list stays the same, so an "
+               "ordinary Moblee update does not need these steps again. If an update ever does need "
+               "them, Moblee says so at the end of the update and ChatGPT will not remind you. After "
+               "any update, prove the guard again.")
 TRUST_CHECK = "To check, and to put it right if need be: " + TRUST_STEPS + " " + TRUST_AGAIN
 TRUST_FIX = "To put it right: " + TRUST_STEPS + " " + TRUST_AGAIN
 
@@ -760,7 +764,8 @@ def check_chatgpt(f: Findings, vault: Path | None, pack: Path | None, assistant:
                       "that comes first.")
     elif in_place:
         f.add(UNSEEN, "Whether the delete guard has been trusted in ChatGPT cannot be seen from its files, and ChatGPT "
-                      "skips the guard until it has. " + TRUST_CHECK + " " + TRUST_PROVE, "F26")
+                      "skips the guard until it has. To check, and to put it right if need be: "
+                      + TRUST_STEPS + " " + TRUST_PROVE + " " + TRUST_AGAIN, "F26")
     limit, key_present = check_codex_limit(f)
     check_codex_instructions(f, vault, assistant, limit, key_present)
     check_skills(f, pack, CODEX_SKILLS, "ChatGPT")

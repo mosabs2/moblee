@@ -115,7 +115,7 @@ Your assistant cannot delete in your vault. A guard refuses the command before i
 
 **With Claude:** this holds as written.
 
-**With ChatGPT:** this holds once you have trusted the guard and proved it. ChatGPT skips a new or changed guard until you have reviewed it, and nothing on screen says so. There are five steps:
+**With ChatGPT:** this holds once you have trusted the guard and proved it. ChatGPT skips a newly installed guard until you have reviewed it, and nothing on screen says so. There are five steps:
 
 First open your wiki folder in ChatGPT (File menu, Open Folder). Until a folder has been opened in ChatGPT, its Hooks page is empty and does not say why. <!-- verify on testdev -->
 
@@ -125,7 +125,7 @@ First open your wiki folder in ChatGPT (File menu, Open Folder). Until a folder 
 4. Press Trust beside the hook that ends `bash-guard.py`.
 5. Turn its switch on.
 
-If ChatGPT is open, quit it and open it again afterwards, so that it reads the whole rules file. You must do this again after any Moblee update that changes the guard. ChatGPT will not remind you. To prove the guard is live, run `python3 scripts/moblee-doctor.py --prove-guard` in Terminal, in the folder where you downloaded Moblee. In the Moblee app, press Prove the guard on the home screen. The proof uses a little of your ChatGPT allowance. OpenAI describes hooks as a guardrail and not a complete boundary, and a guard that crashes or takes too long lets the command through. ChatGPT's own sandbox is a second layer: by default the assistant does not write outside the wiki folder and the Mac's temporary folders without asking you. The sandbox does not stop a deletion inside the wiki; the guard does.
+If ChatGPT is open, quit it and open it again afterwards, so that it reads the whole rules file. ChatGPT keeps its trust while Moblee's entry in its hooks list stays the same, so an ordinary Moblee update does not need these steps again. If an update ever does need them, Moblee says so at the end of the update and ChatGPT will not remind you. After any update, prove the guard again. To prove the guard is live, run `python3 scripts/moblee-doctor.py --prove-guard` in Terminal, in the folder where you downloaded Moblee. In the Moblee app, press Prove the guard on the home screen. The proof uses a little of your ChatGPT allowance. OpenAI describes hooks as a guardrail and not a complete boundary, and a guard that crashes or takes too long lets the command through. ChatGPT's own sandbox is a second layer: by default the assistant does not write outside the wiki folder and the Mac's temporary folders without asking you. The sandbox does not stop a deletion inside the wiki; the guard does.
 
 **Say:** "propose what could be archived, and move it if I agree"
 

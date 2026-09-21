@@ -630,10 +630,12 @@ final class HomeModel: ObservableObject {
                            "--assistant", who],
                           home: home) { [weak self] code, data in
             guard let self else { return }
-            // A repair that put a new guard in place for ChatGPT says, on a line
-            // of its own, that ChatGPT is waiting for the owner's trust again.
+            // A repair that added the guard's entry to ChatGPT's hooks list says,
+            // on a line of its own, that ChatGPT is waiting for the owner's trust.
+            // A repair that only replaced the guard file prints no such line, and
+            // the step is not set waiting: ChatGPT's trust follows the entry.
             let said = String(data: data, encoding: .utf8) ?? ""
-            if said.split(separator: "\n").contains(where: { $0.hasPrefix("@@moblee-trust-needed chatgpt") }) {
+            if Trust.saidNeeded(in: said) {
                 Trust.setPending(true, home: self.home)
                 self.trustSetAside = false
             }

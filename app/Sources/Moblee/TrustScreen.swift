@@ -1,12 +1,29 @@
 import SwiftUI
 import AppKit
 
-/// ChatGPT does not run a newly installed or changed hook until its owner has
-/// trusted it, in ChatGPT's own settings, and only the owner can do that. Until
-/// then ChatGPT skips the delete guard and nothing on its screen says so. The
+/// ChatGPT does not run a newly installed hook until its owner has trusted it,
+/// in ChatGPT's own settings, and only the owner can do that. Until then
+/// ChatGPT skips the delete guard and nothing on its screen says so. The
 /// installer and the updater say when this is so, on a line of their own; this
 /// is where the app keeps that fact until the owner has acted on it.
+///
+/// ChatGPT keeps its trust by the hook's entry in hooks.json and takes no
+/// account of the guard file the entry runs (seen on a real update, 21
+/// September 2026). So a repair or an update that only replaces the guard file
+/// leaves nothing to trust, and the app never sets the step waiting on its own
+/// reading of what changed: only on the scripts' line.
 enum Trust {
+    /// The line the safety installer prints, on its own, when ChatGPT is
+    /// waiting for the owner's trust. A Repair reads it from what the installer
+    /// said; an install or an update is told the same by a progress line (see
+    /// `InstallRun.handle`). Nothing else in what a script prints sets the step
+    /// waiting, a replaced guard file least of all.
+    static let neededLine = "@@moblee-trust-needed chatgpt"
+
+    static func saidNeeded(in output: String) -> Bool {
+        output.split(separator: "\n").contains { $0.hasPrefix(neededLine) }
+    }
+
     /// A note of the app's own, beside its other notes. It says "yes" while
     /// the owner has still to press Trust, and "no" afterwards; it is never
     /// deleted. Kept on disk so that closing Moblee at the Trust screen does
