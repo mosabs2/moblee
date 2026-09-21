@@ -46,6 +46,11 @@ FILES = [
     "scripts/vault-orient-preflight.sh",
     "scripts/patch-claude-md.py",
     "scripts/moblee-setup.py",
+    # The check-up is what the companion runs when something is wrong. From 0.9
+    # it holds the guard proof, which starts and stops a process group, and the
+    # guard read that as a deletion primitive and refused the assistant its own
+    # check-up (found on the first ChatGPT test install, 21 September 2026).
+    "scripts/moblee-doctor.py",
     "scripts/seed-memory.py",
     "scripts/add-identity.py",
     "scripts/add-habits-page.py",

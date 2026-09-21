@@ -45,7 +45,7 @@ struct HomeScreen: View {
             } else if home.needsRepair {
                 repairPrompt
             } else if showsTrust {
-                TrustScreen(start: home.trustPending ? .steps : .offer, vault: home.vault?.path) {
+                TrustScreen(start: home.trustPending ? Trust.firstStage : .offer, vault: home.vault?.path) {
                     trustOpen = false
                     home.trustSetAside = true
                 }

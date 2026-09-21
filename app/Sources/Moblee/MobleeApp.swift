@@ -130,7 +130,7 @@ final class Flow: ObservableObject {
     @Published var updateAssistant: Assistant?
 
     /// Where the Trust screen starts. Only the picture-file drawing sets this.
-    var trustStart: TrustScreen.Stage = .steps
+    var trustStart: TrustScreen.Stage = Trust.firstStage
 
     func beginUpdate(changingAssistant: Bool = false) {
         // The updater this app carries is never run on a wiki that a newer

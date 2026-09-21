@@ -24,7 +24,7 @@ You'll see the wiki update; you won't have to do anything else after the drop.
 
 ## How to ask Claude or ChatGPT to process this folder
 
-**With Claude:** open Cowork or Claude Code. **With ChatGPT:** open ChatGPT, choose Work, and open your wiki folder. <!-- verify on testdev --> Then just say:
+**With Claude:** open Cowork or Claude Code. **With ChatGPT:** open ChatGPT and, from its File menu, choose Open Folder and pick your wiki folder. <!-- verify on testdev --> Then just say:
 
 - "Process the new files in raw/."
 - "Process the new clippings."

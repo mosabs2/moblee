@@ -96,5 +96,5 @@ vault() {
   # The ChatGPT line below: <!-- verify on testdev -->
   printf '\nReady.\n'
   printf 'With Claude: run `claude` to start Claude Code.\n'
-  printf 'With ChatGPT: open ChatGPT, choose Work, and open your wiki folder.\n\n'
+  printf 'With ChatGPT: open ChatGPT and, from its File menu, choose Open Folder and pick your wiki folder.\n\n'
 }

@@ -28,31 +28,71 @@ struct HandoffScreen: View {
 
     private var sentence: String {
         if showingReceipt { return "This is everything Moblee made on your Mac." }
+        return Self.sentence(for: assistant, opened: opened)
+    }
+
+    private var spoken: String? {
+        if showingReceipt { return nil }
+        return Self.spoken(for: assistant, wiki: wikiFolderName)
+    }
+
+    /// The words of the hand-off, kept where the logic check can read them.
+    ///
+    /// In ChatGPT the wiki is opened by the File menu's Open Folder, and by no
+    /// other way: an owner once sent to open it from inside a project that was
+    /// rooted elsewhere ended with the wiki as an outside folder, and every
+    /// write to it then needed their approval (a real install, 21 September 2026).
+    static func sentence(for assistant: Assistant, opened: Bool) -> String {
         switch assistant {
         case .claude:
             return opened ? "The words are copied. Paste them to Claude." : "Last step. Do these three in Claude."
         case .chatgpt:
             return opened ? "The words are copied. Paste them to ChatGPT."
-                          : "Last step. Open ChatGPT, choose Work, and open your wiki folder."
+                          : "Last step. In ChatGPT's File menu choose Open Folder, pick your wiki folder, then say the words."
         case .both:
             return opened ? "The words are copied. Paste them to your assistant."
                           : "Last step. Open your wiki in either assistant, then say the words."
         }
     }
 
-    private var spoken: String? {
-        if showingReceipt { return nil }
+    static func spoken(for assistant: Assistant, wiki: String) -> String {
         switch assistant {
         case .claude:
-            return "Last step. In Claude: one, click Code at the top. Two, pick your wiki, called \(wikiFolderName). "
+            return "Last step. In Claude: one, click Code at the top. Two, pick your wiki, called \(wiki). "
                 + "Three, say: \(Flow.openingWords)."
         case .chatgpt:
-            return "Last step. In ChatGPT: one, choose Work at the top. Two, open your wiki folder, called \(wikiFolderName). "
+            return "Last step. In ChatGPT: one, open the File menu and choose Open Folder. "
+                + "Two, pick your wiki folder, called \(wiki). "
                 + "Three, say: \(Flow.openingWords)."
         case .both:
-            return "Last step. With Claude: click Code at the top, then pick your wiki, called \(wikiFolderName). "
-                + "With ChatGPT: choose Work at the top, then open your wiki folder. "
+            return "Last step. With Claude: click Code at the top, then pick your wiki, called \(wiki). "
+                + "With ChatGPT: in the File menu choose Open Folder, then pick your wiki folder. "
                 + "In either, say: \(Flow.openingWords)."
+        }
+    }
+
+    /// One of the three pictures: its symbol and the words under it.
+    struct Card: Equatable { let symbol, title, detail: String }
+
+    static func cards(for assistant: Assistant, wiki: String) -> [Card] {
+        let say = Card(symbol: "text.bubble.fill", title: "Say", detail: "“\(Flow.openingWords)”")
+        switch assistant {
+        case .claude:
+            return [Card(symbol: "chevron.left.forwardslash.chevron.right",
+                         title: "Click Code", detail: "at the top of Claude"),
+                    Card(symbol: "folder.fill", title: "Pick your wiki", detail: "Wiki ▸ \(wiki)"),
+                    say]
+        case .chatgpt:
+            return [Card(symbol: "filemenu.and.selection",
+                         title: "File menu, Open Folder", detail: "at the top of your screen"),
+                    Card(symbol: "folder.fill", title: "Pick your wiki folder", detail: "Wiki ▸ \(wiki)"),
+                    say]
+        case .both:
+            return [Card(symbol: Assistant.claude.symbol,
+                         title: "With Claude", detail: "Click Code at the top, then pick your wiki"),
+                    Card(symbol: Assistant.chatgpt.symbol,
+                         title: "With ChatGPT", detail: "In the File menu choose Open Folder, then pick your wiki folder"),
+                    say]
         }
     }
 
@@ -101,25 +141,9 @@ struct HandoffScreen: View {
                 .padding(.horizontal, 30)
             } else {
                 HStack(alignment: .top, spacing: 18) {
-                    switch assistant {
-                    case .claude:
-                        HandoffCard(number: 1, symbol: "chevron.left.forwardslash.chevron.right",
-                                    title: "Click Code", detail: "at the top of Claude")
-                        HandoffCard(number: 2, symbol: "folder.fill",
-                                    title: "Pick your wiki", detail: "Wiki ▸ \(wikiFolderName)")
-                    case .chatgpt:
-                        HandoffCard(number: 1, symbol: "briefcase.fill",
-                                    title: "Choose Work", detail: "at the top of ChatGPT")
-                        HandoffCard(number: 2, symbol: "folder.fill",
-                                    title: "Open your wiki folder", detail: "Wiki ▸ \(wikiFolderName)")
-                    case .both:
-                        HandoffCard(number: 1, symbol: Assistant.claude.symbol,
-                                    title: "With Claude", detail: "Click Code at the top, then pick your wiki")
-                        HandoffCard(number: 2, symbol: Assistant.chatgpt.symbol,
-                                    title: "With ChatGPT", detail: "Choose Work at the top, then open your wiki folder")
+                    ForEach(Array(Self.cards(for: assistant, wiki: wikiFolderName).enumerated()), id: \.offset) { i, card in
+                        HandoffCard(number: i + 1, symbol: card.symbol, title: card.title, detail: card.detail)
                     }
-                    HandoffCard(number: 3, symbol: "text.bubble.fill",
-                                title: "Say", detail: "“\(Flow.openingWords)”")
                 }
                 .padding(.horizontal, 30)
             }

@@ -544,6 +544,8 @@ relay_trust() {
 # The five steps only the owner can take, in the same words wherever they are printed.
 print_trust_steps() {
   local pad="$1"
+  # (v0.9) found on a real install: the Hooks page lists nothing until then
+  echo "${pad}First open your wiki folder in ChatGPT (File menu, Open Folder). Until a folder has been opened in ChatGPT, its Hooks page is empty and does not say why."
   echo "${pad}1. Open the ChatGPT menu and choose Settings."
   echo "${pad}2. Choose Hooks, under the heading Coding."
   echo "${pad}3. Open \"User config\"."
@@ -616,8 +618,8 @@ if [[ "$ASSISTANT" != "chatgpt" ]]; then
 fi
 case "$ASSISTANT" in
   chatgpt)
-    echo "To begin: open ChatGPT, choose Work, and open your wiki folder. Then"
-    echo "say: get me started"
+    echo "To begin: open ChatGPT and, from its File menu, choose Open Folder and"
+    echo "pick your wiki folder. Then say: get me started"
     echo "ChatGPT asks how you work and what you read, watch and make, and helps"
     echo "you put your first pages in."
     echo ""
@@ -626,7 +628,8 @@ case "$ASSISTANT" in
     ;;
   both)
     echo "to open Claude or ChatGPT in your new wiki and say: get me started"
-    echo "(for ChatGPT: open ChatGPT, choose Work, and open your wiki folder)."
+    echo "(for ChatGPT: open ChatGPT and, from its File menu, choose Open Folder and"
+    echo "pick your wiki folder)."
     echo "It asks how you use your Mac and what you read, watch and make, then"
     echo "suggests only what fits and gives you one command to install it."
     echo "The extras it installs are set up for Claude; Moblee does not set them"
@@ -702,8 +705,8 @@ echo "       $VAULT_LOCATION"
 echo ""
 case "$ASSISTANT" in
   chatgpt)
-    echo "  2. To begin: open ChatGPT, choose Work, and open your wiki folder. Then say"
-    echo "     \"get me started\". The folder is:"
+    echo "  2. To begin: open ChatGPT and, from its File menu, choose Open Folder and"
+    echo "     pick your wiki folder. Then say \"get me started\". The folder is:"
     echo "       $VAULT_LOCATION"
     ;;
   both)
@@ -711,7 +714,8 @@ case "$ASSISTANT" in
     echo "     Claude:"
     echo "       cd \"$VAULT_LOCATION\""
     echo "       claude"
-    echo "     ChatGPT: open ChatGPT, choose Work, and open your wiki folder:"
+    echo "     ChatGPT: open ChatGPT and, from its File menu, choose Open Folder and"
+    echo "     pick your wiki folder:"
     echo "       $VAULT_LOCATION"
     ;;
   *)

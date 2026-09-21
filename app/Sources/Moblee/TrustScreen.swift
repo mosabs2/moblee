@@ -46,15 +46,43 @@ enum Trust {
         "Turn its switch on",
     ]
 
-    /// "Later", pressed at one of the Trust screen's stages. At the steps, or
-    /// after a proof that saw the guard not running, the step is still to be
-    /// done and the note is left saying so. After the owner has said the steps
-    /// are done (the offer, or a proof that could not tell), putting the proof
-    /// off is theirs to choose, and the note is answered.
+    /// Before the five steps. ChatGPT's Hooks page lists nothing at all, and
+    /// gives no reason, until a folder has been opened in ChatGPT at least
+    /// once (seen in a real install on 21 September 2026): an owner who goes
+    /// straight to the steps finds an empty page and no guard to trust. So the
+    /// wiki folder is opened first, by ChatGPT's own File menu, which is the
+    /// way that makes the wiki the folder ChatGPT works in.
+    static let openFirst = "First open your wiki folder in ChatGPT: File menu, Open Folder."
+    static let emptyUntilOpened = "Until a folder has been opened, ChatGPT's Hooks page is empty."
+    /// Said after a proof that saw the guard not running. The likeliest cause
+    /// comes first: with no folder ever opened in ChatGPT the Hooks page was
+    /// empty, and there was nothing there to trust.
+    static let folderThenSteps = "Open your wiki folder in ChatGPT first (File menu, Open Folder), then do the five steps."
+
+    /// Where the Trust screen begins when the step is waiting: at the folder,
+    /// before the steps.
+    static let firstStage = TrustScreen.Stage.openFolder
+
+    /// Where the big button leads from the stages the owner works through by
+    /// hand: the folder, then the steps, then the offer of a proof. Nil for a
+    /// stage whose button does something else (proves, tries again, leaves).
+    static func stage(after stage: TrustScreen.Stage) -> TrustScreen.Stage? {
+        switch stage {
+        case .openFolder: return .steps
+        case .steps, .notRunning: return .offer
+        case .offer, .proving, .proved, .cannotTell: return nil
+        }
+    }
+
+    /// "Later", pressed at one of the Trust screen's stages. At the folder, at
+    /// the steps, or after a proof that saw the guard not running, the step is
+    /// still to be done and the note is left saying so. After the owner has
+    /// said the steps are done (the offer, or a proof that could not tell),
+    /// putting the proof off is theirs to choose, and the note is answered.
     static func putOff(at stage: TrustScreen.Stage, home: URL) {
         switch stage {
         case .offer, .cannotTell: setPending(false, home: home)
-        case .steps, .notRunning, .proving, .proved: break
+        case .openFolder, .steps, .notRunning, .proving, .proved: break
         }
     }
 
@@ -193,18 +221,21 @@ enum GuardProof {
 
 /// The Trust screen, and the proof that follows it.
 ///
-/// First the reason and the five steps, with a button that opens ChatGPT and a
-/// large "I have done it". Then the offer to prove it, which the owner may put
-/// off ("Later"): nothing after this screen waits for the proof. Then one of
-/// three plain results. The steps can be put off too; the step then stays
-/// waiting (see `Trust.putOff`), and the home screen shows it the next time.
+/// First the reason, in two beats of one screen, since both do not fit the
+/// window at a size that can be read: open the wiki folder in ChatGPT (a
+/// button opens ChatGPT at it), then the five steps, with the same button and
+/// a large "I have done it". Then the offer to prove it, which the owner may
+/// put off ("Later"): nothing after this screen waits for the proof. Then one
+/// of three plain results. The folder and the steps can be put off too; the
+/// step then stays waiting (see `Trust.putOff`), and the home screen shows it
+/// the next time.
 ///
 /// Shown after an install or an update that said the step is needed, before
 /// the hand-off; at home when an earlier run's step was never answered, or a
 /// repair changed the guard; and, starting at the offer, when the owner presses
 /// "Prove the guard" at home.
 struct TrustScreen: View {
-    enum Stage { case steps, offer, proving, proved, notRunning, cannotTell }
+    enum Stage { case openFolder, steps, offer, proving, proved, notRunning, cannotTell }
 
     let vault: String?
     let done: () -> Void
@@ -214,7 +245,7 @@ struct TrustScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var stage: Stage
 
-    init(start: Stage = .steps, vault: String?, done: @escaping () -> Void) {
+    init(start: Stage = Trust.firstStage, vault: String?, done: @escaping () -> Void) {
         self.vault = vault
         self.done = done
         _stage = State(initialValue: start)
@@ -229,11 +260,27 @@ struct TrustScreen: View {
             quietTitle: quietTitle,
             quietAction: quietTitle == nil ? nil : later,
             spoken: spoken,
+            // The verdict is one line, which leaves room for the line that
+            // sends the owner to the folder first, above the steps.
+            pictureHeight: stage == .notRunning ? 310 : 280,
             action: act
         ) {
             switch stage {
+            case .openFolder:
+                VStack(spacing: 16) {
+                    OpenFolderFirst()
+                    openChatGPT
+                }
             case .steps, .notRunning:
                 VStack(spacing: 8) {
+                    if stage == .notRunning {
+                        Text(Trust.folderThenSteps)
+                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.primary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(width: 520)
+                    }
                     TrustSteps()
                     Text(Trust.afterwards)
                         .font(.system(size: 13, weight: .medium, design: .rounded))
@@ -277,8 +324,10 @@ struct TrustScreen: View {
             .accessibilityHidden(true)
     }
 
+    /// Opens ChatGPT at the wiki folder, as the hand-off does: the link first,
+    /// and the app alone if the link is not taken. With no wiki known, the app.
     private var openChatGPT: some View {
-        Button("Open ChatGPT") { ChatGPTApp.open(folder: nil, practice: flow.isTestMode) }
+        Button("Open ChatGPT") { ChatGPTApp.open(folder: vault, practice: flow.isTestMode) }
             .buttonStyle(.bordered).controlSize(.large)
             .font(.system(size: 15, weight: .semibold, design: .rounded))
             .accessibilityIdentifier("open-chatgpt")
@@ -286,24 +335,32 @@ struct TrustScreen: View {
 
     private var sentence: String {
         switch stage {
-        case .steps: return "ChatGPT will not run your wiki's delete guard until you tell it to trust it."
+        case .openFolder, .steps: return Self.reasonSentence
         case .offer: return "Moblee can prove the guard is running in ChatGPT. It can take three minutes."
         case .proving: return "Testing the guard in a practice folder. This can take three minutes."
         case .proved: return Self.provedSentence
-        case .notRunning: return "The guard is not running in ChatGPT yet. Do these five steps again."
+        case .notRunning: return Self.notRunningSentence
         case .cannotTell: return Self.cannotTellSentence
         }
     }
 
+    /// The same over both beats, the folder and the steps: one screen, one reason.
+    static let reasonSentence = "ChatGPT will not run your wiki's delete guard until you tell it to trust it."
+    /// The verdict alone. What to do about it (`Trust.folderThenSteps`) is said
+    /// beneath it, above the steps.
+    static let notRunningSentence = "The guard is not running in ChatGPT yet."
     static let provedSentence = "Proved. Asked to remove a folder and delete a page in a practice folder, ChatGPT was refused."
     static let cannotTellSentence = "Moblee could not tell. Check that ChatGPT is signed in, then try again."
     static let allowance = "It uses a little of your ChatGPT allowance."
 
     private var spoken: String? {
         switch stage {
+        case .openFolder:
+            return sentence + " " + Trust.openFirst + " " + Trust.emptyUntilOpened
         case .steps, .notRunning:
             let numbered = zip(["One", "Two", "Three", "Four", "Five"], Trust.steps).map { "\($0): \($1)." }
-            return sentence + " " + numbered.joined(separator: " ") + " " + Trust.afterwards
+            let first = stage == .notRunning ? " " + Trust.folderThenSteps : ""
+            return sentence + first + " " + numbered.joined(separator: " ") + " " + Trust.afterwards
         case .offer: return sentence + " " + Self.allowance
         default: return nil
         }
@@ -311,6 +368,7 @@ struct TrustScreen: View {
 
     private var buttonTitle: String {
         switch stage {
+        case .openFolder: return Self.openedTitle
         case .steps, .notRunning: return "I have done it"
         case .offer: return "Prove it"
         case .proving, .proved: return "Next"
@@ -318,14 +376,17 @@ struct TrustScreen: View {
         }
     }
 
-    /// Every stage but the test itself can be put off, the steps included: an
-    /// owner who cannot do them now (ChatGPT not signed in, no time, the wrong
-    /// assistant chosen) must not have "I have done it" as the only way on,
-    /// since it would not be true. Put off at the steps, the step stays
-    /// waiting and the home screen brings it back the next time Moblee opens.
+    static let openedTitle = "I have opened it"
+
+    /// Every stage but the test itself can be put off, the folder and the
+    /// steps included: an owner who cannot do them now (ChatGPT not signed in,
+    /// no time, the wrong assistant chosen) must not have "I have done it" as
+    /// the only way on, since it would not be true. Put off there, the step
+    /// stays waiting and the home screen brings it back the next time Moblee
+    /// opens.
     private var quietTitle: String? {
         switch stage {
-        case .steps, .offer, .notRunning, .cannotTell: return "Later"
+        case .openFolder, .steps, .offer, .notRunning, .cannotTell: return "Later"
         case .proving, .proved: return nil
         }
     }
@@ -338,9 +399,10 @@ struct TrustScreen: View {
 
     private func act() {
         switch stage {
-        case .steps, .notRunning:
+        case .openFolder, .steps, .notRunning:
             // The note is left as it is: said done is not yet seen done.
-            withAnimation(.easeInOut(duration: 0.25)) { stage = .offer }
+            guard let next = Trust.stage(after: stage) else { return }
+            withAnimation(.easeInOut(duration: 0.25)) { stage = next }
         case .offer, .cannotTell:
             prove()
         case .proving:
@@ -364,6 +426,34 @@ struct TrustScreen: View {
                 }
             }
         }
+    }
+}
+
+/// What comes before the five steps, on a card of its own: the instruction,
+/// large, and quieter beneath it the reason it cannot be skipped.
+struct OpenFolderFirst: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "folder.fill")
+                .font(.system(size: 56, weight: .medium))
+                .foregroundStyle(Theme.accent)
+                .accessibilityHidden(true)
+            Text(Trust.openFirst)
+                .font(.system(size: 19, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(Trust.emptyUntilOpened)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 26).padding(.vertical, 22)
+        .frame(width: 520)
+        .background(CardBackground(corner: 20))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Trust.openFirst + " " + Trust.emptyUntilOpened)
     }
 }
 

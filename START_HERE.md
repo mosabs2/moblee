@@ -42,7 +42,7 @@ In Obsidian, choose Open folder as vault and pick the folder the installer made.
 
 **With Claude:** Back in Terminal, go into your wiki's folder and start Claude (the installer prints both lines for you). If you used the app, its last screen shows three clicks in Claude's own app instead: click Code (which needs a paid Claude plan) and pick your wiki's folder.
 
-**With ChatGPT:** Open ChatGPT, choose Work, and open your wiki folder. <!-- verify on testdev -->
+**With ChatGPT:** Open ChatGPT and, from its File menu, choose Open Folder and pick your wiki folder. <!-- verify on testdev -->
 
 Then say:
 

@@ -106,7 +106,9 @@ What goes wrong with a Moblee wiki, how to confirm it, what fixes it and who doe
 
 ## F26. ChatGPT has not been told to trust the delete guard, or the guard has been updated since it was
 
-**What the owner sees:** nothing, and that is the trouble. ChatGPT does not run a newly installed or changed hook until the owner has reviewed it. Until then the guard is skipped, nothing on screen says so, and a deletion that should have been refused goes through. **Confirms it:** the check-up says it cannot see whether the guard has been trusted; run with `--prove-guard` it says "The delete guard is not running in ChatGPT". **Why:** Moblee has just been installed for ChatGPT, or an update or a Repair has changed the guard. The steps must be done again after every such change, and ChatGPT does not remind the owner. **Fix, owner, five steps in ChatGPT:**
+**What the owner sees:** nothing, and that is the trouble. ChatGPT does not run a newly installed or changed hook until the owner has reviewed it. Until then the guard is skipped, nothing on screen says so, and a deletion that should have been refused goes through. **Confirms it:** the check-up says it cannot see whether the guard has been trusted; run with `--prove-guard` it says "The delete guard is not running in ChatGPT". **Why:** Moblee has just been installed for ChatGPT, or an update or a Repair has changed the guard. The steps must be done again after every such change, and ChatGPT does not remind the owner. **An empty Hooks page:** if the Hooks page shows "No hooks found" and lists nothing, no folder has been opened in ChatGPT yet. The fix is to open the wiki folder first, then do the steps. **Fix, owner, five steps in ChatGPT:**
+
+First open your wiki folder in ChatGPT (File menu, Open Folder). Until a folder has been opened in ChatGPT, its Hooks page is empty and does not say why. <!-- verify on testdev -->
 
 1. Open the ChatGPT menu and choose Settings.
 2. Choose Hooks, under the heading Coding.

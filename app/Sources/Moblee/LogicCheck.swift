@@ -192,8 +192,63 @@ enum LogicCheck {
         check("and answered, without being deleted",
               !Trust.pending(home: home) && FileManager.default.fileExists(atPath: Trust.note(home: home).path))
 
+        // --- the wiki folder is opened in ChatGPT before the five steps ---
+        // ChatGPT's Hooks page is empty until a folder has been opened there,
+        // so the Trust screen begins at the folder and only then shows the steps.
+        check("the Trust screen begins at opening the wiki folder, before the steps",
+              Trust.firstStage == .openFolder && flow.trustStart == .openFolder)
+        check("from the folder the big button leads to the five steps, and from the steps to the offer of a proof",
+              Trust.stage(after: .openFolder) == .steps && Trust.stage(after: .steps) == .offer)
+        check("after a proof that saw the guard not running, the steps lead to the offer again",
+              Trust.stage(after: .notRunning) == .offer)
+        check("the folder comes first in words: File menu, Open Folder, and why the Hooks page is empty",
+              Trust.openFirst == "First open your wiki folder in ChatGPT: File menu, Open Folder."
+                  && Trust.emptyUntilOpened == "Until a folder has been opened, ChatGPT's Hooks page is empty.")
+        check("the five steps are word for word as verified",
+              Trust.steps == ["Open the ChatGPT menu and choose Settings", "Choose Hooks, under the heading Coding",
+                              "Open “User config”", "Press Trust beside the hook that ends bash-guard.py",
+                              "Turn its switch on"])
+        check("a guard seen not running sends the owner to the folder first, then the five steps",
+              TrustScreen.notRunningSentence == "The guard is not running in ChatGPT yet."
+                  && Trust.folderThenSteps
+                      == "Open your wiki folder in ChatGPT first (File menu, Open Folder), then do the five steps.")
+
+        // --- the hand-off's words ---
+        let wikiName = "Sam Wiki"
+        check("the hand-off for ChatGPT opens the wiki by the File menu's Open Folder",
+              HandoffScreen.sentence(for: .chatgpt, opened: false)
+                  == "Last step. In ChatGPT's File menu choose Open Folder, pick your wiki folder, then say the words.")
+        let chatgptCards = HandoffScreen.cards(for: .chatgpt, wiki: wikiName)
+        check("and its three pictures say the same: the File menu, the wiki folder, the words",
+              chatgptCards.map(\.title) == ["File menu, Open Folder", "Pick your wiki folder", "Say"]
+                  && chatgptCards[1].detail == "Wiki ▸ Sam Wiki" && chatgptCards[2].detail == "“get me started”")
+        check("for both, ChatGPT's line is the File menu's Open Folder, then the wiki folder",
+              HandoffScreen.cards(for: .both, wiki: wikiName)[1]
+                  == HandoffScreen.Card(symbol: Assistant.chatgpt.symbol, title: "With ChatGPT",
+                                        detail: "In the File menu choose Open Folder, then pick your wiki folder"))
+        check("Claude's hand-off is word for word as it has always been",
+              HandoffScreen.sentence(for: .claude, opened: false) == "Last step. Do these three in Claude."
+                  && HandoffScreen.cards(for: .claude, wiki: wikiName).map(\.title) == ["Click Code", "Pick your wiki", "Say"]
+                  && HandoffScreen.cards(for: .claude, wiki: wikiName).map(\.detail)
+                      == ["at the top of Claude", "Wiki ▸ Sam Wiki", "“get me started”"]
+                  && HandoffScreen.cards(for: .both, wiki: wikiName)[0].detail == "Click Code at the top, then pick your wiki"
+                  && HandoffScreen.spoken(for: .claude, wiki: wikiName)
+                      == "Last step. In Claude: one, click Code at the top. Two, pick your wiki, called Sam Wiki. Three, say: get me started.")
+        var said: [String] = [Trust.openFirst, Trust.emptyUntilOpened, Trust.folderThenSteps, Trust.afterwards,
+                              TrustScreen.reasonSentence,
+                              TrustScreen.notRunningSentence, TrustScreen.openedTitle] + Trust.steps
+        for a in Assistant.allCases {
+            said += [HandoffScreen.sentence(for: a, opened: false), HandoffScreen.sentence(for: a, opened: true),
+                     HandoffScreen.spoken(for: a, wiki: wikiName)]
+            said += HandoffScreen.cards(for: a, wiki: wikiName).flatMap { [$0.title, $0.detail] }
+        }
+        check("nothing on the Trust screen or the hand-off tells an owner to choose Work or to make a project",
+              !said.contains { $0.contains("Work") || $0.lowercased().contains("project") })
+
         // What each way of leaving the Trust screen does to the note.
         Trust.setPending(true, home: home)
+        Trust.putOff(at: .openFolder, home: home)
+        check("Later on opening the folder leaves the step waiting", Trust.pending(home: home))
         Trust.putOff(at: .steps, home: home)
         check("Later on the steps leaves the step waiting", Trust.pending(home: home))
         Trust.putOff(at: .offer, home: home)

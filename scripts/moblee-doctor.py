@@ -17,7 +17,8 @@ The assistant the wiki is used with (claude, chatgpt or both) is read from
 Claude is wanted and ChatGPT's when ChatGPT is wanted. ChatGPT's files do not
 show whether the owner has trusted the delete guard there, so that is reported
 as CANNOT SEE unless --prove-guard is given. --prove-guard is the one option
-that does more than read: it makes a scratch wiki under ~/.cache/moblee/ and
+that does more than read: it makes a scratch wiki under
+~/.config/moblee/prove-guard/ (not a place the guard treats as throwaway) and
 asks ChatGPT's agent to remove a folder and delete a page in it, which the
 guard should refuse. The scratch wiki is left where it is; the real wiki is
 never touched.
@@ -66,7 +67,10 @@ ASSISTANTS = ("claude", "chatgpt", "both")
 ASSISTANT_NAMES = {"claude": "Claude", "chatgpt": "ChatGPT", "both": "Claude and ChatGPT"}
 
 # The five steps only the owner can take, in the same words wherever Moblee prints them.
-TRUST_STEPS = ('1. Open the ChatGPT menu and choose Settings. 2. Choose Hooks, under the heading Coding. '
+# The sentence before them was found on a real install: the Hooks page lists nothing until then.
+TRUST_STEPS = ('First open your wiki folder in ChatGPT (File menu, Open Folder). Until a folder has been '
+               'opened in ChatGPT, its Hooks page is empty and does not say why. '
+               '1. Open the ChatGPT menu and choose Settings. 2. Choose Hooks, under the heading Coding. '
                '3. Open "User config". 4. Press Trust beside the hook that ends bash-guard.py. '
                '5. Turn its switch on. If ChatGPT was open during this, quit it and open it again so that '
                'it reads the whole rules file.')
@@ -673,11 +677,14 @@ def prove_guard(f: Findings, announce: bool) -> None:
     except (OSError, subprocess.SubprocessError):
         pass  # the real run below says what is wrong, if anything is
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    scratch = HOME / ".cache" / "moblee" / f"prove-guard-{stamp}"
+    # The scratch wiki is kept out of every place the guard treats as throwaway
+    # (~/.cache, the system's temporary folders, ~/.config/moblee/logs), so a
+    # refusal there is plainly the guard's and owes nothing to where the folder is.
+    scratch = CONFIG / "prove-guard" / stamp
     page, folder = scratch / "wiki" / "page.md", scratch / "emptydir"
     try:
-        # The guard knows a wiki by AGENTS.md beside a wiki/ folder; without
-        # both, anything under ~/.cache is a throwaway it rightly lets go.
+        # The guard knows a wiki by AGENTS.md beside a wiki/ folder, so the
+        # scratch folder is given both.
         (scratch / "wiki").mkdir(parents=True)
         folder.mkdir()
         # Neither file says what is being tested or what is expected to happen:
@@ -691,7 +698,7 @@ def prove_guard(f: Findings, announce: bool) -> None:
         return
     left = f" The scratch wiki used for the test is left at {scratch}; nothing in it matters."
     try:
-        earlier = sorted(p.name for p in scratch.parent.glob("prove-guard-*") if p.is_dir() and p != scratch)
+        earlier = sorted(p.name for p in scratch.parent.iterdir() if p.is_dir() and p != scratch)
     except OSError:
         earlier = []
     if earlier:
@@ -785,7 +792,7 @@ def main() -> int:
     ap.add_argument("--assistant", choices=ASSISTANTS,
                     help="check for this assistant instead of the one on record (claude, chatgpt or both)")
     ap.add_argument("--prove-guard", action="store_true",
-                    help="ask ChatGPT to try a delete in a scratch wiki under ~/.cache/moblee/, to prove the guard runs there")
+                    help="ask ChatGPT to try a delete in a scratch wiki under ~/.config/moblee/prove-guard/, to prove the guard runs there")
     args = ap.parse_args()
 
     f = Findings()
