@@ -553,7 +553,7 @@ print_trust_steps() {
   echo "${pad}5. Turn its switch on."
   echo "${pad}If ChatGPT was open during this, quit it and open it again so that it reads the whole rules file."
   echo "${pad}Then prove it: python3 scripts/moblee-doctor.py --prove-guard (run from the Moblee folder; in the Moblee app, press Prove the guard). It uses a little of your ChatGPT allowance."
-  echo "${pad}You must do this again after any Moblee update that changes the guard. ChatGPT will not remind you."
+  echo "${pad}ChatGPT keeps its trust while Moblee's entry in its hooks list stays the same, so an ordinary Moblee update does not need these steps again. If an update ever does need them, Moblee says so at the end of the update and ChatGPT will not remind you. After any update, prove the guard again."
 }
 if python3 "$PACKAGE_ROOT/safety/install-safety.py" --vault "$VAULT_LOCATION" --assistant "$ASSISTANT" 2>&1 | tee "$SAFETY_OUT"; then
   step_ok safety

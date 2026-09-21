@@ -471,9 +471,11 @@ struct UpdateScreen: View {
     }
 
     private func backHome() {
-        // An update that put a new guard in place for ChatGPT asks for the
-        // owner's trust again, even if they put the Trust screen off earlier
-        // in this opening of the app: that was an answer about the old guard.
+        // An update that said ChatGPT is waiting for the owner's trust (it added
+        // the guard's entry to ChatGPT's hooks list) shows the Trust screen even
+        // if the owner put it off earlier in this opening of the app: that was
+        // an answer about the entry as it was. An update that only replaced the
+        // guard file says no such thing, and nothing is shown.
         if install.trustNeeded { home.trustSetAside = false }
         home.load(home: flow.home, bundledPack: flow.bundledPack)
         flow.mode = .home

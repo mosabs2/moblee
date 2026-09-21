@@ -125,6 +125,27 @@ enum LogicCheck {
         quiet.handle(["step": "safety", "state": "a-state-from-the-future"])
         check("lines that are not understood are ignored: no trust step, nothing failed, no tile changed",
               !quiet.trustNeeded && quiet.phase == .idle && quiet.items.allSatisfy { $0.state == .waiting })
+        // ChatGPT keeps its trust by the entry in its hooks list and takes no
+        // account of the guard file. So what a repair printed when it only
+        // replaced that file sets nothing waiting; only the scripts' own line
+        // does, on a line of its own, and never a sentence that merely names it.
+        let replacedOnly = """
+        Delete guard for ChatGPT
+          previous guard kept at ~/.config/moblee/backups/20260921-101500/codex-bash-guard.py
+          installed ~/.codex/hooks/bash-guard.py
+        Hook registration in ~/.codex/hooks.json
+          already registered; nothing to change
+        The delete guard for ChatGPT was updated. ChatGPT keeps the trust you gave it.
+        Prove the guard again: python3 scripts/moblee-doctor.py --prove-guard
+        A line that only names @@moblee-trust-needed chatgpt is not the line.
+        """
+        let updatedOnly = InstallRun()
+        updatedOnly.handle(["step": "safety", "state": "start", "n": 4, "of": 8])
+        updatedOnly.handle(["step": "safety", "state": "ok", "n": 4, "of": 8])
+        check("a repair or an update that only replaced ChatGPT's guard file sets no Trust step waiting: only the scripts' trust-needed line does",
+              !Trust.saidNeeded(in: replacedOnly) && !updatedOnly.trustNeeded
+                  && Trust.saidNeeded(in: replacedOnly + "\n" + Trust.neededLine + "\n")
+                  && Trust.neededLine == "@@moblee-trust-needed chatgpt")
 
         // --- the proof's findings ---
         func rows(_ list: [[String: Any]]) -> Data { (try? JSONSerialization.data(withJSONObject: list)) ?? Data() }

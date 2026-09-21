@@ -65,7 +65,7 @@ After that, the script will:
 
 It takes a few minutes. You run the installer yourself, rather than asking your assistant to, because it changes your assistant's own settings (the guard, the skills and, for Claude, the permission rules); those changes are yours to make, on your own screen.
 
-**With ChatGPT: the Trust step.** ChatGPT does not run a newly installed or changed guard until you have reviewed it. Until then the guard is skipped and nothing on screen says so. The installer prints the steps when they are due:
+**With ChatGPT: the Trust step.** ChatGPT does not run a newly installed guard until you have reviewed it. Until then the guard is skipped and nothing on screen says so. The installer prints the steps when they are due:
 
 First open your wiki folder in ChatGPT (File menu, Open Folder). Until a folder has been opened in ChatGPT, its Hooks page is empty and does not say why. <!-- verify on testdev -->
 
@@ -75,7 +75,7 @@ First open your wiki folder in ChatGPT (File menu, Open Folder). Until a folder 
 4. Press Trust beside the hook that ends `bash-guard.py`.
 5. Turn its switch on.
 
-If ChatGPT is open, quit it and open it again afterwards, so that it reads the whole rules file. You must do the five steps again after any Moblee update that changes the guard. ChatGPT will not remind you. `docs/09-safety.md` says how to prove the guard afterwards.
+If ChatGPT is open, quit it and open it again afterwards, so that it reads the whole rules file. ChatGPT keeps its trust while Moblee's entry in its hooks list stays the same, so an ordinary Moblee update does not need the five steps again. If an update ever does need them, Moblee says so at the end of the update and ChatGPT will not remind you. After any update, prove the guard again; `docs/09-safety.md` says how.
 
 **The install diary.** Every run of the installer, from Terminal or from the app, keeps a plain diary of its steps at `~/.config/moblee/install-diary.txt`: what ran, what passed, what failed and why. It holds no names, and it writes your home folder as `~`, so it is safe to pass to whoever is helping you if an install goes wrong. Each run adds to the end of the file; nothing in it is overwritten.
 

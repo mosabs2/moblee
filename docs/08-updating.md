@@ -28,13 +28,13 @@ bash scripts/update.sh
 3. It finds your vault by itself (it remembers where the installer put it). If it cannot, run `bash scripts/update.sh` followed by the path to your vault.
 4. Answer the questions it may ask: whether to schedule the weekly health check, and whether to add the learning path. Wait for each question to appear before typing.
 5. When it says "Updated to", it suggests asking your assistant which extras suit you ("review my setup" in your wiki, or "get me started" if you have never done it; the `companion` skill answers to both), then asks "Would you rather choose from the full checklist yourself now?". Press Return to leave it, or type `y` to open it. The checklist connects the wiki to your Mac's Calendar, Reminders, Mail and Notes, to Google, GitHub and Chrome, and adds tools for video, documents and editing. Items that are already working are marked and left alone, and each line says the time, space and cost before anything starts. Ticking everything free takes about an hour and a half the first time and several gigabytes; nothing is ticked in advance. `docs/10-connections.md` explains every item. The checklist is **with Claude**. **With ChatGPT:** Moblee does not set this up for ChatGPT yet.
-6. Open your assistant in your vault and say `orient`. With Claude, if you added any connections, quit Claude Code and open it again first so it sees them. With ChatGPT, do the Trust step below first if the updater printed it.
+6. Open your assistant in your vault and say `orient`. With Claude, if you added any connections, quit Claude Code and open it again first so it sees them. With ChatGPT, first prove the guard as described below, after the Trust steps if the updater printed them.
 
 Running the updater twice is safe. Each step checks what is already there and skips it.
 
-## With ChatGPT: after an update that changes the guard
+## With ChatGPT: after an update
 
-ChatGPT runs the delete guard only while you have trusted it. After an update that changes the guard, ChatGPT skips the guard until you press Trust again, and nothing on screen says so. ChatGPT will not remind you. The updater prints the steps when they are due:
+After any update, prove the guard again; the command is at the end of this section. ChatGPT keeps its trust while Moblee's entry in its hooks list stays the same, so an ordinary Moblee update does not need the Trust steps again, even when it brings a newer guard. If an update ever does need them, Moblee says so at the end of the update and ChatGPT will not remind you. Do the steps only then:
 
 First open your wiki folder in ChatGPT (File menu, Open Folder). Until a folder has been opened in ChatGPT, its Hooks page is empty and does not say why. <!-- verify on testdev -->
 
@@ -46,7 +46,7 @@ First open your wiki folder in ChatGPT (File menu, Open Folder). Until a folder 
 
 If ChatGPT is open, quit it and open it again afterwards, so that it reads the whole rules file.
 
-Then prove the guard with the check-up, from the Moblee folder:
+Whether or not the steps were needed, prove the guard with the check-up, from the Moblee folder:
 
 ```
 python3 scripts/moblee-doctor.py --prove-guard

@@ -83,7 +83,7 @@ When the owner says "guide me" or "what next", or accepts orient's one offer, re
 
 State the reason with the offer. Never offer a second thing in the same session unless asked; something the owner asks for themselves is a request, not an offer, and is simply done.
 
-**With ChatGPT:** the guard comes before the offer. The guard must be trusted again after any Moblee update that changes it, and ChatGPT does not remind the owner. If the wiki's `VERSION` is newer than the one beside the last proof under "Review history", or no proof is recorded there, ask for the proof first (field guide F26).
+**With ChatGPT:** the guard comes before the offer. An ordinary Moblee update keeps ChatGPT's trust, because that trust follows Moblee's entry in ChatGPT's hooks list and takes no account of the guard file; the Trust steps are needed again only when the update says so, and ChatGPT does not remind the owner. ChatGPT does not notice a replaced guard file either, so the proof is asked for again after every update. If the wiki's `VERSION` is newer than the one beside the last proof under "Review history", or no proof is recorded there, ask for the proof first (field guide F26).
 
 **A no to the thing and a "not now" are different answers.** "No, I don't want that" is written under "Said no to" with the date, and that thing is not offered again for ninety days unless the owner raises it. "Not now", "later", "nah" to a reminder, or an item they started and backed out of, is not a no to the thing: leave it where it is, end the offer for this session, and do not write it under "Said no to". If it is unclear which they mean, ask in five words ("Not now, or not at all?").
 

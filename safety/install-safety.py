@@ -47,9 +47,13 @@ hooks off (hooks = false under [features]): Moblee does not change ChatGPT's
 hook arrangement by itself. Each file is read again just before it is
 written, and left alone if it changed in the meantime.
 
-ChatGPT runs a new or changed hook only after the owner trusts it. When that
-step is needed the last line printed is "@@moblee-trust-needed chatgpt", which
-the app and the updater read; it is printed even when a later step fails.
+ChatGPT runs a hook only after the owner trusts it, and it keeps that trust by
+the hook's entry in hooks.json (its command, matcher, timeout and place in the
+list). It takes no account of the contents of the guard file the entry runs.
+So the step is needed only when this run has added the entry; a run that only
+brings the guard file up to date leaves the trust as it was, and says so. When
+the step is needed the last line printed is "@@moblee-trust-needed chatgpt",
+which the app and the updater read; it is printed even when a later step fails.
 
 Everything here is standard-library Python; nothing is downloaded.
 """
@@ -628,11 +632,26 @@ def prove_codex_guard(guard: Path, vault: Path) -> None:
         "a harmless command passes")
 
 
-def say_trust(trust_needed: bool) -> None:
+PROVE_LINE = ("python3 scripts/moblee-doctor.py --prove-guard (run from the Moblee folder; "
+              "in the Moblee app, press Prove the guard). It uses a little of your ChatGPT "
+              "allowance.")
+
+
+def say_trust(trust_needed: bool, guard_updated: bool = False) -> None:
     """The step only the owner can take, and the line the app and the updater
     look for. The steps are the same five every time. The machine-readable
-    line is printed only when trust is needed, and is then the last thing
-    printed."""
+    line is printed only when trust is needed, which is only when this run
+    added the entry to hooks.json, and is then the last thing printed. A run
+    that only brought the guard file up to date prints no steps: ChatGPT's
+    trust follows the entry, and the entry did not change (seen on a real
+    update, 21 September 2026)."""
+    if guard_updated and not trust_needed:
+        say("The delete guard for ChatGPT was updated. ChatGPT keeps the trust you gave it, "
+            "because Moblee's entry in ChatGPT's hooks list did not change, so the Trust steps "
+            "are not needed again.")
+        say("Prove the guard again: " + PROVE_LINE)
+        say("If the proof finds the guard not running, it gives the steps.")
+        return
     if trust_needed:
         say("One step is yours: ChatGPT will not run the guard until you trust it.")
     else:
@@ -648,17 +667,21 @@ def say_trust(trust_needed: bool) -> None:
     say("  5. Turn its switch on.")
     say("If ChatGPT was open during this, quit it and open it again so that it reads "
         "the whole rules file.")
-    say("You must do this again after any Moblee update that changes the guard. "
-        "ChatGPT will not remind you.")
+    say("ChatGPT keeps its trust while Moblee's entry in its hooks list stays the same, so an "
+        "ordinary Moblee update does not need these steps again. If an update ever does need "
+        "them, Moblee says so at the end of the update and ChatGPT will not remind you. After "
+        "any update, prove the guard again.")
     if trust_needed:
         say(TRUST_LINE)
 
 
 def chatgpt_branch(vault: Path, hooks_plan: tuple, config_plan: tuple,
                    stamp: str, dry_run: bool, progress: dict) -> int:
-    """Returns the exit code. progress["trust"] is set the moment something
-    is changed that the owner must trust, so the caller can still say so if a
-    later step fails."""
+    """Returns the exit code. progress["trust"] is set the moment the entry is
+    added to hooks.json, which is the one thing here the owner must trust, so
+    the caller can still say so if a later step fails. A guard file that was
+    only brought up to date sets progress["guard_updated"] and nothing more:
+    ChatGPT's trust follows the entry, and takes no account of the file."""
     data, raw, hooks_new, hooks_expected = hooks_plan
     config_raw, config_new = config_plan
 
@@ -680,7 +703,7 @@ def chatgpt_branch(vault: Path, hooks_plan: tuple, config_plan: tuple,
                 say(f"  previous guard kept at {short(b)}")
             shutil.copy2(GUARD_SRC, CODEX_GUARD_DST)
             say(f"  installed {short(CODEX_GUARD_DST)}")
-            progress["trust"] = True
+            progress["guard_updated"] = True
         CODEX_GUARD_DST.chmod(CODEX_GUARD_DST.stat().st_mode
                               | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         prove_codex_guard(CODEX_GUARD_DST, vault)
@@ -770,11 +793,13 @@ def main() -> int:
         # and later refuses the pack's own newer tools, so its file is kept
         # level. Nothing else of Claude's is touched.
         keep_claude_guard_level(stamp, a.dry_run)
-    progress, code = {"trust": False}, 0
+    progress, code = {"trust": False, "guard_updated": False}, 0
     if wants_chatgpt:
         # Whatever stops a later step, the owner is still told when there is
         # something to trust: a guard that is registered but not trusted does
-        # not run, and nothing else would say so.
+        # not run, and nothing else would say so. There is something to trust
+        # only when this run added the entry; a guard file brought up to date
+        # under an entry already there keeps the trust it had.
         failure = None
         try:
             code = chatgpt_branch(vault, hooks_plan, config_plan, stamp, a.dry_run, progress)
@@ -816,7 +841,7 @@ def main() -> int:
             say("    or with its file-editing tool, in the forms the guard knows, including")
             say("    indirect ones. If something must go, ChatGPT tells you what and you")
             say("    remove it yourself.")
-        say_trust(trust_needed)
+        say_trust(trust_needed, progress["guard_updated"])
     return code
 
 
