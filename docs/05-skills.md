@@ -85,7 +85,7 @@ The analytical and ghost patterns are read-only; save-back routes through `wiki-
 - "Add to my wiki."
 - "Capture everything from this chat."
 
-When the vault is mounted (with Claude: Claude Code, or Cowork with the folder mounted; with ChatGPT: open ChatGPT and, from its File menu, choose Open Folder and pick your wiki folder), the skill writes directly into `raw/<date>-<topic>.md`. <!-- verify on testdev --> When the vault is not mounted, it produces a copy-paste markdown artefact for you to paste in by hand.
+When the vault is mounted (with Claude: Claude Code, or Cowork with the folder mounted; with ChatGPT: open ChatGPT and, from its File menu, choose Open Folder and pick your wiki folder, making sure Work is chosen at the top of the window, and not Chat, before you type), the skill writes directly into `raw/<date>-<topic>.md`. <!-- verify on testdev --> When the vault is not mounted, it produces a copy-paste markdown artefact for you to paste in by hand.
 
 It also handles light housekeeping on request: "move the processed files" or "tidy up raw" will move ingested files into the `raw/processed/` subfolder for you.
 

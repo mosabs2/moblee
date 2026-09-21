@@ -409,7 +409,8 @@ if [[ "$ASSISTANT" == "both" ]]; then
 fi
 if [[ "$ASSISTANT" == "chatgpt" || "$ASSISTANT" == "both" ]]; then
   echo "For ChatGPT: open ChatGPT and, from its File menu, choose Open Folder and pick your wiki folder."
-  echo "Then type \`@\` in the message box."
+  echo "Make sure Work is chosen at the top of the window, and not Chat, before"
+  echo "you type. Then type \`@\` in the message box."
   echo "The installed skills should appear in the list. If they do not, quit"
   echo "ChatGPT and open it again."
 fi

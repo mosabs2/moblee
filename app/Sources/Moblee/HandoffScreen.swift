@@ -42,13 +42,21 @@ struct HandoffScreen: View {
     /// other way: an owner once sent to open it from inside a project that was
     /// rooted elsewhere ended with the wiki as an outside folder, and every
     /// write to it then needed their approval (a real install, 21 September 2026).
+    ///
+    /// Then the switch at the top of ChatGPT's window, which says Chat or Work.
+    /// Set to Work, the chat runs in the opened wiki folder. Set to Chat,
+    /// ChatGPT offers to "Continue in Work", and that goes on in a folder of
+    /// ChatGPT's own making, outside the wiki, where the wiki's rules are not
+    /// loaded (a test on 21 September 2026). The Open ChatGPT button opens the
+    /// wiki folder but cannot set that switch, so the owner is told to, before
+    /// the words are said and again once the words are copied.
     static func sentence(for assistant: Assistant, opened: Bool) -> String {
         switch assistant {
         case .claude:
             return opened ? "The words are copied. Paste them to Claude." : "Last step. Do these three in Claude."
         case .chatgpt:
-            return opened ? "The words are copied. Paste them to ChatGPT."
-                          : "Last step. In ChatGPT's File menu choose Open Folder, pick your wiki folder, then say the words."
+            return opened ? "The words are copied. In ChatGPT choose Work at the top, then paste them."
+                          : "Last step. Open your wiki folder in ChatGPT, choose Work at the top, then say the words."
         case .both:
             return opened ? "The words are copied. Paste them to your assistant."
                           : "Last step. Open your wiki in either assistant, then say the words."
@@ -61,12 +69,12 @@ struct HandoffScreen: View {
             return "Last step. In Claude: one, click Code at the top. Two, pick your wiki, called \(wiki). "
                 + "Three, say: \(Flow.openingWords)."
         case .chatgpt:
-            return "Last step. In ChatGPT: one, open the File menu and choose Open Folder. "
-                + "Two, pick your wiki folder, called \(wiki). "
+            return "Last step. In ChatGPT: one, open the File menu, choose Open Folder and pick your wiki folder, called \(wiki). "
+                + "Two, choose Work at the top of the window, not Chat. "
                 + "Three, say: \(Flow.openingWords)."
         case .both:
             return "Last step. With Claude: click Code at the top, then pick your wiki, called \(wiki). "
-                + "With ChatGPT: in the File menu choose Open Folder, then pick your wiki folder. "
+                + "With ChatGPT: in the File menu choose Open Folder, pick your wiki folder, and choose Work at the top. "
                 + "In either, say: \(Flow.openingWords)."
         }
     }
@@ -83,15 +91,16 @@ struct HandoffScreen: View {
                     Card(symbol: "folder.fill", title: "Pick your wiki", detail: "Wiki ▸ \(wiki)"),
                     say]
         case .chatgpt:
-            return [Card(symbol: "filemenu.and.selection",
-                         title: "File menu, Open Folder", detail: "at the top of your screen"),
-                    Card(symbol: "folder.fill", title: "Pick your wiki folder", detail: "Wiki ▸ \(wiki)"),
+            return [Card(symbol: "folder.fill",
+                         title: "Open your wiki folder", detail: "File menu, Open Folder, then Wiki ▸ \(wiki)"),
+                    Card(symbol: "switch.2", title: "Choose Work", detail: "at the top of the window, not Chat"),
                     say]
         case .both:
             return [Card(symbol: Assistant.claude.symbol,
                          title: "With Claude", detail: "Click Code at the top, then pick your wiki"),
                     Card(symbol: Assistant.chatgpt.symbol,
-                         title: "With ChatGPT", detail: "In the File menu choose Open Folder, then pick your wiki folder"),
+                         title: "With ChatGPT",
+                         detail: "File menu, Open Folder, pick your wiki folder, and choose Work at the top"),
                     say]
         }
     }

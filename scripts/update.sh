@@ -764,16 +764,19 @@ if [[ -f "$SCRIPT_DIR/moblee-setup.py" ]]; then
   case "$ASSISTANT" in
     chatgpt)
       echo "To carry on: open ChatGPT and, from its File menu, choose Open Folder and"
-      echo "pick your wiki folder. Then say: get me started (if you have never done it)."
+      echo "pick your wiki folder. Make sure Work is chosen at the top of the window,"
+      echo "and not Chat, before you type."
+      echo "Then say: get me started (if you have never done it)."
       echo "Moblee's optional extras (Calendar, Mail, Google, videos and the rest) are"
       echo "set up for Claude. Moblee does not set them up for ChatGPT yet."
       ;;
     both)
       echo "New in this version: your assistant can suggest which extras suit you. Open"
       echo "Claude or ChatGPT in your wiki (for ChatGPT: open ChatGPT and, from its File"
-      echo "menu, choose Open Folder and pick your wiki folder) and say: review my setup"
-      echo "(or, if you have never done it, get me started). It asks how you use your Mac,"
-      echo "suggests only what fits and gives you one command to install it."
+      echo "menu, choose Open Folder and pick your wiki folder; make sure Work is chosen"
+      echo "at the top of the window, and not Chat, before you type) and say: review my"
+      echo "setup (or, if you have never done it, get me started). It asks how you use"
+      echo "your Mac, suggests only what fits and gives you one command to install it."
       echo "The extras it installs are set up for Claude; Moblee does not set them"
       echo "up for ChatGPT yet."
       ;;

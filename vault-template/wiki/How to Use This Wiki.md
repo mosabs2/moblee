@@ -20,7 +20,7 @@ You curate sources, direct analysis, and ask the right questions. Your assistant
 ### Adding New Content
 
 **Method 1, in conversation (easiest).**
-**With Claude:** open Cowork. **With ChatGPT:** open ChatGPT and, from its File menu, choose Open Folder and pick your wiki folder. <!-- verify on testdev --> Say things like:
+**With Claude:** open Cowork. **With ChatGPT:** open ChatGPT and, from its File menu, choose Open Folder and pick your wiki folder. Make sure Work is chosen at the top of the window, and not Chat, before you type. <!-- verify on testdev --> Say things like:
 - "I had a meeting about [Your Topic] today, add it to the wiki."
 - "Process the new files in raw/."
 - "Add this to my [Your Domain] page: [paste text]."
