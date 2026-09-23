@@ -55,6 +55,9 @@ struct BuildScreen: View {
             return install.items.contains { $0.state == .failed }
                 ? "Your wiki is ready. One part needs a repair: open Moblee again later and press Repair."
                 : "Your wiki is ready."
+        case .needsCommit:
+            return "Your wiki is ready, but one thing is not saved into its history. "
+                 + "Open your assistant and say: the Moblee update did not commit, please look and commit it."
         case .failed(let why):
             switch why {
             case "place-taken": return "There is already a folder with that name. Nothing was changed."

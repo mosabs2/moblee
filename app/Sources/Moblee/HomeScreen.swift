@@ -439,10 +439,17 @@ struct UpdateScreen: View {
 
     var body: some View {
         ScreenFrame(
-            sentence: install.phase == .finished ? "Your wiki is up to date."
-                : (failed ? "The update stopped. Your pages were not touched." : "Updating your wiki…"),
+            // (v0.9.1) `needsCommit` is its own sentence. The files all landed,
+            // so "the update stopped" would be wrong; the closing commit was
+            // refused, so "up to date" would be a lie — and it was the one the
+            // owner used to be told, over a wiki whose update was never saved
+            // into its history and whose own next commit would be refused too.
+            sentence: install.phase == .needsCommit
+                ? "Your wiki is updated, but the change was not saved into its history. Open your assistant and say: the Moblee update did not commit, please look and commit it."
+                : (install.phase == .finished ? "Your wiki is up to date."
+                : (failed ? "The update stopped. Your pages were not touched." : "Updating your wiki…")),
             buttonTitle: failed ? "Try again" : "Done",
-            buttonEnabled: install.phase == .finished || failed,
+            buttonEnabled: install.phase == .finished || install.phase == .needsCommit || failed,
             showsBack: false,
             quietTitle: failed ? "Not now" : nil,
             quietAction: failed ? { home.updateSetAside = true; backHome() } : nil,
@@ -455,7 +462,13 @@ struct UpdateScreen: View {
                 LazyVGrid(columns: Array(repeating: GridItem(.fixed(150), spacing: 16), count: 3), spacing: 8) {
                     ForEach(install.items) { item in BuildTile(item: item, small: true) }
                 }
-                if failed { QuietButton(title: "Show what happened", action: { install.showDiary() }) }
+                // The diary is where the refusal is written out in full, so it is
+                // offered whenever there is something to read about, not only on
+                // a failure. Before v0.9.1 a refused commit reached the owner as
+                // a green screen with no way through to the one file that said so.
+                if failed || install.phase == .needsCommit {
+                    QuietButton(title: "Show what happened", action: { install.showDiary() })
+                }
             }
         }
         .onAppear {
