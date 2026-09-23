@@ -823,6 +823,33 @@ echo ""
 echo "Your wiki's content was not touched. Replaced files were kept at:"
 echo "  $BACKUP"
 echo ""
+# ----- the wiki is somewhere macOS will not let jobs read (v0.9.1) ------------
+# The installer warns about this while the location can still be typed again.
+# An owner already in one of these folders never sees that warning, because
+# they run the updater and not the installer — and that is exactly the owner
+# this warning was written for: the fault was found on the wiki of a man whose
+# nightly reminder had almost certainly never run once, unnoticed for five days.
+# Nothing is moved: relocating a person's wiki would break their Obsidian vault,
+# their recorded path and anything pointing at the old one, and moving an
+# owner's files without asking is the fault this version exists to remove. So
+# it is said plainly, at the end, where the last thing read is the thing done.
+for _protected in Desktop Documents Downloads; do
+  if [[ "$VAULT" == "$HOME/$_protected" || "$VAULT" == "$HOME/$_protected/"* ]]; then
+    echo "One thing worth knowing about where your wiki lives."
+    echo ""
+    echo "  It is inside your $_protected folder, which macOS protects. Anything"
+    echo "  Moblee runs on a schedule cannot read files there, so it fails and"
+    echo "  says nothing: the evening lesson reminder, the weekly health check,"
+    echo "  and anything else you have put on a schedule. They may never have run."
+    echo ""
+    echo "  Moving the wiki out of $_protected fixes it, to somewhere like ~/Wiki."
+    echo "  Nothing here has moved it: that is yours to decide."
+    echo "  Ask $ASSISTANT_LABEL: \"my wiki is in $_protected, walk me through moving it\"."
+    echo ""
+    diary "the wiki is under ~/$_protected, where macOS blocks scheduled jobs; the owner was told (F29)"
+    break
+  fi
+done
 # ----- the step only the owner can take (v0.9) --------------------------------
 if [[ $TRUST_NEEDED -eq 1 ]]; then
   echo "One step is yours alone. Until it is done, the delete guard does not run"
