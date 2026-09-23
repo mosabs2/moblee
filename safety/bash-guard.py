@@ -118,7 +118,7 @@ KNOWN_SAFE_SHA256 = {
     "30a82d49127f0bb21df7054ec12b0c34d5c13c1343dd9aec9439277aab5bec6b": "scripts/install.sh",
     "c9e2f83cb83209fbd9d750c0ac0098b99ab9612337005c4f5c2e7a71ba674b85": "scripts/lint-v2.py",
     "3dc036a7fd72607eae7eb8adfdefd749858205ba6aac05d604373a1714a56f57": "scripts/log-append.py",
-    "7447203fa4498b666ccda79836438b80e68239d69a1c491f2d0e84a14321ae57": "scripts/moblee-doctor.py",
+    "c2f8d06c8768505611b21448067516cab467655d31ca0ad71f1b6e86517cc08a": "scripts/moblee-doctor.py",
     "93d3293136c2cf66f0be3f306cd81ff0c858d07a33427bfb0575854b98088c04": "scripts/moblee-setup.py",
     "7cd1827f5e2dc4f1a97c587bdfdd0eb8771f57ed9df023ffe8744bf55d1506d4": "scripts/patch-claude-md.py",
     "117f1991ed97f813e0db0f40088ae4cdfaf32c2810d096bb1b1e0ad4e699b84e": "scripts/seed-memory.py",

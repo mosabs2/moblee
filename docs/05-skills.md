@@ -124,7 +124,7 @@ The interview is six short questions. Total time is usually under five minutes. 
 
 You never need to type the skill name. The skills are described to your assistant with rich trigger surfaces, and it picks the right one from your phrasing. If a phrase doesn't trigger what you expected, just describe what you want in plain English and your assistant will either route it correctly or ask a clarifying question.
 
-If you want to inspect a skill, the files are at `~/.claude/skills/<name>/` (for ChatGPT, `~/.agents/skills/<name>/`). Each `SKILL.md` is readable markdown; edit it freely to change behaviour, add trigger phrases, or extend the workflow.
+If you want to inspect a skill, the files are at `~/.claude/skills/<name>/` (for ChatGPT, `~/.agents/skills/<name>/`). Each `SKILL.md` is readable markdown, and you can edit one — but know what follows. The check-up then reports it as installed under Moblee's name while not being Moblee's copy (F23), and the next update replaces it, keeping your version in `~/.config/moblee/backups/`. **To keep a change, copy the folder under a name of your own and edit that**: Moblee only ever replaces a skill it installed itself, and one of yours is left alone and reported rather than overwritten.
 
 ## Beyond the bundle
 
