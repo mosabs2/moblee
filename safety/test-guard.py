@@ -81,6 +81,7 @@ def build_fixture():
           'import os\nos.replace("/tmp/a", "wiki/A.md")\n')
     # (v0.9.2) the standard atomic write: temp file, then replace over the
     # target. Refusing this refused every carefully written script in a vault.
+    write(os.path.join(vault, "scripts", "run.command"), '#!/bin/bash\necho hi\n')
     write(os.path.join(vault, "scripts", "atomic.py"),
           'import os, tempfile\n'
           'fd, tmp = tempfile.mkstemp(dir="outputs")\n'
@@ -464,6 +465,18 @@ BLOCK = [
      "echo \"this mentions <<EOF in passing\"\nrm -rf wiki\nEOF"),
     ("heredoc: marker inside a comment",
      "# see <<EOF below\nrm -rf wiki\nEOF"),
+    # (v0.9.2) A script run through its own shebang is the same file doing the
+    # same work as one handed to an interpreter, and only the latter was scanned.
+    ("script run directly", "./scripts/bad.sh"),
+    ("script run directly, no extension", "./scripts/noext-rm"),
+    # (v0.9.2) three tools that write while looking like readers
+    ("sort -o over a page", "sort -o wiki/Index.md /dev/null"),
+    ("sort --output= over a page", "sort --output=wiki/Index.md /dev/null"),
+    ("uniq writing its second file", "uniq /dev/null wiki/Index.md"),
+    ("awk redirecting into a page", "awk 'BEGIN{print \"\" > \"wiki/Index.md\"}' /dev/null"),
+    # (v0.9.2) open hands a file to something that runs it
+    ("open -a Terminal a script", "open -a Terminal scripts/bad.sh"),
+    ("open a .command file", "open scripts/run.command"),
     ("head in capitals", "RM -rf wiki"),
     ("head in mixed case", "Rm -rf wiki"),
     ("absolute path in capitals", "/bin/RM -rf wiki"),
@@ -516,6 +529,16 @@ ALLOW = [
     # (v0.9.2) Tier 3's friction half. Each of these was refused, none of them
     # destroys anything, and a guard that refuses ordinary work is one its owner
     # learns to work around.
+    ("script run directly, benign", "./scripts/ok.sh"),
+    ("sort reading a page", "sort wiki/Index.md"),
+    ("uniq reading a page", "uniq wiki/Index.md"),
+    ("awk reading a page", "awk '{print}' wiki/Index.md"),
+    ("open a page", "open wiki/Index.md"),
+    ("open the vault folder", "open ."),
+    # (v0.9.2) locks the heredoc-quoting test, which reads the pattern's groups:
+    # widening it for the other three delimiter spellings moved them once already
+    ("apply_patch quoted heredoc holding a dollar",
+     "apply_patch <<'EOF'\n*** Begin Patch\n*** Update File: wiki/A.md\n@@\n-old\n+new costing $5\n*** End Patch\nEOF"),
     ("heredoc: an ordinary note", "cat > /tmp/note.txt <<EOF\nhello\nEOF"),
     ("heredoc: an ordinary note, backslash delimiter",
      "cat > /tmp/note.txt <<\\EOF\nhello\nEOF"),
