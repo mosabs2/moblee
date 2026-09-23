@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.9.1 (23 September 2026)
+
+The honesty release. Every change here comes from one owner's real update on 21 September, and they share a fault: Moblee told him something that was not true, or changed his own work without telling him.
+
+### Fixed
+
+- **An update whose closing commit was refused said it had finished.** His rules file had grown past the commit gate's size cap, git refused the commit, and the diary still recorded "step 9 of 9, finish: done", the check-up still said "the last update ran to the end", and twelve files sat staged and uncommitted. The updater now says plainly on screen and in the diary that the files are in place but the commit was refused, names how many are staged, and tells the owner what to ask their assistant. The check-up reports it as a problem in its own words rather than as a clean finish.
+- **Scheduled jobs fail silently when the wiki is in Desktop, Documents or Downloads.** macOS protects those folders and a scheduled job does not carry the permission the owner's own Terminal has, so the evening lesson reminder and the weekly health check fail with "Operation not permitted" and show nothing. One owner's nightly reminder had almost certainly never run. The installer now says so while the location can still be changed, and offers to change it; the check-up reports it (field guide F29). This is separate from the iCloud warning (F13) and is true whether or not iCloud is involved.
+- **The updater replaced the orientation script whole, so an owner's own checks disappeared.** One owner's freshness check went at v0.5.0 and was not missed for five days. `scripts/orient-extras.sh` is now the owner's own file: the preflight runs it if it is there and prints what it says under "Your own checks", the updater copies it in only when it is absent and never overwrites it, and a fault in it cannot stop the preflight. When the updater does replace a pack script it now names where the old copy went.
+- **A second "Wiki Operations" line was added to the Index** when the existing one pointed at another page. The habits page now extends the line that is there instead of adding its own.
+- **The commit gate's superlative advisory fired on ordinary words.** "First", "every", "the first section" all tripped it, three times in one owner's update and ten at once in v0.5.1, and an advisory that is almost always wrong teaches people to ignore the gate. It now wants a superlative actually claiming a record or a primacy — "the first time", "the largest ever", "unprecedented", "the only one".
+- **The rules file still named the retired `get-started` skill** in its habits section, replaced by `companion` in v0.8.
+
 ## v0.9.0 (21 September 2026)
 
 The second-assistant release. Until now Moblee set a wiki up for Claude. From this version the owner chooses Claude, ChatGPT or both, at install or at any later update, and the whole pack (installer, updater, app, guard, check-up, guides, lessons and skills) serves that choice. Nothing changes for an owner of Claude who does nothing.

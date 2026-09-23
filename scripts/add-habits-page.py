@@ -57,6 +57,19 @@ def add_index_line(vault: Path) -> None:
     lines = text.splitlines(keepends=True)
     if lines and not lines[-1].endswith("\n"):
         lines[-1] += "\n"
+    # (v0.9.1) If the Index already keeps a Wiki Operations line, extend it
+    # rather than adding a second one. The check above only looks for this
+    # page's own link, so an Index whose Wiki Operations line pointed at some
+    # other page — the starting memories add one — got a duplicate line. It
+    # happened to a real owner on 21 September 2026.
+    for i, l in enumerate(lines):
+        if l.lstrip().startswith("- Wiki Operations"):
+            bare = l.rstrip("\r\n")
+            ending = l[len(bare):] or "\n"
+            lines[i] = bare.rstrip().rstrip(",") + ", [[Habits and Tools]]" + ending
+            write_atomic(index, "".join(lines))
+            print("Habits and Tools added to the existing Wiki Operations line of wiki/Index.md")
+            return
     # at the end of the Subfolder pages section, where the Index keeps
     # subfolder pages; at the end of the file if there is no such section
     at = None

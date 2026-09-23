@@ -1,0 +1,26 @@
+#!/bin/sh
+# Your own orientation checks. This file is yours.
+#
+# Copy it to scripts/orient-extras.sh and edit it. Moblee's updater never
+# touches that name, so whatever you put there survives every update — unlike
+# scripts/vault-orient-preflight.sh, which is the pack's and is replaced whole.
+#
+# Whatever this prints appears at the end of the preflight, under "Your own
+# checks". VAULT_ROOT is set for you. If it fails, the preflight carries on.
+#
+# Ask your assistant to write checks for you: "add a check to my orient-extras
+# that tells me when my reading list was last updated" is enough.
+
+# Two examples. Delete them and write your own.
+
+# 1. Is a file you care about going stale?
+#    if [ -f "$VAULT_ROOT/wiki/Reading List.md" ]; then
+#      days=$(( ( $(date +%s) - $(stat -f %m "$VAULT_ROOT/wiki/Reading List.md") ) / 86400 ))
+#      [ "$days" -gt 14 ] && echo "[INFO] Reading List last touched $days days ago"
+#    fi
+
+# 2. Is something you expect to arrive actually arriving?
+#    count=$(ls "$VAULT_ROOT/raw" 2>/dev/null | wc -l | tr -d ' ')
+#    echo "[INFO] $count item(s) waiting in raw/"
+
+echo "[INFO] orient-extras.sh is running; edit it to add your own checks"
