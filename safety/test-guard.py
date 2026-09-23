@@ -450,6 +450,30 @@ BLOCK = [
      "python3 -c 'open(\"$HOME/.claude/hooks/bash-guard.py\", \"w\").close()'"),
     ("self: the ChatGPT guard", "echo x > ~/.codex/hooks/bash-guard.py"),
     ("self: the ChatGPT hooks file", "echo {} > ~/.codex/hooks.json"),
+    # (v0.9.2) A Mac's filesystem is case-insensitive by default, so these run.
+    # (v0.9.2) The delimiter forms bash accepts but the guard did not read, and
+    # a marker in quoted text or a comment, which opened a heredoc that
+    # swallowed every following line instead of letting it be read as a command.
+    ("heredoc: backslash delimiter",
+     "python3 <<\\EOF\nimport shutil; shutil.rmtree(\"wiki\")\nEOF"),
+    ("heredoc: dashed delimiter",
+     "python3 <<'E-O-F'\nimport shutil; shutil.rmtree(\"wiki\")\nE-O-F"),
+    ("heredoc: dotted delimiter",
+     "python3 <<'END.OF'\nimport shutil; shutil.rmtree(\"wiki\")\nEND.OF"),
+    ("heredoc: marker inside a quoted string",
+     "echo \"this mentions <<EOF in passing\"\nrm -rf wiki\nEOF"),
+    ("heredoc: marker inside a comment",
+     "# see <<EOF below\nrm -rf wiki\nEOF"),
+    ("head in capitals", "RM -rf wiki"),
+    ("head in mixed case", "Rm -rf wiki"),
+    ("absolute path in capitals", "/bin/RM -rf wiki"),
+    # (v0.9.2) wrappers that run the command handed to them, as env and nohup do
+    ("arch wrapper", "arch -x86_64 rm -rf wiki"),
+    ("arch with -arch", "arch -arch arm64 rm -rf wiki"),
+    ("stdbuf wrapper", "stdbuf -o0 rm -rf wiki"),
+    ("script wrapper", "script -q /dev/null rm -rf wiki"),
+    ("arch around a shell", "arch -x86_64 bash -c 'rm -rf wiki'"),
+    ("stdbuf around python", "stdbuf -oL python3 -c 'import shutil; shutil.rmtree(\"wiki\")'"),
     ("git clean", "git clean -fdx"),
     ("git clean -f, no dry run", "git clean -f"),
     ("git rebase interactive", "git rebase -i HEAD~3"),
@@ -492,6 +516,11 @@ ALLOW = [
     # (v0.9.2) Tier 3's friction half. Each of these was refused, none of them
     # destroys anything, and a guard that refuses ordinary work is one its owner
     # learns to work around.
+    ("heredoc: an ordinary note", "cat > /tmp/note.txt <<EOF\nhello\nEOF"),
+    ("heredoc: an ordinary note, backslash delimiter",
+     "cat > /tmp/note.txt <<\\EOF\nhello\nEOF"),
+    ("arch around ordinary work", "arch -x86_64 git status"),
+    ("stdbuf around ordinary work", "stdbuf -oL python3 scripts/ok.py"),
     ("self: reading the guard", "cat ~/.claude/hooks/bash-guard.py"),
     ("self: reading the settings", "cat ~/.claude/settings.json"),
     ("self: a file merely named like it", "echo x > /tmp/bash-guard.py.notes"),
