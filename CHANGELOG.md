@@ -16,6 +16,29 @@ The nine owner-facing faults a four-part code review found after v0.9.1's own fi
 - **When the Moblee folder could not be found, three checks passed with an unqualified OK.** They work by comparing what is installed with Moblee's own copy, and without the folder they had nothing to compare against. The most important is the guard: that comparison is what shows `bash-guard.py` has not been swapped or edited, and `docs/09-safety.md` tells the owner it is the check to rely on. **A swapped guard passed the check-up with nothing said.** All three now report CANNOT SEE, with field-guide entry F31 and the command that lets them see.
 - **The key recording a no to the setup conversation was split three ways**, so a declined conversation was re-offered every week for ever. Fixed with v0.9.1's template correction, since doing half of it would have shipped the split to fresh owners.
 
+### The delete guard, v5
+
+Ten holes and five pieces of friction, every one measured against the guard as it stood before the change and after it. The friction matters as much as the holes: a guard that refuses ordinary work is one its owner learns to work around, and then it protects nothing.
+
+**The holes.**
+
+- **The guard did not protect its own file or its registration.** `echo x > ~/.claude/hooks/bash-guard.py` ended every rule in it, and `echo` is allow-listed, so nothing about the command looked like a delete. The same went for the settings file that registers the hook and for both of ChatGPT's equivalents. Reading them is untouched.
+- **A script run through its own shebang was never scanned.** `bash scripts/x.sh` was read and `./scripts/x.sh` was not, though it is the same file doing the same work.
+- **A file written and run by the same command** defeated the scanner outright: the scan reads the file as it stands, which is not what the command is about to put in it.
+- **`cd` never reached path resolution.** Every path was judged against the folder the hook started in, whatever the command did first, so `cd /tmp && mv <vault>/wiki .` moved the wiki out while `cd /tmp && rm -rf mydir`, which touches nothing of anyone's, was refused. One gap, a hole and a piece of friction together.
+- **The command head was compared exactly**, on a filesystem that is case-insensitive by default, so `RM -rf wiki` ran and matched no rule.
+- **`arch`, `stdbuf` and `script`** run the command handed to them exactly as `env` and `nohup` do, and only the latter were peeled.
+- **Three heredoc delimiter spellings were unknown to it** — `<<\EOF`, `<<'E-O-F'`, `<<"END.OF"` — so a heredoc it could not read carried whatever it liked. And the marker was looked for in the raw line, so `echo "mentions <<EOF"` opened one as far as the guard was concerned and swallowed every following line instead of reading it as a command.
+- **`sort -o`, `uniq`'s second file argument and awk's own `print > "file"`** each write over what is there, and all three heads were allow-listed: a page could be emptied by a command with no delete word in it anywhere.
+- **`open` hands a file to an application and some of them run it.** `open -a Terminal x.sh` runs the script in a window no hook sees, and a `.command` file runs on being opened at all.
+- **The resource caps were an evasion.** On reaching one the guard answered "nothing found", which is the one thing it cannot honestly say about a file it has not read: six harmless scripts and a seventh that emptied the wiki went through together. Both caps now refuse, with the way out in the message.
+
+**The friction.** `git clean -n` lists and removes nothing, `git rebase --abort` puts the branch back, and `git restore --staged` leaves the working tree alone; all three were refused wholesale. `ditto` is a copy tool that sat among the shredders. A keyword that is a plain identifier was matched as a bare substring, so `unlink` fired on `unlinked` and on the word inside a string a script prints. `os.replace()` over a target is the standard atomic write, and blocking it refused every carefully written Python file in a vault the moment it was edited, the pack's own included. And a truncating `open()` in an inline body was refused wherever it wrote, while the same call in a file has always been judged on the path.
+
+**The test suite** grew from 484 cases to 564, covering every blind spot the review named — direct execution, the wrappers, the head's case, `cd` and resolution, quote-blind heredocs, write-then-run, the text tools, the guard's own files, the caps as an evasion, and the one that would have caught the live problem at v0.9.0: a case asserting that the pack's own check-up and updater still run, which fails the moment a pinned hash drifts.
+
+**This does not reach an owner until the safety layer is installed again**, `~/.claude/hooks/bash-guard.py` being a copy rather than a link. An update does that; so does `python3 safety/install-safety.py`.
+
 ### Added
 
 - **A size check in the check-up (F30)**, reporting the always-loaded files against the commit gate's caps while there is still room, rather than leaving an owner to meet the cap as a refused commit with a rule name in it.
