@@ -1,0 +1,6 @@
+#!/bin/sh
+# Stands in for a real commit gate refusing the update's closing commit, which
+# is what happened to an owner on 21 September 2026 when his rules file had
+# grown past the gate's size cap.
+echo "refused: CLAUDE.md is over its size cap"
+exit 1
