@@ -114,6 +114,7 @@ case_happy() {
   has   "$HOME_DIR/last-subject.txt" "moblee: updated" "the update committed itself"
   same  "$(cd "$SBX" && git status --porcelain | wc -l | tr -d ' ')" "0" "nothing is left staged"
   has   "$SBX/wiki/log.md" "the owner wrote this" "the owner's own content is untouched"
+  has   "$SBX/wiki/Golf.md" "A page of the owner's own" "and so are his own pages"
 }
 
 # --------------------------------------------------------------------------
