@@ -432,6 +432,24 @@ BLOCK = [
     ("git -C push --force", "git -C . push --force"),
     ("git -C rm", "git -C . rm -r wiki"),
     ("git -C rebase", "git -C . rebase -i HEAD~3"),
+    # (v0.9.2) The guard's own file and the files that register it. Every other
+    # rule in the guard is reached through these, and before this version a
+    # plain `echo x > ~/.claude/hooks/bash-guard.py` ended all of them — with
+    # `echo` allow-listed, so nothing about the command looked like a delete.
+    # The routes that were already refused (removing it, moving over it,
+    # truncating it) are here too, so nobody has to work out which was which.
+    ("self: redirect over the guard", "echo x > ~/.claude/hooks/bash-guard.py"),
+    ("self: redirect over the settings", "echo {} > ~/.claude/settings.json"),
+    ("self: append to the guard", "echo x >> ~/.claude/hooks/bash-guard.py"),
+    ("self: append to the settings", "echo x >> ~/.claude/settings.json"),
+    ("self: tee over the guard", "echo x | tee ~/.claude/hooks/bash-guard.py"),
+    ("self: remove the guard", "rm ~/.claude/hooks/bash-guard.py"),
+    ("self: move over the guard", "mv /tmp/x.sh ~/.claude/hooks/bash-guard.py"),
+    ("self: truncate the guard", "truncate -s 0 ~/.claude/hooks/bash-guard.py"),
+    ("self: python writes over the guard",
+     "python3 -c 'open(\"$HOME/.claude/hooks/bash-guard.py\", \"w\").close()'"),
+    ("self: the ChatGPT guard", "echo x > ~/.codex/hooks/bash-guard.py"),
+    ("self: the ChatGPT hooks file", "echo {} > ~/.codex/hooks.json"),
     ("git clean", "git clean -fdx"),
     ("git clean -f, no dry run", "git clean -f"),
     ("git rebase interactive", "git rebase -i HEAD~3"),
@@ -474,6 +492,9 @@ ALLOW = [
     # (v0.9.2) Tier 3's friction half. Each of these was refused, none of them
     # destroys anything, and a guard that refuses ordinary work is one its owner
     # learns to work around.
+    ("self: reading the guard", "cat ~/.claude/hooks/bash-guard.py"),
+    ("self: reading the settings", "cat ~/.claude/settings.json"),
+    ("self: a file merely named like it", "echo x > /tmp/bash-guard.py.notes"),
     ("git clean dry run", "git clean -n"),
     ("git clean dry run, combined", "git clean -nd"),
     ("git clean --dry-run", "git clean --dry-run"),
