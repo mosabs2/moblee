@@ -151,19 +151,28 @@ case_extras() {
   run_update "$HOME_DIR" "$SBX"
   isfile "$SBX/scripts/orient-extras.sh" "the owner's extras file is created"
   has "$SBX/scripts/vault-orient-preflight.sh" "orient-extras.sh" "the preflight knows to run it"
-  # (v0.9.1) "never staged for the update's commit", says the step that adds it.
-  # The closing commit staged the whole scripts folder, so it was committed under
-  # a message naming Moblee, and the file git then knew was the owner's.
-  ( cd "$SBX" && git log -1 --name-only --format= ) > "$HOME_DIR/committed-files.txt" 2>/dev/null
-  hasnt "$HOME_DIR/committed-files.txt" "scripts/orient-extras.sh" "and it is not in the update's own commit"
+  # (v0.9.1) The run that lays the stub down commits it, so it is in git from
+  # the start and does not sit untracked in every `git status` the owner runs.
   ( cd "$SBX" && git ls-files -- scripts/orient-extras.sh ) > "$HOME_DIR/tracked.txt" 2>/dev/null
-  if [[ -s "$HOME_DIR/tracked.txt" ]]; then bad "and git does not track it until the owner commits it"; else ok "and git does not track it until the owner commits it"; fi
+  has "$HOME_DIR/tracked.txt" "scripts/orient-extras.sh" "and the run that laid it down put it in git"
+  # From here it is the owner's. What he writes in it must never be carried into
+  # a commit that says "moblee: updated from X to Y", which is what the closing
+  # commit's `git add -A -- scripts` used to do.
   cp "$FIXTURES/owners-own-check.sh" "$SBX/scripts/orient-extras.sh"
   cp "$FIXTURES/old-wiki/VERSION" "$SBX/VERSION"
-  ( cd "$SBX" && git add -A && git commit -qm "the owner adds his own check" ) >/dev/null 2>&1
+  # the VERSION is committed and the owner's check is NOT: the second update has
+  # real work to do, and his edit is uncommitted when it runs, which is the case
+  # the sweep used to take
+  ( cd "$SBX" && git add -- VERSION && git commit -qm "back to the old version" ) >/dev/null 2>&1
   run_update "$HOME_DIR" "$SBX"
   has "$SBX/scripts/orient-extras.sh" "the owner wrote this check himself" \
       "and a second update leaves it exactly as he left it"
+  ( cd "$SBX" && git log -1 --format=%s ) > "$HOME_DIR/last-subject.txt" 2>/dev/null
+  has  "$HOME_DIR/last-subject.txt" "moblee: updated" "the second update did make a commit of its own"
+  ( cd "$SBX" && git log -1 --name-only --format= ) > "$HOME_DIR/committed-files.txt" 2>/dev/null
+  hasnt "$HOME_DIR/committed-files.txt" "scripts/orient-extras.sh" "and his check is not in it"
+  ( cd "$SBX" && git status --porcelain -- scripts/orient-extras.sh ) > "$HOME_DIR/his-to-commit.txt" 2>/dev/null
+  has "$HOME_DIR/his-to-commit.txt" "scripts/orient-extras.sh" "which is still his to commit"
 }
 
 # --------------------------------------------------------------------------
@@ -176,11 +185,19 @@ case_owners_pages() {
   make_wiki "$HOME_DIR" "$SBX"
   run_update "$HOME_DIR" "$SBX"           # the first update lays Identity.md down and commits it
   isfile "$SBX/wiki/Identity.md" "the first update adds Identity.md"
-  printf '\n\nThe owner was in the middle of writing this.\n' >> "$SBX/wiki/Identity.md"
+  # The VERSION goes back and is COMMITTED, so the second update has real work
+  # and makes a commit of its own. Without that it finds nothing to change, makes
+  # no commit, and an assertion reading `git log -1` is answered by the FIRST
+  # update's commit, which legitimately contains Identity.md: the case then fails
+  # while the behaviour under test is correct. (Found by running it, 23 September.)
   cp "$FIXTURES/old-wiki/VERSION" "$SBX/VERSION"
+  ( cd "$SBX" && git add -- VERSION && git commit -qm "back to the old version" ) >/dev/null 2>&1
+  printf '\n\nThe owner was in the middle of writing this.\n' >> "$SBX/wiki/Identity.md"
   run_update "$HOME_DIR" "$SBX"
+  ( cd "$SBX" && git log -1 --format=%s ) > "$HOME_DIR/last-subject.txt" 2>/dev/null
+  has "$HOME_DIR/last-subject.txt" "moblee: updated" "the second update makes a commit of its own"
   ( cd "$SBX" && git log -1 --name-only --format= ) > "$HOME_DIR/committed-files.txt" 2>/dev/null
-  hasnt "$HOME_DIR/committed-files.txt" "wiki/Identity.md" "a page the owner had half-written is not in the update's commit"
+  hasnt "$HOME_DIR/committed-files.txt" "wiki/Identity.md" "a page the owner had half-written is not in it"
   has "$SBX/wiki/Identity.md" "The owner was in the middle of writing this" "and their words are still in the file"
   ( cd "$SBX" && git diff --name-only -- wiki/Identity.md ) > "$HOME_DIR/still-dirty.txt" 2>/dev/null
   has "$HOME_DIR/still-dirty.txt" "wiki/Identity.md" "and still theirs to commit"

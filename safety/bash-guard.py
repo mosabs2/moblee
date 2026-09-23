@@ -122,7 +122,7 @@ KNOWN_SAFE_SHA256 = {
     "93d3293136c2cf66f0be3f306cd81ff0c858d07a33427bfb0575854b98088c04": "scripts/moblee-setup.py",
     "277b958160d70222b5feb18708c5d5f494a382238463ab95bb4790be772f7ef3": "scripts/patch-claude-md.py",
     "efe6be309f192a06b6a1dc579033b2c02fc0a548c59fbce7a37a952d78c93cd1": "scripts/seed-memory.py",
-    "e9243b7aea1971e0fed237261f6b2dd630f53ec3214aa7178318994068c731cb": "scripts/update.sh",
+    "4ed6963d4fcc55d9a2bf71991d31e02b3b8546ec02c7f2b1a944abfd03e4fb95": "scripts/update.sh",
     "dd783c9db10d9753f4fdef9af06a2bd74e168c9bafa7f661f16dce052a08244e": "scripts/vault-gate.py",
     "ebecd70937e2dc3b7f31e15877d0e718df2d4bf532146878c9f832e5a6998414": "scripts/vault-orient-preflight.sh",
     "5506f733bb7c75c57fb3f5cc534696bb5a0180719b7f1d060815bf035acf1eba": "scripts/vault.sh",
