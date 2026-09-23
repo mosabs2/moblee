@@ -2,6 +2,8 @@
 
 What goes wrong with a Moblee wiki, how to confirm it, what fixes it and who does the fix. Every entry up to F25 has been met in a real install; F26 to F28 were found while testing Moblee with ChatGPT. The check-up (`moblee-doctor.py` in the Moblee folder's `scripts/`) prints the entry number beside anything it finds, so start there, then read the entry.
 
+**Two kinds of entry.** Most are things the check-up finds and names by number, so a `LOOK` or a `PROBLEM` line leads straight here. Eleven are things only the owner can report, because nothing on disk shows them: F06, F07, F08, F09, F10, F14, F15, F20, F21, F22 and F25. Those are matched from what the owner describes, not from a check-up line, and a check-up that says nothing about them has not missed anything.
+
 "Owner" fixes are done by the owner, in the Moblee app or in a Terminal window of their own, because they change the assistant's settings or the Mac. "Assistant" fixes stay inside the vault. Nothing in this guide deletes anything. Where an entry differs by assistant it says **With Claude:** and **With ChatGPT:**; which one the owner uses is the one word in `~/.config/moblee/assistant`.
 
 ## F01. Claude asks permission for almost everything
@@ -66,7 +68,7 @@ What goes wrong with a Moblee wiki, how to confirm it, what fixes it and who doe
 
 ## F16. Obsidian does not show the wiki
 
-**Fix, owner:** in Obsidian: Open another vault, Open folder as vault, then the wiki's folder (the check-up prints where it is). Obsidian is only the reading window; the wiki works without it.
+**Confirms it:** the check-up says Obsidian was not found in Applications, or the owner says the wiki is not in Obsidian's list. **Note which it is before giving the fix:** the check-up's line is about Obsidian not being installed at all, and telling that owner to open a vault inside it is an instruction they cannot follow. **Fix, owner, if Obsidian is not installed:** nothing needs doing. Obsidian is only a reading window and the wiki works fully without it; install it from obsidian.md if the owner wants one. **Fix, owner, if it is installed but does not show the wiki:** in Obsidian, Open another vault, then Open folder as vault, then the wiki's folder — the check-up prints where that is.
 
 ## F17. A window offers to install "command line developer tools"
 
@@ -149,3 +151,35 @@ It asks ChatGPT's agent to try two deletions in a scratch wiki. It can take up t
 ## F31. The Moblee folder could not be found, so some checks could not be made
 
 **Confirms it:** the check-up says CANNOT SEE against the delete guard, the skills, or both, and names this as the reason. **Why it matters:** several checks work by comparing what is installed with Moblee's own copy of it, and without the folder they have nothing to compare against. The most important is the guard: comparing the installed `bash-guard.py` with Moblee's copy is what shows it has not been swapped or edited, and `docs/09-safety.md` tells the owner that is the check to rely on. Until v0.9.2 these three reported a plain OK in that state, so **a swapped guard passed the check-up with nothing said**. **Fix:** run the check-up from the Moblee folder — `cd` to where Moblee was downloaded and run `python3 scripts/moblee-doctor.py` — or put the folder's path back in `~/.config/moblee/package-path`, which the installer writes and which goes stale if the folder is moved or thrown away. Nothing is wrong with the wiki itself; the check-up simply cannot see far enough from where it was run.
+
+## F32. The commit gate is wired the old way
+
+**Confirms it:** the check-up says the commit gate is not wired through `scripts/hooks`. **Why:** the wiki was installed before v0.5, when the gate was copied into `.git/hooks/` instead. It still runs; it is simply the copy git holds rather than the one in the wiki, so an update cannot reach it and the wiki carries two. **Fix:** the next Moblee update wires it through `scripts/hooks` and moves the old copy aside. Nothing is lost and nothing needs doing first. Split off from F11 in v0.9.2, which had been carrying seven unrelated faults under one number.
+
+## F33. The wiki's instructions are not where the assistant looks
+
+**Confirms it:** the check-up says the wiki has no `CLAUDE.md`, or no `AGENTS.md`, or that one of them is a link leading nowhere, or that the two are separate files. **Why it matters:** Claude reads `CLAUDE.md` and ChatGPT reads `AGENTS.md`, and an assistant that cannot find its file starts with none of the wiki's rules — it will not know the house style, the ingest steps, or that it must not delete. This is the one fault whose symptom is the assistant behaving like a stranger in the wiki. **Fix, owner:** run a Moblee update with the assistant you use named (`--assistant claude`, `chatgpt` or `both`), which lays the file down under the right name and links the other to it. Never two separate files: one is the text and the other is a link to it. Split off from F11 in v0.9.2.
+
+## F34. The last install or update did not commit what it changed
+
+**Confirms it:** the check-up says every file was put in place but the commit was refused, and names how many are staged. **Why:** git refused the closing commit, almost always because the wiki's commit gate found something — a rules file over its size cap, a link to a page that does not exist. The files are all there; what is missing is the entry in the wiki's history. **Fix, assistant:** ask it to look and commit — "the Moblee update did not commit, please look and commit it". It will find what the gate objected to, put that right, and commit. **If it is the size cap**, see F30. Split off from F11 in v0.9.2, where this shared a number with the wiki being on an older Moblee.
+
+## F35. The last install or update did not reach the end
+
+**Confirms it:** the check-up says the last run did not finish, and quotes the step it stopped on. **Why:** something in the middle failed — no disk space, a permission, a tool missing. Nothing of the owner's is damaged: every Moblee step writes forward and keeps what it replaces. **Fix, owner:** run it again with the same answers. Both the installer and the updater are safe to repeat and carry on from where they stopped. If it stops at the same step twice, the diary at `~/.config/moblee/install-diary.txt` names the step and the reason, and it holds no personal detail, so it can be sent to whoever is helping. Until v0.9.2 an install that did not finish pointed at F02, which is about the delete guard and describes nothing of this.
+
+## F36. No choice of assistant is on record on this Mac
+
+**Confirms it:** the check-up says so, and says which assistant it checked for instead. **Why:** `~/.config/moblee/assistant` is missing or unreadable, so Moblee guessed from the wiki's own shape. Everything works; the guess is simply not written down, and a later update could guess differently. **Fix, owner:** run a Moblee update naming the assistant — `--assistant claude`, `chatgpt` or `both` — or choose it in the Moblee app, which writes the choice down. Split off from F11 in v0.9.2.
+
+## F37. No wiki could be found
+
+**Confirms it:** the check-up finds no wiki at all. **Why:** either the wiki's folder was moved or renamed, and `~/.config/moblee/vault-path` still names the old place; or the check-up was run from somewhere with no wiki above it. **This is the most likely finding of all and it carried no number until v0.9.2**, so an owner meeting it had nothing to look up. **Fix, owner:** if the wiki was moved, correct the one line in `~/.config/moblee/vault-path` to the new folder, or run the Moblee app once and point it at the wiki. If it was not moved, run the check-up from inside the wiki's folder, or pass it: `python3 scripts/moblee-doctor.py --vault "<the wiki's folder>"`. Nothing is wrong with the wiki itself.
+
+## F38. ChatGPT's reading limit could not be read
+
+**Confirms it:** the check-up says the `project_doc_max_bytes` setting in `~/.codex/config.toml` could not be read as a number. **Why:** that line has been edited by hand or written by another tool, so Moblee cannot tell how much of the wiki's instruction file ChatGPT will read and falls back to judging it against ChatGPT's own default of 32,768 bytes. **Why it matters:** if the real limit is lower than the rules file, ChatGPT reads part of the wiki's rules and none of the rest, silently. **Fix, owner:** open `~/.codex/config.toml` and make that line a plain number, or delete the line entirely and let a Moblee update write it again.
+
+## F39. Your assistant's own app is not in Applications
+
+**Confirms it:** the check-up says Claude's app, or ChatGPT's app, was not found in Applications. **Why it matters, and usually it does not:** Moblee needs the assistant, not its app. If Claude Code is used from a Terminal window, or ChatGPT's agent is, everything works and this line is a note rather than a fault — which is why it is a `LOOK`. It matters only if the owner expected to open the app and cannot find it. **Fix, owner:** install the app if it is wanted, or ignore the line. If it is installed but somewhere else, moving it into Applications is what makes it findable by name, and Moblee's own app says the same about itself. Added in v0.9.2, when a sweep of the check-up found this was the one finding still carrying no number.

@@ -39,6 +39,16 @@ Ten holes and five pieces of friction, every one measured against the guard as i
 
 **This does not reach an owner until the safety layer is installed again**, `~/.claude/hooks/bash-guard.py` being a copy rather than a link. An update does that; so does `python3 safety/install-safety.py`.
 
+### The documentation, and the numbers behind it
+
+- **One finding code was carrying seven unrelated faults.** `F11`'s entry describes a wiki being on an older Moblee, and the code was also being shown for a commit gate wired the old way, four separate states of a missing or misnamed instruction file, an install that did not commit, one that did not finish, and no assistant being on record. Each now has its own code and its own entry: **F32 to F38**. Worse, an install that did not finish pointed at `F02`, which is about the delete guard.
+- **Findings with no code at all**, against the promise in `docs/11-the-app-and-the-companion.md` that every `LOOK` and `PROBLEM` points at a numbered entry. **The review said sixteen; parsing the check-up rather than grepping it, there were four** — including "No wiki could be found", which is the likeliest finding of all and had nothing to look up. A sweep for the last one added **F39**. Every `LOOK` and `PROBLEM` now carries a code.
+- **Eleven field-guide entries nothing could reach.** They are not dead: eleven of them are things only an owner can report, which the companion is told to match from what the owner describes. What was missing was any way to tell the two kinds apart, so the guide's preamble now names them.
+- **`F16`'s fix could not be followed.** The check-up raises it when Obsidian is *not installed*, and the entry told the owner to open a vault inside it. It now answers both cases, and says the wiki works fully without Obsidian.
+- **`docs/05-skills.md` invited an edit the check-up then reports as a fault** and whose fix silently reverts it. It now says what follows from editing a Moblee skill in place, and that copying it under your own name is how to keep a change.
+- **Three stale statements:** `docs/02-install.md` told the owner to verify a `VERSION` of `0.9.0`; `docs/08-updating.md` described the Index behaviour this release reversed; and `vault-template/CLAUDE.md` contradicted itself on where lint reports go.
+- **A check that keeps it true.** `tools/check-codes.py` reads the check-up as Python and the field guide as text, and fails if a finding carries no code, a code has no entry, or an entry is neither shown nor declared owner-reported. `app/scripts/test-app.sh` runs it, so this drift cannot come back unnoticed.
+
 ### Added
 
 - **A size check in the check-up (F30)**, reporting the always-loaded files against the commit gate's caps while there is still room, rather than leaving an owner to meet the cap as a refused commit with a rule name in it.

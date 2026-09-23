@@ -8,9 +8,10 @@
     python3 scripts/moblee-doctor.py --prove-guard         # ask ChatGPT to try a delete in a scratch wiki
 
 It changes nothing (the report is the one file it can write, and only when
-asked). Each finding carries the number of the entry in the companion skill's
-field guide (skills/companion/field-guide.md) that explains it and says who
-does the fix.
+asked). Every LOOK and PROBLEM carries the number of the entry in the companion
+skill's field guide (skills/companion/field-guide.md) that explains it and says
+who does the fix. OK lines carry none, having nothing to fix; CANNOT SEE and
+CANNOT TELL say in the line itself how to find out.
 
 The assistant the wiki is used with (claude, chatgpt or both) is read from
 ~/.config/moblee/assistant; no file means claude. Claude's checks run when
@@ -297,7 +298,7 @@ def check_guard(f: Findings, settings: dict | None, pack: Path | None) -> None:
 
 def check_vault(f: Findings, vault: Path | None, pack: Path | None) -> None:
     if vault is None:
-        f.add(PROBLEM, "No wiki could be found (no vault-path record, and none above this folder). If the wiki's folder was moved, the record at ~/.config/moblee/vault-path still names the old place; the owner corrects it.")
+        f.add(PROBLEM, "No wiki could be found (no vault-path record, and none above this folder). If the wiki's folder was moved, the record at ~/.config/moblee/vault-path still names the old place; the owner corrects it.", "F37")
         return
     f.add(OK, f"The wiki is at {vault}.")
     if not (vault / ".git").exists():
@@ -307,7 +308,7 @@ def check_vault(f: Findings, vault: Path | None, pack: Path | None) -> None:
         if out.strip() == "scripts/hooks":
             f.add(OK, "The commit gate is wired.")
         else:
-            f.add(LOOK, "The commit gate is not wired through scripts/hooks (an older install). The next update does it.", "F11")
+            f.add(LOOK, "The commit gate is not wired through scripts/hooks (an older install). The next update does it.", "F32")
         code, out = run(["git", "-C", str(vault), "status", "--porcelain"])
         changed = len([l for l in out.splitlines() if l.strip()]) if code == 0 else 0
         code, out = run(["git", "-C", str(vault), "log", "-1", "--format=%ct"])
@@ -400,9 +401,9 @@ def check_mac(f: Findings, assistant: str = "claude") -> None:
     f.add(OK, f"macOS {out.strip()}, Python {sys.version.split()[0]}, chip {os.uname().machine}.")
     apps = []
     if assistant in ("claude", "both"):
-        apps.append(("Claude.app", "Claude's app", "fine if Claude Code is used from Terminal", None))
+        apps.append(("Claude.app", "Claude's app", "fine if Claude Code is used from Terminal", "F39"))
     if assistant in ("chatgpt", "both"):
-        apps.append(("ChatGPT.app", "ChatGPT's app", "fine if ChatGPT's agent is used from Terminal", None))
+        apps.append(("ChatGPT.app", "ChatGPT's app", "fine if ChatGPT's agent is used from Terminal", "F39"))
     apps.append(("Obsidian.app", "Obsidian", "the wiki works without it; it is the reading window", "F16"))
     for app, name, note, guide in apps:
         if (Path("/Applications") / app).exists() or (HOME / "Applications" / app).exists():
@@ -534,7 +535,8 @@ def check_codex_limit(f: Findings) -> tuple[int, bool]:
         return DOC_LIMIT_DEFAULT, False
     if value is None or value <= 0:
         f.add(LOOK, f"The setting {DOC_LIMIT_KEY} in ~/.codex/config.toml could not be read as a number, so how "
-                    f"much of the instruction file ChatGPT reads is judged at the usual {DOC_LIMIT_DEFAULT:,} bytes.")
+                    f"much of the instruction file ChatGPT reads is judged at the usual {DOC_LIMIT_DEFAULT:,} bytes.",
+                  "F38")
         return DOC_LIMIT_DEFAULT, True
     f.add(OK, f"ChatGPT is set to read up to {value:,} bytes of the wiki's instruction file.")
     return value, True
@@ -547,12 +549,14 @@ def check_codex_instructions(f: Findings, vault: Path | None, assistant: str, li
     claude_md, agents_md = vault / "CLAUDE.md", vault / "AGENTS.md"
     if not agents_md.is_file():
         if agents_md.is_symlink():
-            f.add(PROBLEM, "AGENTS.md in the wiki is a link that leads nowhere, so ChatGPT starts without the wiki's instructions.")
+            f.add(PROBLEM, "AGENTS.md in the wiki is a link that leads nowhere, so ChatGPT starts without the wiki's instructions.",
+                  "F33")
         elif claude_md.is_file():
             f.add(PROBLEM, "ChatGPT reads a file named AGENTS.md, and the wiki has only CLAUDE.md, so ChatGPT starts "
-                           "without the wiki's instructions. An update with both assistants chosen adds it.", "F11")
+                           "without the wiki's instructions. An update with both assistants chosen adds it.", "F33")
         else:
-            f.add(PROBLEM, "The wiki has no instruction file (AGENTS.md), so ChatGPT starts without the wiki's instructions.")
+            f.add(PROBLEM, "The wiki has no instruction file (AGENTS.md), so ChatGPT starts without the wiki's instructions.",
+                  "F33")
         return
     real = instruction_file(vault)  # the file Moblee's own scripts keep up to date
     try:
@@ -579,10 +583,10 @@ def check_codex_instructions(f: Findings, vault: Path | None, assistant: str, li
                     "AGENTS.md as a link to CLAUDE.md.", "F28")
     elif assistant == "both" and not claude_md.is_file():
         f.add(PROBLEM, "The wiki is set up for both assistants but has no CLAUDE.md, so Claude starts without the "
-                       "wiki's instructions. An update with both assistants chosen adds it.", "F11")
+                       "wiki's instructions. An update with both assistants chosen adds it.", "F33")
     elif assistant == "chatgpt" and agents_real and not claude_md.exists() and not claude_md.is_symlink():
         f.add(LOOK, "The wiki has no CLAUDE.md link beside AGENTS.md. ChatGPT does not need one, but an older copy of "
-                    "the Moblee app would not recognise this wiki; the next update adds it.", "F11")
+                    "the Moblee app would not recognise this wiki; the next update adds it.", "F33")
     # A rules file that holds almost nothing: most often a link that a syncing
     # tool turned into a small file whose whole text is the other file's name.
     for md, other in ((agents_md, "CLAUDE.md"), (claude_md, "AGENTS.md")):
@@ -901,13 +905,13 @@ def check_diary(f: Findings) -> None:
         f.add(PROBLEM,
               f"The last {what} put every file in place but was not committed: {detail} "
               f"Ask your assistant: \"the Moblee {what} did not commit, please look and commit it\".",
-              "F11")
+              "F34")
     elif any("finished ===" in l for l in tail):
         f.add(OK, f"The last {what} ran to the end.")
     else:
         stopped = next((l for l in tail if "stopped during" in l or "FAILED" in l), "it did not reach the end")
         f.add(LOOK, f"The last {what} did not finish: " + tidy(stopped.split("  ", 1)[-1]),
-              "F11" if what == "update" else "F02")
+              "F35")
 
 
 def main() -> int:
@@ -940,7 +944,7 @@ def main() -> int:
     f.add(OK, f"This wiki is set up to be used with {ASSISTANT_NAMES[assistant]}.")
     if inferred:
         f.add(LOOK, "No choice of assistant is on record on this Mac. The wiki is laid out for ChatGPT alone "
-                    "(AGENTS.md is its real rules file), so it was checked as one. The next update records the choice.", "F11")
+                    "(AGENTS.md is its real rules file), so it was checked as one. The next update records the choice.", "F36")
     if wants_claude:
         settings = check_settings(f, vault)
         check_guard(f, settings, pack)

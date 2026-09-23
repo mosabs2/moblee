@@ -128,7 +128,7 @@ A quick checklist to confirm everything is in place:
 - `~/.claude/skills/` (for ChatGPT, `~/.agents/skills/`) contains the eight core skills: `brain/`, `compact/`, `companion/`, `galaxy/`, `wiki-capture/`, `wiki-interview/`, `wiki-to-pdf/`, `design-your-brand/` (plus any extras you ticked).
 - With Claude: `~/.claude/hooks/bash-guard.py` exists, and the vault's `.claude/settings.local.json` lists the permission rules (the installer printed the counts).
 - With ChatGPT: `~/.codex/hooks/bash-guard.py` exists, `~/.codex/hooks.json` holds its entry, you have done the Trust step, and `python3 scripts/moblee-doctor.py --prove-guard`, run from the Moblee folder, reports the guard as proved. In the Moblee app, press Prove the guard on the home screen. The proof uses a little of your ChatGPT allowance.
-- The vault's `VERSION` file reads `0.9.0` for this release.
+- The vault's `VERSION` file reads `0.9.2` for this release.
 - `python3 scripts/moblee-doctor.py`, run from the Moblee folder, changes nothing and marks each finding `OK`, `LOOK`, `PROBLEM`, `CANNOT SEE` or `CANNOT TELL`.
 - `python3 scripts/moblee-setup.py --check`, run from the Moblee folder, shows `WORKING` for each item you ticked.
 - If you added the `vault` shortcut: typing `vault` in a new Terminal window takes you into the vault and prints the ready signal.

@@ -84,6 +84,17 @@ grep -q "^logic: ok: lines about steps the app does not count are ignored" "$WOR
 grep -q "^logic: ok: an unknown state on a counted step is not treated as success" "$WORK/logic.txt" && ok "  an unknown state on a counted step is not success" || bad "  an unknown state on a counted step is not success"
 grep -q "^logic: ok: needs-commit is recorded and the step is not shown as broken" "$WORK/logic.txt" && ok "  a refused commit is recorded without marking the step broken" || bad "  a refused commit is recorded without marking the step broken"
 grep -q "^logic: ok: a refused commit does not end as finished" "$WORK/logic.txt" && ok "  a refused commit never ends as finished" || bad "  a refused commit never ends as finished"
+# (v0.9.2) The check-up's codes against the companion's field guide. Tier 4 of
+# the code review found one code carrying seven unrelated faults, four findings
+# carrying none at all against a promise that all of them do, and eleven entries
+# nothing could reach. All three are the kind of drift that only shows when
+# somebody counts, so something counts them now.
+if ( cd "$here/../.." && python3 tools/check-codes.py ) > "$WORK/codes.txt" 2>&1; then
+  ok "the check-up's codes and the field guide agree"
+else
+  bad "the check-up's codes and the field guide agree"
+  sed 's/^/      /' "$WORK/codes.txt"
+fi
 grep -q "^logic: ok: a partly-finished step is recorded and is not shown as broken" "$WORK/logic.txt" && grep -q "^logic: ok: and the run still finishes, with the screen able to say so" "$WORK/logic.txt" && ok "  a step that finished while a part of it did not is recorded, and the run still finishes" || bad "  a partly-finished step is recorded and the run still finishes"
 grep -q "^logic: ok: on a wiki newer than this app, Change is hidden" "$WORK/logic.txt" && grep -q "^logic: ok: and neither Change nor Update can start this app's older updater" "$WORK/logic.txt" && grep -q "^logic: ok: a guard that looks off on a newer wiki is not this app's to repair" "$WORK/logic.txt" && ok "  on a wiki newer than the app, Change, Update and Repair are all refused" || bad "  on a wiki newer than the app, Change, Update and Repair are all refused"
 grep -q "^logic: ok: a waiting note is not shown to an owner whose choice is Claude alone" "$WORK/logic.txt" && grep -q "^logic: ok: Later on the steps leaves the step waiting" "$WORK/logic.txt" && ok "  the Trust step waits through Later on the steps, and is not shown to an owner of Claude alone" || bad "  the Trust note"
