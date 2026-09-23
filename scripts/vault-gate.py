@@ -23,7 +23,7 @@ Checks (hard failures block the commit):
   G1  New log headers carry the mandatory `HH:MM ±TZ` tail.
   G2  No new log header (or staged `as of` line) is future-dated (> today+1).
   G3  Always-loaded files stay under their caps when staged
-      (_context.md ≤ 12k tok, CLAUDE.md ≤ 10k, Index.md ≤ 8k; chars/4).
+      (_context.md ≤ 12k tok, CLAUDE.md ≤ 16k, Index.md ≤ 8k; chars/4).
       The CLAUDE.md cap applies to the instruction file in use: AGENTS.md
       where that is the real file, never a symlink to the other.
   G4  Newly added cluster notes carry a `Source:`/`Sources:` line
@@ -125,7 +125,18 @@ def instruction_file(vault: Path) -> Path:
 
 
 VAULT = find_vault_root()
-CAPS = {"wiki/_context.md": 12000, instruction_file(VAULT).name: 10000, "wiki/Index.md": 8000}
+# (v0.9.1) The instruction file's cap was 10,000 tokens against a rules file the
+# pack itself ships at about 9,100, leaving an owner 900 tokens of their own
+# before every commit in their vault — not Moblee's commits, every commit —
+# started being refused. One owner crossed the line on 21 September 2026 through
+# no fault of his own, and the updater's own patcher can add up to about 2,500
+# more. A cap a pack sets and then all but fills itself is not a discipline, it
+# is a trap, so the figure is derived rather than guessed: the shipped file
+# (~9,100) plus the patcher's worst case (~2,500) plus room for the owner's own
+# rules (~4,400). The other two caps are unchanged; nothing ships into those
+# files, so their headroom is entirely the owner's.
+INSTRUCTION_CAP = 16000
+CAPS = {"wiki/_context.md": 12000, instruction_file(VAULT).name: INSTRUCTION_CAP, "wiki/Index.md": 8000}
 RESTRICTED_DIRS = ("wiki/Private/", "wiki/Ghost Reconstructions/")
 EXEMPT_LINK_SOURCES = {"wiki/log.md", "wiki/Wiki Operations/Context Archive.md",
                        "wiki/Index.md", "wiki/_context.md"}

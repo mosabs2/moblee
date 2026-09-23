@@ -56,8 +56,10 @@ struct BuildScreen: View {
                 ? "Your wiki is ready. One part needs a repair: open Moblee again later and press Repair."
                 : "Your wiki is ready."
         case .needsCommit:
+            // the words name the *install*, because this screen is only ever a
+            // first build; the update screen says "update" for the same reason
             return "Your wiki is ready, but one thing is not saved into its history. "
-                 + "Open your assistant and say: the Moblee update did not commit, please look and commit it."
+                 + "Open your assistant and say: the Moblee install did not commit, please look and commit it."
         case .failed(let why):
             switch why {
             case "place-taken": return "There is already a folder with that name. Nothing was changed."

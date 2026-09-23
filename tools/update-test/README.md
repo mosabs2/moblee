@@ -1,7 +1,8 @@
 # update-test
 
 Runs the real `scripts/update.sh` from start to finish against throwaway wikis
-and checks what it actually did.
+and checks what it actually did. Sibling of `tools/install-test/`, which does the
+same for the installer.
 
 ## Running it
 
@@ -27,6 +28,7 @@ path is the last line.
 | `refused` | When git refuses the closing commit, the diary, the screen and the step state all say so, the closing step is not marked done, and the work is staged rather than lost. |
 | `extras` | `scripts/orient-extras.sh` is created, the preflight runs it, and a second update leaves the owner's own edits to it exactly as they were. |
 | `index` | An Index that already keeps a Wiki Operations line does not gain a second one. |
+| `protected` | A wiki inside the owner's Desktop is told that macOS blocks scheduled jobs there, that they may never have run, and that nothing has been moved. |
 | `twice` | Running the same update twice makes no second commit and leaves nothing staged. |
 
 ## Safety

@@ -151,12 +151,39 @@ case_extras() {
   run_update "$HOME_DIR" "$SBX"
   isfile "$SBX/scripts/orient-extras.sh" "the owner's extras file is created"
   has "$SBX/scripts/vault-orient-preflight.sh" "orient-extras.sh" "the preflight knows to run it"
+  # (v0.9.1) "never staged for the update's commit", says the step that adds it.
+  # The closing commit staged the whole scripts folder, so it was committed under
+  # a message naming Moblee, and the file git then knew was the owner's.
+  ( cd "$SBX" && git log -1 --name-only --format= ) > "$HOME_DIR/committed-files.txt" 2>/dev/null
+  hasnt "$HOME_DIR/committed-files.txt" "scripts/orient-extras.sh" "and it is not in the update's own commit"
+  ( cd "$SBX" && git ls-files -- scripts/orient-extras.sh ) > "$HOME_DIR/tracked.txt" 2>/dev/null
+  if [[ -s "$HOME_DIR/tracked.txt" ]]; then bad "and git does not track it until the owner commits it"; else ok "and git does not track it until the owner commits it"; fi
   cp "$FIXTURES/owners-own-check.sh" "$SBX/scripts/orient-extras.sh"
   cp "$FIXTURES/old-wiki/VERSION" "$SBX/VERSION"
   ( cd "$SBX" && git add -A && git commit -qm "the owner adds his own check" ) >/dev/null 2>&1
   run_update "$HOME_DIR" "$SBX"
   has "$SBX/scripts/orient-extras.sh" "the owner wrote this check himself" \
       "and a second update leaves it exactly as he left it"
+}
+
+# --------------------------------------------------------------------------
+# The four pages the assistant is told to write to are staged by the closing
+# commit, so an owner's half-finished work on one of them was going into a
+# commit message that names Moblee. The rules file and the Index already had
+# this care; these did not.
+case_owners_pages() {
+  start owners_pages
+  make_wiki "$HOME_DIR" "$SBX"
+  run_update "$HOME_DIR" "$SBX"           # the first update lays Identity.md down and commits it
+  isfile "$SBX/wiki/Identity.md" "the first update adds Identity.md"
+  printf '\n\nThe owner was in the middle of writing this.\n' >> "$SBX/wiki/Identity.md"
+  cp "$FIXTURES/old-wiki/VERSION" "$SBX/VERSION"
+  run_update "$HOME_DIR" "$SBX"
+  ( cd "$SBX" && git log -1 --name-only --format= ) > "$HOME_DIR/committed-files.txt" 2>/dev/null
+  hasnt "$HOME_DIR/committed-files.txt" "wiki/Identity.md" "a page the owner had half-written is not in the update's commit"
+  has "$SBX/wiki/Identity.md" "The owner was in the middle of writing this" "and their words are still in the file"
+  ( cd "$SBX" && git diff --name-only -- wiki/Identity.md ) > "$HOME_DIR/still-dirty.txt" 2>/dev/null
+  has "$HOME_DIR/still-dirty.txt" "wiki/Identity.md" "and still theirs to commit"
 }
 
 # --------------------------------------------------------------------------
@@ -199,7 +226,7 @@ case_twice() {
   same "$(cd "$SBX" && git status --porcelain | wc -l | tr -d ' ')" "0" "and leaves nothing staged"
 }
 
-for c in happy refused extras index protected twice; do
+for c in happy refused extras owners_pages index protected twice; do
   wanted "$c" && "case_$c"
 done
 
