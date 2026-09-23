@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test suite for safety/bash-guard.py (v4).
+Test suite for safety/bash-guard.py (v5).
 
 Runs the guard as a subprocess, exactly as Claude Code does (JSON on stdin,
 exit 2 = blocked, exit 0 = allowed), against a throwaway fake vault built in
@@ -467,6 +467,20 @@ BLOCK = [
      "# see <<EOF below\nrm -rf wiki\nEOF"),
     # (v0.9.2) A script run through its own shebang is the same file doing the
     # same work as one handed to an interpreter, and only the latter was scanned.
+    # (v0.9.2) cd is followed, so a path is judged where it will be read
+    # (v0.9.2) The caps were an evasion: on reaching one the guard answered
+    # "nothing found", which is the one thing it cannot honestly say about a
+    # file it has not read. Six harmless scripts hid a seventh.
+    ("the file cap hides the seventh script",
+     " && ".join(["bash scripts/ok.sh"] * 6 + ["bash scripts/bad.sh"])),
+    ("cd into the wiki, then delete the folder", "cd wiki && rm -rf ."),
+    ("cd into the wiki, then delete a page", "cd wiki && rm -f Index.md"),
+    ("cd away and back, then delete", "cd /tmp && cd - && rm -rf wiki"),
+    # (v0.9.2) a file written and run by the same command cannot be read first
+    ("write a script then run it", "echo 'rm -rf wiki' > /tmp/z.sh && bash /tmp/z.sh"),
+    ("write a script then run it, one line", "printf 'rm -rf wiki' > /tmp/z2.sh; sh /tmp/z2.sh"),
+    ("append to a script then run it", "echo 'rm -rf wiki' >> /tmp/z3.sh && bash /tmp/z3.sh"),
+    ("write a script then run it directly", "echo 'rm -rf wiki' > /tmp/z4.sh && /tmp/z4.sh"),
     ("script run directly", "./scripts/bad.sh"),
     ("script run directly, no extension", "./scripts/noext-rm"),
     # (v0.9.2) three tools that write while looking like readers
@@ -529,6 +543,24 @@ ALLOW = [
     # (v0.9.2) Tier 3's friction half. Each of these was refused, none of them
     # destroys anything, and a guard that refuses ordinary work is one its owner
     # learns to work around.
+    # (v0.9.2) the other half of following cd: a throwaway delete in a throwaway
+    # folder was refused, because the path was resolved against the folder the
+    # hook started in rather than the one the command had moved to
+    ("six scripts and nothing else", " && ".join(["bash scripts/ok.sh"] * 6)),
+    # (v0.9.2) The one case that would have caught the live problem at v0.9.0:
+    # the pack's own tooling is skipped by hash, and seven of the twenty-six
+    # hashes had drifted, so the guard refused the pack's own check-up on every
+    # owner's Mac. If this case ever fails, the hashes need regenerating with
+    # safety/release-hashes.py — which is what the message says to do.
+    ("the pack's own check-up runs",
+     "python3 %s --json" % os.path.join(os.path.dirname(HERE), "scripts", "moblee-doctor.py")),
+    ("the pack's own updater runs",
+     "bash %s --help" % os.path.join(os.path.dirname(HERE), "scripts", "update.sh")),
+    ("cd to a throwaway, then delete there", "cd /tmp && rm -rf mydir"),
+    ("cd to a throwaway, then delete a file", "cd /tmp && rm -f note.txt"),
+    ("ordinary work after a cd", "cd wiki && ls"),
+    ("write then read, which is fine", "echo hello > /tmp/note4.txt && cat /tmp/note4.txt"),
+    ("write one file, run another", "echo hello > /tmp/note5.txt && bash scripts/ok.sh"),
     ("script run directly, benign", "./scripts/ok.sh"),
     ("sort reading a page", "sort wiki/Index.md"),
     ("uniq reading a page", "uniq wiki/Index.md"),

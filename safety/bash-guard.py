@@ -95,7 +95,7 @@ import shlex
 import sys
 import unicodedata
 
-VERSION = "v4"
+VERSION = "v5"
 MAX_DEPTH = 6
 MAX_FILE_BYTES = 512 * 1024
 MAX_HASH_BYTES = 4 * 1024 * 1024
@@ -106,7 +106,7 @@ KNOWN_SAFE_SHA256 = {
     "9f31dddc0b348023906a575cfa86991a539673eae0b7a5da21e6f84d6fd33e44": "dashboard/server.py",
     "a4294253dcd091c30997668bd55ce359076597de23e4bf341e690168373ea65c": "learning-path/moblee-tip.sh",
     "55d0d3e672b19c957383968006569114f4b4f5277b1da9b844612f1a054b6f5a": "safety/install-safety.py",
-    "29e959b46468588941ab6022050b8246f0186cba9313f0bf15541e9c1020c699": "safety/test-guard.py",
+    "5870060204e85735c832b4cbe75ca67eb79864223870ed3f3267c9359a93635c": "safety/test-guard.py",
     "7f3a7048063503cb11ab2b3ec42a34128ca85f8924e71eeb25ce3e93ca50637e": "scripts/add-habits-page.py",
     "4b2f688c92a7b56fb2fc98c25a922ecf958b77b13659173e0b86cfa336aff211": "scripts/add-identity.py",
     "749ed9603f05e1a633f9586383e86777289fb0eb78b8b7bd9c7e2e0706c6672d": "scripts/cadence/run-weekly-lint.sh",
@@ -907,7 +907,13 @@ def strip_comments(content, lang):
 
 def scan_file(path_raw, invoker, depth):
     if STATE["files"] >= MAX_FILES_PER_CALL:
-        return None
+        # (v0.9.2) Reaching the cap used to mean "nothing found", which is the
+        # one answer the guard cannot honestly give about a file it has not
+        # read: six harmless scripts and a seventh that emptied the wiki went
+        # through together. The cap is still a cap; it is now a refusal.
+        return ("this command runs more script files than the guard reads in one go "
+                "(%d); run them in separate commands so each can be read"
+                % MAX_FILES_PER_CALL)
     p = resolve(path_raw)
     if p is None or not os.path.isfile(p):
         return None
@@ -1900,8 +1906,14 @@ def scan_segment_tokens(toks, depth, seg=None, assigns=None, allow_root=False):
 
 def scan_command(command, depth=0):
     """Reason string if the command string contains a destructive step."""
-    if depth > MAX_DEPTH or not command or not isinstance(command, str):
+    if not command or not isinstance(command, str):
         return None
+    if depth > MAX_DEPTH:
+        # (v0.9.2) As with the file cap: past the nesting limit the guard has
+        # stopped reading, and saying nothing was found would be a claim about
+        # text it never looked at.
+        return ("this command nests shells deeper than the guard follows (%d); "
+                "run the inner command on its own" % MAX_DEPTH)
     try:
         lines = parse(command)
     except Exception:
@@ -1913,15 +1925,84 @@ def scan_command(command, depth=0):
     assigns = _safe(assignments, lines) or {}
     if _safe(changes_folder, lines, assigns):
         STATE["chdir"] = True  # stays set: an apply_patch step may be nested
+    r = _safe(written_then_run, lines, assigns)
+    if r:
+        return r
     for line in lines:
         for seg in line.segs:
             r = scan_segment_tokens(seg.toks, depth, seg, assigns)
             if r:
                 return r
+            _safe(apply_chdir, seg, assigns)
         for inner in (_safe(substitutions, line.text) or []):
             r = scan_command(inner, depth + 1)
             if r:
                 return "command substitution: %s" % r
+    return None
+
+
+def _segment_head(seg, assigns):
+    try:
+        return peel(seg.toks, assigns)
+    except Exception:
+        if not seg.toks:
+            return "", "", []
+        return norm_head(seg.toks[0]), seg.toks[0], seg.toks[1:]
+
+
+def apply_chdir(seg, assigns):
+    """(v0.9.2) Follow a `cd` so the paths after it are resolved where they
+    will actually be read.
+
+    Until now every path in a command was resolved against the folder the hook
+    was started in, whatever the command did first. That let `cd /tmp && mv
+    <vault>/wiki .` move the wiki out, `.` having been read as the vault, and it
+    refused `cd /tmp && rm -rf mydir`, which touches nothing of anyone's. A cd
+    whose target cannot be resolved leaves the cwd alone and the existing
+    conservative flag set, which is the safe way to be uncertain.
+    """
+    b, _head, rest = _segment_head(seg, assigns)
+    if b not in CHDIR_HEADS:
+        return
+    target = next((x for x in rest if not x.startswith("-")), None)
+    if b == "cd" and target is None:
+        target = os.path.expanduser("~")
+    if not target:
+        return
+    resolved = resolve(target)
+    if resolved and os.path.isdir(resolved):
+        STATE["cwd"] = resolved
+
+
+def written_then_run(lines, assigns):
+    """(v0.9.2) A file written and then run inside the same command.
+
+    `echo 'rm -rf wiki' > /tmp/z.sh && bash /tmp/z.sh` defeated the file scanner
+    completely: the scan reads /tmp/z.sh as it stands now, which is not what is
+    about to be in it. Splitting the two across two commands leaves both
+    readable, and is the only thing this asks for.
+    """
+    written = set()
+    for line in lines:
+        for seg in line.segs:
+            b, head, rest = _segment_head(seg, assigns)
+            candidates = []
+            if head:
+                candidates.append(head)
+            if b in SHELLS or b in PYTHONS or b in AWKS or b in OTHER_INTERP \
+                    or b in ("node", "perl", "ruby", "php", "osascript", "source", "."):
+                candidates.extend(x for x in rest if not x.startswith("-"))
+            for c in candidates:
+                r = resolve(c)
+                if r and os.path.realpath(r) in written:
+                    return ("`%s` is written and then run by the same command, so it "
+                            "cannot be read before it runs. Write it, then run it in a "
+                            "second command" % c)
+            for op, target in seg.redirs:
+                if op in TRUNC_OPS or op == ">>":
+                    r = resolve(target)
+                    if r:
+                        written.add(os.path.realpath(r))
     return None
 
 
