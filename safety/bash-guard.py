@@ -106,7 +106,7 @@ KNOWN_SAFE_SHA256 = {
     "9f31dddc0b348023906a575cfa86991a539673eae0b7a5da21e6f84d6fd33e44": "dashboard/server.py",
     "a4294253dcd091c30997668bd55ce359076597de23e4bf341e690168373ea65c": "learning-path/moblee-tip.sh",
     "55d0d3e672b19c957383968006569114f4b4f5277b1da9b844612f1a054b6f5a": "safety/install-safety.py",
-    "6294927cb9a449f56c18e060bd9d42ebed8edf05a32a017d1340a8defec73e72": "safety/test-guard.py",
+    "3ec728a43a0f426a87ba4c862d8a372693a823156552e0f42b876c11a9a3569b": "safety/test-guard.py",
     "7f3a7048063503cb11ab2b3ec42a34128ca85f8924e71eeb25ce3e93ca50637e": "scripts/add-habits-page.py",
     "4b2f688c92a7b56fb2fc98c25a922ecf958b77b13659173e0b86cfa336aff211": "scripts/add-identity.py",
     "749ed9603f05e1a633f9586383e86777289fb0eb78b8b7bd9c7e2e0706c6672d": "scripts/cadence/run-weekly-lint.sh",
@@ -471,8 +471,12 @@ def is_content_path(path_raw):
 
 # ---------------------------------------------------------------- tokens
 def norm_head(t):
+    # (v0.9.2) Lowercased. A Mac's filesystem is case-insensitive by default, so
+    # `RM -rf wiki` and `/bin/RM` both run rm, while a head compared exactly
+    # matched no rule at all. Every command name the guard knows is written in
+    # lower case, and the original token is what any path check still uses.
     t = unicodedata.normalize("NFKC", t)
-    return os.path.basename(t)
+    return os.path.basename(t).lower()
 
 
 def shlex_tokens(text):
@@ -539,7 +543,61 @@ def segment(tokens, line):
     return [s for s in segs if s.toks or s.redirs]
 
 
-HEREDOC_RE = re.compile(r"(?<![<\w])<<(?!<)-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
+# (v0.9.2) All four spellings bash accepts. The delimiter is whichever group
+# matched: <<\EOF and <<'E-O-F' and <<"END.OF" are as ordinary as <<EOF, and a
+# guard that knows only the last of them can be handed a heredoc it will not
+# read. A quoted delimiter may hold anything but its own quote.
+HEREDOC_RE = re.compile(
+    r"(?<![<\w])<<(?!<)-?\s*(?:"
+    r"\\([A-Za-z_][A-Za-z0-9_]*)"
+    r"|'([^'\n]+)'"
+    r"|\"([^\"\n]+)\""
+    r"|([A-Za-z_][A-Za-z0-9_]*)"
+    r")")
+
+
+def heredoc_delims(line):
+    """The delimiters a line opens, reading only the parts of it that are code.
+
+    Quoted text and comments are blanked first. Before v0.9.2 the raw line was
+    searched, so `echo "mentions <<EOF"` opened a heredoc and every line after
+    it was swallowed as the body — which is to say, never read as a command.
+    """
+    out = []
+    for m in HEREDOC_RE.finditer(blank_noncode(line)):
+        out.append(next(g for g in m.groups() if g is not None))
+    return out
+
+
+def blank_noncode(line):
+    """The line with quoted runs and any trailing comment replaced by spaces.
+
+    Length is kept so nothing that reads offsets is disturbed.
+    """
+    out, q, esc = [], None, False
+    for i, ch in enumerate(line):
+        if esc:
+            esc = False
+            out.append(" " if q else ch)
+            continue
+        if ch == "\\" and q != "'":
+            esc = True
+            out.append(ch if not q else " ")
+            continue
+        if q:
+            out.append(" " if ch != q else ch)
+            if ch == q:
+                q = None
+            continue
+        if ch in "'\"":
+            q = ch
+            out.append(ch)
+            continue
+        if ch == "#" and (i == 0 or line[i - 1] in " \t;&|("):
+            out.append(" " * (len(line) - i))
+            break
+        out.append(ch)
+    return "".join(out)
 
 
 def strip_heredocs(text):
@@ -549,7 +607,7 @@ def strip_heredocs(text):
     i = 0
     while i < len(lines):
         line = lines[i]
-        delims = [m.group(2) for m in HEREDOC_RE.finditer(line)]
+        delims = heredoc_delims(line)
         out.append(line)
         i += 1
         for d in delims:
@@ -1011,6 +1069,23 @@ def peel(toks, assigns, depth=0):
             if i < n and toks[i] in ("-v", "-V"):
                 return "command", t, toks[i:]
             while i < n and toks[i].startswith("-"):
+                i += 1
+            continue
+        # (v0.9.2) Three more wrappers that run the command handed to them, in
+        # the same way as env and nohup. `arch -x86_64 rm -rf wiki` was read as
+        # a call to arch, which has no rule, and went straight through.
+        if b in ("arch", "stdbuf"):
+            i += 1
+            while i < n and toks[i].startswith("-"):
+                i += 2 if (b == "arch" and toks[i] in ("-arch", "-e")) else 1
+            continue
+        if b == "script":
+            # macOS: script [options] [file [command ...]]. The first non-flag
+            # is the typescript file and the command comes after it.
+            i += 1
+            while i < n and toks[i].startswith("-"):
+                i += 2 if toks[i] in ("-t",) else 1
+            if i < n:
                 i += 1
             continue
         if b in ("time", "nohup", "builtin", "exec", "caffeinate"):
