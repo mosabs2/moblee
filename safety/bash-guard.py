@@ -106,7 +106,7 @@ KNOWN_SAFE_SHA256 = {
     "9f31dddc0b348023906a575cfa86991a539673eae0b7a5da21e6f84d6fd33e44": "dashboard/server.py",
     "a4294253dcd091c30997668bd55ce359076597de23e4bf341e690168373ea65c": "learning-path/moblee-tip.sh",
     "55d0d3e672b19c957383968006569114f4b4f5277b1da9b844612f1a054b6f5a": "safety/install-safety.py",
-    "3860dab0b7496ba0e079b18d94e75b4ad8ddb748428af79dc1fc5833bd329e85": "safety/test-guard.py",
+    "6cf1691fa92b2834f651836ee0784e75a63ee793120b0125768214207cfed6b7": "safety/test-guard.py",
     "7f3a7048063503cb11ab2b3ec42a34128ca85f8924e71eeb25ce3e93ca50637e": "scripts/add-habits-page.py",
     "4b2f688c92a7b56fb2fc98c25a922ecf958b77b13659173e0b86cfa336aff211": "scripts/add-identity.py",
     "749ed9603f05e1a633f9586383e86777289fb0eb78b8b7bd9c7e2e0706c6672d": "scripts/cadence/run-weekly-lint.sh",
@@ -147,7 +147,10 @@ E_FLAGS = {
 AWKS = {"awk", "gawk", "nawk", "mawk"}
 OTHER_INTERP = {"deno", "bun", "lua", "tclsh", "expect"}
 DELETERS = {"rm", "rmdir", "unlink"}
-HARD_DELETERS = {"trash", "truncate", "shred", "srm", "ditto", "rimraf"}
+# (v0.9.2) `ditto` came out of this set: it is a copy tool, the macOS cousin
+# of cp, and sat among the shredders where nothing it did could be allowed.
+# It goes through the same destination checks as mv and cp instead.
+HARD_DELETERS = {"trash", "truncate", "shred", "srm", "rimraf"}
 CONTENT_DIRS = ("wiki", "raw", "Clippings", "Daily Notes")
 INSTRUCTION_FILES = ("CLAUDE.md", "AGENTS.md")
 CONTENT_FILES = INSTRUCTION_FILES + ("VERSION",)
@@ -686,6 +689,52 @@ def drop_throwaway_py_calls(body, assigns):
     return PY_DEL_CALL_RE.sub(rep, body)
 
 
+# (v0.9.2) A `del` keyword that is a plain identifier used to be matched as a
+# bare substring, so `unlink` fired on `unlinked`, on `unlink_later`, and on the
+# word inside a string a script prints. Matching on word boundaries instead
+# removes those and removes nothing real: every actual call or statement still
+# has a boundary on each side. Keywords carrying a dot or a bracket
+# (`os.remove`, `rmdir(`, `do shell script`) are left as substrings.
+_BARE_WORD_RE = re.compile(r"^[a-z_][a-z0-9_]*$")
+_KW_CACHE = {}
+
+
+def _kw_present(k, low):
+    if k not in _KW_CACHE:
+        # `sync` may follow: node's entries are written as the bare verb and
+        # its real calls carry that suffix, which the boundary would otherwise
+        # reject along with the past participles this is here to drop.
+        _KW_CACHE[k] = (re.compile(r"(?<![a-z0-9_])" + re.escape(k) + r"(?:sync)?(?![a-z0-9_])")
+                        if _BARE_WORD_RE.match(k) else None)
+    rx = _KW_CACHE[k]
+    return bool(rx.search(low)) if rx is not None else (k in low)
+
+
+# The standard atomic write is: make a temp file, write it, then os.replace() it
+# over the target. Blocking os.replace( outright refused every carefully written
+# Python file in a vault the moment it was edited — including the pack's own —
+# and taught its owner to work around the guard. Where the same body shows a
+# temp file being made, the replace is read as that idiom and is not a hit on
+# its own; everything else in the body is still scanned exactly as before.
+_ATOMIC_WRITE_RE = re.compile(r"mkstemp\(|namedtemporaryfile\(|tempfile\.")
+
+# open("literal", "w") whose literal is plainly not vault content. A body used
+# to be refused for any truncating open at all, wherever it wrote; a file has
+# always been judged on the path. The two now agree, and an unresolvable target
+# is still refused, since what cannot be read cannot be cleared.
+PY_OPEN_W_CALL_RE = re.compile(
+    r"open\(\s*[rR]?(['\"])([^'\"]*)\1\s*,\s*(?:mode\s*=\s*)?['\"]w[bt+]*['\"]")
+
+
+def drop_safe_open_w(body):
+    def rep(m):
+        target = m.group(2)
+        if UNRESOLVABLE_RE.search(target) or is_content_path(target):
+            return m.group(0)
+        return " "
+    return PY_OPEN_W_CALL_RE.sub(rep, body)
+
+
 def keyword_hit(body, lang=None, is_file=False, assigns=None):
     lang = LANG_ALIAS.get(lang, lang) or "unknown"
     if lang == "shell":
@@ -694,8 +743,13 @@ def keyword_hit(body, lang=None, is_file=False, assigns=None):
     if lang in ("python", "unknown"):
         body = drop_throwaway_py_calls(body, assigns)
     low = body.lower()
+    if lang in ("python", "unknown"):
+        if _ATOMIC_WRITE_RE.search(low):
+            low = low.replace("os.replace(", " ")
+        if not is_file:
+            low = drop_safe_open_w(low)
     for k in spec["del"]:
-        if k in low:
+        if _kw_present(k, low):
             return k
     for rx in (spec["res_file"] if is_file else spec["res_body"]):
         m = rx.search(low)
@@ -1327,6 +1381,22 @@ def _clobber_checks(cmd, args, vault_bound, dest_flag_t=True):
 def rule_move_copy(b, rest):
     if b in ("mv", "cp"):
         return _clobber_checks(b, rest, True)
+    if b == "ditto":
+        # (v0.9.2) Out of the shredder list, where nothing it did could be
+        # allowed, and given the rule its behaviour actually calls for. ditto
+        # copies, so copying OUT of the vault — the usual reason anyone reaches
+        # for it, making a backup — is ordinary work. Copying IN is refused
+        # whatever the destination is, folder as well as file, because ditto
+        # writes a whole tree over a destination and what that leaves behind is
+        # not something the guard can read off the command line.
+        for t in reversed(rest):
+            if t.startswith("-"):
+                continue
+            d = resolve(t)
+            if d and STATE["vault"] and inside(d, STATE["vault"]):
+                return "ditto writes a whole tree into the vault (%s)" % t
+            break
+        return None
     if b == "install":
         return _clobber_checks(b, rest, False)
     if b == "ln":
@@ -1363,6 +1433,22 @@ def rule_git(b, rest, depth):
     low = [a.lower() for a in args]
     if sub == "rm":
         return "git rm removes tracked files"
+    # (v0.9.2) Three of these have forms that destroy nothing, and refusing
+    # them taught their user that the guard is wrong about git — which is how a
+    # guard stops being read. `git clean -n` lists and removes nothing;
+    # `git rebase --abort` and `--quit` end a rebase and put the branch back;
+    # `git restore --staged` unstages and leaves the working tree alone. The
+    # destructive forms of all three are refused exactly as before.
+    if sub == "clean" and any(a == "--dry-run" or (a.startswith("-") and not a.startswith("--")
+                                                   and "n" in a[1:]) for a in low):
+        return None
+    if sub == "rebase" and any(a in ("--abort", "--quit") for a in low):
+        return None
+    # -S/-W, not -s/-w: in git restore, -s is --source and takes a tree, so the
+    # case matters and `low` cannot be used for this one.
+    if sub == "restore" and ("--staged" in low or "-S" in args) \
+            and "--worktree" not in low and "-W" not in args:
+        return None
     if sub in ("clean", "rebase", "filter-branch", "filter-repo", "prune", "restore"):
         return "git %s rewrites or discards work" % sub
     if sub == "reset":
