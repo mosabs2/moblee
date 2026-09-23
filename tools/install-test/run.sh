@@ -148,8 +148,52 @@ case_refused() {
 }
 
 # --------------------------------------------------------------------------
+# scripts/install-skills.sh, which both the installer and the updater run.
+#
+# Until v0.9.2 its --update mode — the only mode the updater uses — replaced any
+# skill of a Moblee name in ~/.claude/skills, whoever had written it, by moving
+# the folder out to the backups folder. Two faults in one line. The owner's own
+# work went without being asked; and where ~/.claude/skills is a symlink into a
+# synced vault, which it is on both of the author's Macs, the move took vault
+# content OUT of the vault, which every sync client reads as a deletion, on
+# every machine at once.
+case_skills() {
+  start skills
+  local A="$ROOT/skills/fresh-home" B="$ROOT/skills/owner-home"
+  mkdir -p "$A/.claude/skills" "$B/.claude"
+
+  ( cd "$PACKAGE_ROOT" && HOME="$A" bash scripts/install-skills.sh --update ) >"$A/out.txt" 2>&1
+  isfile "$A/.config/moblee/skills-claude" "a fresh install writes down which skills are Moblee's"
+  same "$(ls "$A/.claude/skills" | wc -l | tr -d ' ')" "$(find "$PACKAGE_ROOT/skills" -maxdepth 1 -type d ! -path "$PACKAGE_ROOT/skills" | wc -l | tr -d ' ')" \
+       "and installs every one of them"
+
+  # an owner from before the record: Moblee's skills in place, no record of them
+  cp -R "$A/.claude/skills" "$B/.claude/skills"
+  printf 'an older Moblee shipped this line\n' >> "$B/.claude/skills/brain/SKILL.md"
+  local inode_before; inode_before=$(stat -f %i "$B/.claude/skills/brain")
+  ( cd "$PACKAGE_ROOT" && HOME="$B" bash scripts/install-skills.sh --update ) >"$B/out.txt" 2>&1
+  isfile "$B/.config/moblee/skills-claude" "an owner from before the record gets one, seeded from what is there"
+  same "$(stat -f %i "$B/.claude/skills/brain")" "$inode_before" \
+       "and Moblee's own skill is replaced where it stands, not moved out from under a sync client"
+  hasnt "$B/.claude/skills/brain/SKILL.md" "an older Moblee shipped this line" "the pack's copy is now in place"
+  if ls "$B/.config/moblee/backups"/*/skills/brain/SKILL.md >/dev/null 2>&1; then
+    ok "and the copy it replaced is kept"
+  else
+    bad "and the copy it replaced is kept"
+  fi
+
+  # a skill of the owner's own, written after the record exists
+  printf -- "---\nname: galaxy\n---\n\nThe owner wrote this one himself.\n" > "$B/.claude/skills/galaxy/SKILL.md"
+  sed -i '' '/^galaxy$/d' "$B/.config/moblee/skills-claude"
+  ( cd "$PACKAGE_ROOT" && HOME="$B" bash scripts/install-skills.sh --update ) >"$B/out2.txt" 2>&1
+  has "$B/.claude/skills/galaxy/SKILL.md" "The owner wrote this one himself" \
+      "a skill of the owner's own wearing a Moblee name is left exactly as it is"
+  has "$B/out2.txt" "left alone" "and he is told so rather than finding out later"
+}
+
+# --------------------------------------------------------------------------
 printf '\n  Moblee install test — %s\n  scratch: %s\n' "$(cat "$PACKAGE_ROOT/VERSION")" "$ROOT"
-for c in happy refused; do
+for c in happy refused skills; do
   if wanted "$c"; then "case_$c"; fi
 done
 
