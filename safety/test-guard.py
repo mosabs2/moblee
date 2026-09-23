@@ -79,6 +79,20 @@ def build_fixture():
           '#!/bin/bash\nrm -f wiki/A.md\n')
     write(os.path.join(vault, "scripts", "replace.py"),
           'import os\nos.replace("/tmp/a", "wiki/A.md")\n')
+    # (v0.9.2) the standard atomic write: temp file, then replace over the
+    # target. Refusing this refused every carefully written script in a vault.
+    write(os.path.join(vault, "scripts", "atomic.py"),
+          'import os, tempfile\n'
+          'fd, tmp = tempfile.mkstemp(dir="outputs")\n'
+          'with os.fdopen(fd, "w") as fh:\n    fh.write("report")\n'
+          'os.replace(tmp, "outputs/report.md")\n')
+    # the word, not the call: nothing here removes anything
+    write(os.path.join(vault, "scripts", "unlinked.py"),
+          '"""Counts pages that are unlinked from the Index."""\n'
+          'unlinked_pages = []\nprint(len(unlinked_pages))\n')
+    # the call, whatever it is spelled beside
+    write(os.path.join(vault, "scripts", "unlinker.py"),
+          'from pathlib import Path\nPath("wiki/A.md").unlink()\n')
     write(os.path.join(vault, "scripts", "commented.py"),
           '# rm -rf wiki is never run here\n"""rmtree is only mentioned in this docstring"""\n'
           'print(1)\n')
@@ -419,6 +433,12 @@ BLOCK = [
     ("git -C rm", "git -C . rm -r wiki"),
     ("git -C rebase", "git -C . rebase -i HEAD~3"),
     ("git clean", "git clean -fdx"),
+    ("git clean -f, no dry run", "git clean -f"),
+    ("git rebase interactive", "git rebase -i HEAD~3"),
+    ("git restore --staged --worktree", "git restore --staged --worktree wiki/Index.md"),
+    ("git restore -W short form", "git restore -S -W wiki/Index.md"),
+    ("ditto into the vault", "ditto /tmp/empty wiki/Index.md"),
+    ("python file: unlink call", "python3 scripts/unlinker.py"),
     ("git filter-branch", "git filter-branch --tree-filter 'rm -f x' HEAD"),
     ("git clean via alias", "git config alias.zap 'clean -fdx'"),
     ("git update-ref -d", "git update-ref -d refs/heads/main"),
@@ -451,6 +471,20 @@ BLOCK = [
 
 # (label, command) — every one must exit 0.
 ALLOW = [
+    # (v0.9.2) Tier 3's friction half. Each of these was refused, none of them
+    # destroys anything, and a guard that refuses ordinary work is one its owner
+    # learns to work around.
+    ("git clean dry run", "git clean -n"),
+    ("git clean dry run, combined", "git clean -nd"),
+    ("git clean --dry-run", "git clean --dry-run"),
+    ("git rebase --abort", "git rebase --abort"),
+    ("git rebase --quit", "git rebase --quit"),
+    ("git restore --staged", "git restore --staged wiki/Index.md"),
+    ("git restore -S short form", "git restore -S wiki/Index.md"),
+    ("ditto out of the vault", "ditto wiki /tmp/ditto-backup"),
+    ("python body: write a temp file", "python3 -c 'open(\"/tmp/scratch2.txt\", \"w\").close()'"),
+    ("python file: the atomic write idiom", "python3 scripts/atomic.py"),
+    ("python file: the word unlinked", "python3 scripts/unlinked.py"),
     ("rm in commit message", "git commit -m 'remove rm from docs'"),
     ("rm in multi-line commit message", "git commit -m 'fix\nrm -rf wiki\n'"),
     ("commit message 'remove stale link'", "git commit -m \"remove stale link\""),
