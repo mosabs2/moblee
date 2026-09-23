@@ -53,11 +53,30 @@ make_wiki() {
 }
 
 # run_update <home> <sandbox> [args...] — echoes the exit code.
+#
+# stdin comes from /dev/null, and that is not a detail. The updater asks three
+# questions (the weekly health check, the learning path, the checklist) and is
+# written to take its default when input ends. Left attached to a terminal it
+# waits for an answer for ever, and because output is redirected the question is
+# invisible: the run simply appears to hang after printing the case name. That
+# is what the first run of this rig did on 23 September 2026.
+# A cap as well, so that a future hang fails the run loudly instead of sitting
+# there looking like work. macOS has no timeout(1), hence the killer subshell.
+UPDATE_TIMEOUT="${UPDATE_TIMEOUT:-240}"
 run_update() {
   local home="$1" sbx="$2"; shift 2
+  printf '    …running the updater\n' >&2
   ( cd "$PACKAGE_ROOT" && HOME="$home" bash scripts/update.sh "$sbx" "$@" ) \
-    > "$home/update-output.txt" 2>&1
-  echo $?
+    < /dev/null > "$home/update-output.txt" 2>&1 &
+  local pid=$!
+  ( sleep "$UPDATE_TIMEOUT"; kill -9 "$pid" 2>/dev/null ) & local killer=$!
+  wait "$pid"; local rc=$?
+  kill "$killer" 2>/dev/null
+  if [[ $rc -ge 128 ]]; then
+    printf 'the updater did not finish within %ss and was stopped\n' "$UPDATE_TIMEOUT" \
+      >> "$home/update-output.txt"
+  fi
+  echo $rc
 }
 
 start() {
