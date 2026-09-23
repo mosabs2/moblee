@@ -170,6 +170,24 @@ case_index() {
 }
 
 # --------------------------------------------------------------------------
+# A wiki already inside a folder macOS protects. The installer warns while the
+# location can still be typed again; an owner already there runs the UPDATER and
+# would never see that warning, which is the owner the warning was written for.
+case_protected() {
+  start protected
+  # The wiki goes inside the sandbox HOME's own Desktop, so $VAULT really is
+  # under $HOME/Desktop from the updater's point of view.
+  SBX="$HOME_DIR/Desktop/wiki"
+  make_wiki "$HOME_DIR" "$SBX"
+  run_update "$HOME_DIR" "$SBX"
+  has "$HOME_DIR/update-output.txt" "inside your Desktop folder" "the update tells the owner about the folder"
+  has "$HOME_DIR/update-output.txt" "may never have run" "and says the schedules may never have run"
+  has "$HOME_DIR/update-output.txt" "Nothing here has moved it" "and makes clear nothing was moved"
+  has "$HOME_DIR/.config/moblee/install-diary.txt" "macOS blocks scheduled jobs" "and the diary records it"
+  isfile "$SBX/VERSION" "the wiki is still where the owner put it"
+}
+
+# --------------------------------------------------------------------------
 # Running the same update twice must change nothing the second time.
 case_twice() {
   start twice
@@ -181,7 +199,7 @@ case_twice() {
   same "$(cd "$SBX" && git status --porcelain | wc -l | tr -d ' ')" "0" "and leaves nothing staged"
 }
 
-for c in happy refused extras index twice; do
+for c in happy refused extras index protected twice; do
   wanted "$c" && "case_$c"
 done
 
