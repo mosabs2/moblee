@@ -114,7 +114,7 @@ KNOWN_SAFE_SHA256 = {
     "42bb3ae68fb171ff5670ac7e1fa8ec3e49bfc1e138c8727ee497158ab1c12c8e": "scripts/hooks/pre-commit",
     "94561c93948728e573aa78df5056701c227a59190b295c8b2f661b2a41ef70c5": "scripts/install-learning-path.py",
     "e6526d9d84ff88e7c3c581064c67fbcd71c94ffeaf69b439e48b7413f40148ba": "scripts/install-schedule.sh",
-    "951b9aa305895c133431cdc89d3ace97596a31613a4d60ca4a32d1e6947d94db": "scripts/install-skills.sh",
+    "e50d661d7dd41110c94f1236666cdafd8392dfa5a2e7666a03d13c504fdeb2c4": "scripts/install-skills.sh",
     "2968dcce9906350dea58ff80532a68050217f50911589fbce5997fd7afe1a1d5": "scripts/install.sh",
     "c9e2f83cb83209fbd9d750c0ac0098b99ab9612337005c4f5c2e7a71ba674b85": "scripts/lint-v2.py",
     "3dc036a7fd72607eae7eb8adfdefd749858205ba6aac05d604373a1714a56f57": "scripts/log-append.py",

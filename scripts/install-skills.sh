@@ -121,17 +121,55 @@ if [[ "$ASSISTANT" == "chatgpt" || "$ASSISTANT" == "both" ]]; then
   DEST_BACKUPS+=("$BACKUP_ROOT/skills-chatgpt")
   DEST_KINDS+=("chatgpt")
 fi
-# The names Moblee has itself put into ~/.agents/skills, one to a line. That
-# folder is shared with other tools, so only a skill named here is ever moved
-# aside to make way for a newer copy; see install_into below.
-AGENTS_RECORD="$HOME/.config/moblee/skills-chatgpt"
-ours_in_agents() {
-  [[ -f "$AGENTS_RECORD" ]] && grep -qxF -- "$1" "$AGENTS_RECORD" 2>/dev/null
+# The names Moblee has itself installed, one file per destination and one name
+# to a line. Neither folder is Moblee's alone: ~/.agents/skills is shared with
+# other tools, and an owner may perfectly well write their own skill into
+# ~/.claude/skills. Only a skill named in the record is ever replaced to make
+# way for a newer copy; see install_into below.
+#
+# (v0.9.2) The record used to be kept for ChatGPT only, so on --update — the
+# only mode the updater uses — a skill in ~/.claude/skills wearing a Moblee name
+# was replaced whatever it was and whoever wrote it.
+record_file() {   # record_file <kind>
+  echo "$HOME/.config/moblee/skills-$1"
 }
-record_in_agents() {
-  if ! ours_in_agents "$1"; then
+ours_here() {     # ours_here <name>   (reads DEST_KIND)
+  local rec; rec="$(record_file "$DEST_KIND")"
+  [[ -f "$rec" ]] && grep -qxF -- "$1" "$rec" 2>/dev/null
+}
+record_here() {
+  local rec; rec="$(record_file "$DEST_KIND")"
+  if ! ours_here "$1"; then
     mkdir -p "$HOME/.config/moblee"
-    echo "$1" >> "$AGENTS_RECORD" 2>/dev/null || true
+    echo "$1" >> "$rec" 2>/dev/null || true
+  fi
+}
+seed_record_once() {
+  # An owner who installed before v0.9.2 has Moblee's skills in place and no
+  # record of them. Refusing to update all eight would be a worse fault than the
+  # one the record prevents, so it is seeded once, from the skills Moblee ships
+  # that are in the folder at that moment. Claude's folder only: until this
+  # version Moblee was the only thing that put those names there for Claude,
+  # while ~/.agents/skills is shared with other tools and Moblee only began
+  # writing to it at 0.9, which is the whole reason that side was checked first.
+  # The seeding assumes exactly what the old code assumed on every single run;
+  # the difference is that it now assumes it once and writes down the answer.
+  [[ "$DEST_KIND" == "claude" ]] || return 0
+  local rec; rec="$(record_file "$DEST_KIND")"
+  [[ -f "$rec" ]] && return 0
+  mkdir -p "$HOME/.config/moblee"
+  : > "$rec" 2>/dev/null || return 0
+  local seeded=0 entry name
+  for entry in "$SKILLS_SRC"/*; do
+    [[ -d "$entry" ]] || continue
+    name="$(basename "$entry")"
+    if [[ -d "$SKILLS_DST/$name" ]]; then
+      echo "$name" >> "$rec" 2>/dev/null || true
+      seeded=$((seeded + 1))
+    fi
+  done
+  if [[ $seeded -gt 0 && $QUIET -eq 0 ]]; then
+    echo "  (noting which skills are Moblee's, for the first time: $seeded already here were taken as Moblee's)"
   fi
 }
 case "$ASSISTANT" in
@@ -162,6 +200,7 @@ fi
 ANY_DIFFERENT=0
 
 install_into() {
+  seed_record_once
   # ----- copy each skill ------------------------------------------------------
   INSTALLED=()
   SKIPPED=()
@@ -184,13 +223,14 @@ install_into() {
     fi
 
     dst="$SKILLS_DST/$name"
-    # (v0.9) ~/.agents/skills is shared with other tools, and Moblee put nothing
-    # there before 0.9. A skill of the same name found there that is not this
-    # Moblee's copy is replaced on --update only if it is known to be Moblee's:
-    # a record of the names Moblee has installed there is kept beside the
-    # choice (~/.config/moblee/skills-chatgpt). Anything else is left alone and
-    # reported, as the safe install has always done.
-    if [[ -d "$dst" && $FORCE -eq 1 && "$DEST_KIND" == "chatgpt" ]] && ! ours_in_agents "$name" \
+    # (v0.9, widened in v0.9.2) A skill of the same name already in the folder
+    # is replaced on --update only if it is known to be Moblee's, by the record
+    # kept beside the choice. Anything else is left alone and reported, as the
+    # safe install has always done. Until v0.9.2 this ran for ChatGPT's folder
+    # alone, on the reasoning that ~/.agents/skills is shared with other tools —
+    # true, and not a reason for Claude's folder to be treated as Moblee's to
+    # overwrite.
+    if [[ -d "$dst" && $FORCE -eq 1 ]] && ! ours_here "$name" \
        && ! diff -rq -x .DS_Store "$entry" "$dst" >/dev/null 2>&1; then
       SKIPPED+=("$name (a different skill of this name is already installed; it was left alone)")
       DIFFERENT+=("$name")
@@ -199,7 +239,7 @@ install_into() {
     if [[ -d "$dst" && $FORCE -eq 0 ]]; then
       if diff -rq -x .DS_Store "$entry" "$dst" >/dev/null 2>&1; then
         SAME+=("$name")          # this Moblee's own copy is already there: nothing to do
-        if [[ "$DEST_KIND" == "chatgpt" ]]; then record_in_agents "$name"; fi
+        record_here "$name"      # identical to what Moblee ships, so it is Moblee's
       else
         # A different skill already has this name: an older Moblee's copy, or
         # something of the owner's own. It is left exactly as it is, and that is
@@ -211,15 +251,28 @@ install_into() {
     fi
 
     if [[ -d "$dst" && $FORCE -eq 1 ]]; then
-      # Never delete: the previous copy is moved aside, so it can be put back.
+      # (v0.9.2) Never delete, and never move the folder out from under a sync
+      # client. The old copy is COPIED to the backups folder and the new one
+      # written over it where it stands. It used to be moved out, and where
+      # ~/.claude/skills is a symlink into a synced vault — which it is on both
+      # of the author's Macs — that move takes vault content out of the vault,
+      # and every sync client reads it as a deletion, on every machine at once.
       mkdir -p "$BACKUP_DIR"
-      mv "$dst" "$BACKUP_DIR/$name"
+      cp -R "$dst" "$BACKUP_DIR/$name"
       KEPT=1
+      cp -R "$entry/." "$dst/"
+      # A file an older version shipped and this one does not is left behind
+      # rather than deleted, and that is deliberate. Sweeping it would put a
+      # deletion into this script, and a delete guard that scans script files
+      # then refuses to run the pack's own skills installer on every owner's
+      # Mac — which is exactly the fault that had the check-up refused at
+      # v0.9.0. A file nothing references is inert; the backup above holds the
+      # previous copy whole, if anyone ever wants to compare.
+    else
+      cp -R "$entry" "$dst"
     fi
-
-    cp -R "$entry" "$dst"
     INSTALLED+=("$name")
-    if [[ "$DEST_KIND" == "chatgpt" ]]; then record_in_agents "$name"; fi
+    record_here "$name"
   done
 
   # ----- skills that have been renamed or folded into another -----------------
