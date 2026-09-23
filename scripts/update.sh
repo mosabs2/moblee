@@ -283,11 +283,18 @@ mkdir -p "$VAULT/scripts"
 # anything an owner added to it disappeared quietly — one owner lost a freshness
 # check at v0.5.0 and did not notice for five days. The preflight now runs
 # scripts/orient-extras.sh if it exists, and that file is the owner's: copied in
-# only when absent, never overwritten, never staged for the update's commit.
+# only when absent and never overwritten. The run that lays it down commits its
+# own stub with the update, because at that moment it is Moblee's copy and not
+# yet the owner's work, and because a file left untracked for ever shows in
+# every `git status` they run and would be swept into their own next `git add`
+# anyway. From then on it is theirs: no later commit of Moblee's stages it, so
+# what they write in it is never carried into "moblee: updated from X to Y".
+EXTRAS_ADDED=0
 if [[ -f "$SCRIPT_DIR/orient-extras.sh.example" && ! -f "$VAULT/scripts/orient-extras.sh" ]]; then
   cp "$SCRIPT_DIR/orient-extras.sh.example" "$VAULT/scripts/orient-extras.sh"
   chmod +x "$VAULT/scripts/orient-extras.sh" 2>/dev/null || true
-  echo "   added scripts/orient-extras.sh (yours; updates never change it)"
+  EXTRAS_ADDED=1
+  echo "   added scripts/orient-extras.sh (yours from here on; updates never change it)"
   diary "added scripts/orient-extras.sh, the owner's own orientation checks"
 fi
 
@@ -768,15 +775,15 @@ if [[ -d "$VAULT/.git" ]]; then
         if git ls-files --error-unmatch -- "$p" >/dev/null 2>&1; then COMMIT_PATHS+=("$p"); fi
       fi
     done
-    # (v0.9.1) scripts/orient-extras.sh is the owner's. The step that adds it
-    # says so in this same file — "copied in only when absent, never
-    # overwritten, never staged for the update's commit" — and then the line
-    # above staged the whole scripts folder and committed the owner's own file
-    # under "moblee: updated from X to Y". It is taken back out of the index,
-    # and excluded from the commit's own pathspec as well, because a commit that
-    # names its paths takes the working tree for them and would otherwise carry
-    # the file in whatever the index said.
-    if [[ -e scripts/orient-extras.sh ]]; then
+    # (v0.9.1) scripts/orient-extras.sh is the owner's from the moment it lands.
+    # The line above stages the whole scripts folder, so every update committed
+    # whatever the owner had written in it, under "moblee: updated from X to Y".
+    # Any run but the one that created it therefore takes the file back out of
+    # the index, and out of the commit's own pathspec as well, because a commit
+    # that names its paths takes the working tree for them and would otherwise
+    # carry it in whatever the index said. The creating run does commit its own
+    # stub: see the step that lays it down, further up this file.
+    if [[ $EXTRAS_ADDED -eq 0 && -e scripts/orient-extras.sh ]]; then
       git reset -q -- scripts/orient-extras.sh >/dev/null 2>&1 || true
       if [[ ${#COMMIT_PATHS[@]} -gt 0 ]]; then
         COMMIT_PATHS+=(":(exclude)scripts/orient-extras.sh")

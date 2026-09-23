@@ -9,12 +9,25 @@ git at scripts/hooks/ so that only one gate runs — and so tested nothing at al
 
 Usage: make-oversized-claude-md.py <path to CLAUDE.md>
 """
+import re
 import sys
 from pathlib import Path
 
-# The gate counts roughly four characters to the token and caps the rules file
-# at 10,000, so comfortably past it without being absurd.
-TARGET_CHARS = 48_000
+# The gate counts roughly four characters to the token. The cap is read out of
+# the gate itself rather than written down here: it was 10,000 when this was
+# written and 16,000 a few hours later, at which point a fixed 48,000 characters
+# quietly stopped being over the line and five checks in the `refused` case
+# failed for want of a refusal. A test fixture that hard-codes the number it is
+# meant to exceed tests nothing the moment that number moves.
+def _cap() -> int:
+    gate = Path(__file__).resolve().parents[3] / "scripts" / "vault-gate.py"
+    m = re.search(r"^INSTRUCTION_CAP\s*=\s*(\d+)", gate.read_text(), re.MULTILINE)
+    if not m:
+        raise SystemExit("could not read INSTRUCTION_CAP from scripts/vault-gate.py")
+    return int(m.group(1))
+
+
+TARGET_CHARS = _cap() * 4 * 5 // 4   # a quarter again past the cap
 
 HEAD = """# CLAUDE.md
 
