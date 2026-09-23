@@ -106,7 +106,7 @@ KNOWN_SAFE_SHA256 = {
     "9f31dddc0b348023906a575cfa86991a539673eae0b7a5da21e6f84d6fd33e44": "dashboard/server.py",
     "a4294253dcd091c30997668bd55ce359076597de23e4bf341e690168373ea65c": "learning-path/moblee-tip.sh",
     "55d0d3e672b19c957383968006569114f4b4f5277b1da9b844612f1a054b6f5a": "safety/install-safety.py",
-    "6cf1691fa92b2834f651836ee0784e75a63ee793120b0125768214207cfed6b7": "safety/test-guard.py",
+    "6294927cb9a449f56c18e060bd9d42ebed8edf05a32a017d1340a8defec73e72": "safety/test-guard.py",
     "7f3a7048063503cb11ab2b3ec42a34128ca85f8924e71eeb25ce3e93ca50637e": "scripts/add-habits-page.py",
     "4b2f688c92a7b56fb2fc98c25a922ecf958b77b13659173e0b86cfa336aff211": "scripts/add-identity.py",
     "749ed9603f05e1a633f9586383e86777289fb0eb78b8b7bd9c7e2e0706c6672d": "scripts/cadence/run-weekly-lint.sh",
@@ -414,6 +414,35 @@ def source_touches_vault(sources):
             base = os.path.dirname(base) or "."
         r = resolve(base or ".")
         if r is None or inside(r, vault):
+            return True
+    return False
+
+
+# (v0.9.2) The guard's own file and the files that register it, for both
+# assistants. Nothing else the guard protects matters if these can be written
+# over: `echo x > ~/.claude/hooks/bash-guard.py` ends every rule in this file,
+# and `echo` is allow-listed. The owner changes these in their own Terminal, as
+# they always could; what is refused is the assistant doing it.
+SELF_PATHS = tuple(os.path.join(os.path.expanduser("~"), *parts) for parts in (
+    (".claude", "hooks", "bash-guard.py"),
+    (".claude", "settings.json"),
+    (".codex", "hooks", "bash-guard.py"),
+    (".codex", "hooks.json"),
+))
+
+
+def is_self_path(path_raw):
+    """True if the path names the guard itself or the file that registers it."""
+    if not path_raw:
+        return False
+    resolved = resolve(path_raw)
+    for s in SELF_PATHS:
+        if resolved and os.path.realpath(resolved) == os.path.realpath(s):
+            return True
+        # a path the guard cannot resolve is judged on its spelling, since what
+        # cannot be read cannot be cleared for writing either
+        if os.path.basename(str(path_raw)) == os.path.basename(s) \
+                and os.path.dirname(s).split(os.sep)[-1] in str(path_raw):
             return True
     return False
 
@@ -729,7 +758,7 @@ PY_OPEN_W_CALL_RE = re.compile(
 def drop_safe_open_w(body):
     def rep(m):
         target = m.group(2)
-        if UNRESOLVABLE_RE.search(target) or is_content_path(target):
+        if UNRESOLVABLE_RE.search(target) or is_content_path(target) or is_self_path(target):
             return m.group(0)
         return " "
     return PY_OPEN_W_CALL_RE.sub(rep, body)
@@ -1024,6 +1053,12 @@ def peel(toks, assigns, depth=0):
 # ---------------------------------------------------------------- rules
 def rule_redirects(seg):
     for op, target in seg.redirs:
+        # Any write at all, not only a truncating one: an append to the file
+        # that registers the guard leaves JSON that cannot be parsed, and a
+        # registration that cannot be parsed is a guard that does not run.
+        if op in REDIR_OPS and op not in ("<", "<<", "<<<", "<&") and target and is_self_path(target):
+            return ("that writes to the delete guard itself (%s), which would end every "
+                    "rule it applies. The owner changes it in their own Terminal" % target)
         if op in TRUNC_OPS and target and is_content_path(target):
             return "a `>` redirect truncates the vault file %s" % target
     return None
@@ -1346,6 +1381,11 @@ def _clobber_checks(cmd, args, vault_bound, dest_flag_t=True):
         dest, sources = positional[-1], positional[:-1]
     else:
         sources = positional
+    # (v0.9.2) The guard's own file and its registration, whether or not one is
+    # there now. An assistant putting a file at that path is replacing the
+    # guard just as surely when the path is empty as when it is not.
+    if dest is not None and is_self_path(dest):
+        return "%s writes over the delete guard itself (%s)" % (cmd, dest)
     no_clobber = any((f.startswith("-") and not f.startswith("--") and "n" in f[1:])
                      or f == "--no-clobber" for f in flags)
     if cmd == "ln" and not any(f.startswith("-") and not f.startswith("--") and "f" in f[1:]
@@ -1411,6 +1451,8 @@ def rule_tee(b, rest):
                                         and "a" in t[1:]) for t in rest):
         return None
     for t in rest:
+        if not t.startswith("-") and is_self_path(t):
+            return "tee without -a writes over the delete guard itself (%s)" % t
         if not t.startswith("-") and is_content_path(t):
             return "tee without -a overwrites the vault file %s" % t
     return None
