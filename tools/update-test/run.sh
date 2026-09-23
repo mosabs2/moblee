@@ -216,16 +216,30 @@ case_owners_pages() {
 case_partly() {
   start partly
   make_wiki "$HOME_DIR" "$SBX"
-  mkdir -p "$HOME_DIR/nopython"
-  printf '#!/bin/sh\nexit 127\n' > "$HOME_DIR/nopython/python3"
-  chmod +x "$HOME_DIR/nopython/python3"
-  ( cd "$PACKAGE_ROOT" && PATH="$HOME_DIR/nopython:$PATH" HOME="$HOME_DIR" \
-      bash scripts/update.sh "$SBX" --progress ) < /dev/null > "$HOME_DIR/update-output.txt" 2>&1
+  # The learning path is already in this wiki, which is the branch most owners
+  # take: the update refreshes it rather than offering it. Then the folder those
+  # two steps write into is made read-only, which fails add-habits-page.py in
+  # step 6 and install-learning-path.py in step 8 and nothing else. Both are
+  # written `|| true` or `|| echo` so that one part failing never stops an
+  # otherwise sound update, which is right, and is why their failure has to be
+  # carried to the end instead of being swallowed.
+  #
+  # The first version of this case put python3 out of reach for the run. That
+  # killed the safety step, which correctly stops the update at step 4, so the
+  # instrumented steps never ran at all and four checks failed over code that
+  # was working. The failure has to be narrow or it tests nothing.
+  cp "$FIXTURES/old-wiki/VERSION" "$SBX/wiki/Wiki Operations/Moblee Learning Path.md"
+  chmod 500 "$SBX/wiki/Wiki Operations"
+  run_update "$HOME_DIR" "$SBX"
+  chmod 700 "$SBX/wiki/Wiki Operations"
   local diary="$HOME_DIR/.config/moblee/install-diary.txt"
   has  "$diary" "DID NOT FINISH" "the diary names what did not finish"
   has  "$diary" "done, except" "and the step says it finished all but that"
   has  "$HOME_DIR/update-output.txt" "did not finish" "the screen says so at the end"
   has  "$HOME_DIR/update-output.txt" '"state":"partial"' "and the app is told, so it can say so too"
+  has  "$HOME_DIR/update-output.txt" "Habits and Tools page" "the first failure is named"
+  has  "$HOME_DIR/update-output.txt" "learning path" "and so is the second, three steps later"
+  hasnt "$diary" "=== Moblee update finished, BUT" "the update itself still finished"
 }
 
 # --------------------------------------------------------------------------
