@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.9.2 (23 September 2026)
+
+The nine owner-facing faults a four-part code review found after v0.9.1's own fixes had gone in. They have one thing in common with that release: in every case Moblee either did something to an owner's own work without asking, or said something about itself that was not true.
+
+### Fixed
+
+- **A skill of the owner's own wearing a Moblee name was replaced without being asked.** `install-skills.sh --update`, the only mode the updater uses, moved any same-named folder in `~/.claude/skills` out to the backups folder and put Moblee's copy in its place. ChatGPT's folder had an ownership record from v0.9; Claude's did not. It does now, seeded once for owners who installed before it existed, and an unrecognised skill is left exactly as it is and reported. **And the replacing no longer moves the folder out.** Where `~/.claude/skills` is a symlink into a synced vault, a move takes vault content out of the vault, and every sync client reads that as a deletion on every machine at once; Moblee's copy is now written where the folder stands.
+- **Five of the updater's nine steps reported "done" whatever happened inside them.** Work inside a step is deliberately written so that one part failing never stops an otherwise sound update, but the screen said so and the diary did not, and the check-up reads the diary. Six branches now record what did not happen, the step closes saying so, the run says so at the end, and the app has a state for it that leaves the tile green without pretending the run had nothing to report. A step the owner declined, or one the Mac cannot run, is still a choice and not a fault.
+- **The installer said "Your wiki is ready." after the skills step had failed**, and then told the owner to say "get me started", which is the phrase those very skills answer. It now says what is outstanding and gives the one command that puts it right.
+- **The learning-path line added to the Index was never staged**, so an owner who accepted the learning path during an update finished with a modified Index they had never touched. Three steps can add a line to the Index, and the comparison that decides whether Moblee commits its own edit has now moved to sit after all three and before the commit, which is the only place it cannot go stale again.
+- **The backup folder the closing banner named could hold none of what was replaced.** Three of the scripts an update runs each minted a timestamped folder of their own, seconds apart, so an owner wanting their previous rules file back opened the folder they were told about and found it empty or absent. One folder per run, passed down to each script, and named only when there is something in it.
+- **The starting memories could be written where Claude would never look.** `seed-memory.py` resolved the vault's path; Claude Code names a project folder after the path it was *opened* with, and for a vault reached through a symlink, or under an iCloud-synced Desktop, the two differ. They were reported as installed either way. They now go to every path the vault can be opened by.
+- **F29 could not fire on an iCloud-synced Desktop.** With Desktop & Documents sync on, `~/Desktop` *is* a link into Mobile Documents, so a resolved path no longer begins with `~/Desktop` and the check for that very folder was skipped on exactly the Macs that needed it — while the installer, which tests the string the owner typed, got it right. The check-up was silently contradicting what the installer had told the same owner.
+- **When the Moblee folder could not be found, three checks passed with an unqualified OK.** They work by comparing what is installed with Moblee's own copy, and without the folder they had nothing to compare against. The most important is the guard: that comparison is what shows `bash-guard.py` has not been swapped or edited, and `docs/09-safety.md` tells the owner it is the check to rely on. **A swapped guard passed the check-up with nothing said.** All three now report CANNOT SEE, with field-guide entry F31 and the command that lets them see.
+- **The key recording a no to the setup conversation was split three ways**, so a declined conversation was re-offered every week for ever. Fixed with v0.9.1's template correction, since doing half of it would have shipped the split to fresh owners.
+
+### Added
+
+- **A size check in the check-up (F30)**, reporting the always-loaded files against the commit gate's caps while there is still room, rather than leaving an owner to meet the cap as a refused commit with a rule name in it.
+- **Skills cases in `tools/install-test/`**, covering the ownership record, the replace-in-place, and an installer whose skills step failed. **Two more cases in `tools/update-test/`** for the reporting family and the backup folder.
+
 ## v0.9.1 (23 September 2026)
 
 The honesty release. Every change here comes from one owner's real update on 21 September, and they share a fault: Moblee told him something that was not true, or changed his own work without telling him.

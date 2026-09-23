@@ -59,18 +59,34 @@ INDEX_LINK = ", [[Assistant Memory]] (standing notes the assistant keeps on how 
 PROPER = {"english": "English"}
 
 
+# (v0.9.2) The path the vault was NAMED by, before resolving. Claude Code
+# encodes a project folder by the path it was opened with, and this script
+# resolves the path it is given, so for a vault reached through a symlink — or
+# one under an iCloud-synced Desktop, where the real path runs through
+# Mobile Documents — the two differ and the memories land in a folder Claude
+# never reads, reported as installed either way.
+VAULT_AS_NAMED: Path | None = None
+
+
 def find_vault(explicit: str | None) -> Path:
+    global VAULT_AS_NAMED
+    raw: Path | None = None
     if explicit:
-        return Path(explicit).expanduser().resolve()
-    env = os.environ.get("MOBLEE_VAULT")
-    if env:
-        return Path(env).expanduser().resolve()
-    cfg = Path.home() / ".config" / "moblee" / "vault-path"
-    if cfg.exists() and cfg.read_text().strip():
-        return Path(cfg.read_text().strip()).expanduser().resolve()
+        raw = Path(explicit).expanduser()
+    else:
+        env = os.environ.get("MOBLEE_VAULT")
+        cfg = Path.home() / ".config" / "moblee" / "vault-path"
+        if env:
+            raw = Path(env).expanduser()
+        elif cfg.exists() and cfg.read_text().strip():
+            raw = Path(cfg.read_text().strip()).expanduser()
+    if raw is not None:
+        VAULT_AS_NAMED = raw
+        return raw.resolve()
     here = Path.cwd().resolve()
     for cand in (here, *here.parents):
         if (cand / "wiki" / "Index.md").exists():
+            VAULT_AS_NAMED = cand
             return cand
     sys.exit("Could not find the vault. Pass --vault <path> or run from inside it.")
 
@@ -110,9 +126,34 @@ def index_line(seed: Path) -> str:
     return f"- [{title}]({seed.name}) — {desc}"
 
 
+def memory_dirs(vault: Path) -> list[Path]:
+    """Every folder Claude might read this vault's memories from.
+
+    Claude Code names a project folder after the path it was OPENED with. A
+    vault can be opened by more than one path — through a symlink, or under an
+    iCloud-synced Desktop where the real path runs through Mobile Documents —
+    and the memories are a handful of small files, so they are written to each
+    rather than guessed at. Most likely first, and duplicates dropped.
+    """
+    seen: list[Path] = []
+    for p in (vault, VAULT_AS_NAMED):
+        if p is None:
+            continue
+        encoded = re.sub(r"[^A-Za-z0-9]", "-", str(p))
+        mem = Path.home() / ".claude" / "projects" / encoded / "memory"
+        if mem not in seen:
+            seen.append(mem)
+    return seen
+
+
 def seed_claude(vault: Path, seeds: list[Path], dry_run: bool) -> int:
-    encoded = re.sub(r"[^A-Za-z0-9]", "-", str(vault))
-    mem = Path.home() / ".claude" / "projects" / encoded / "memory"
+    rc = 0
+    for mem in memory_dirs(vault):
+        rc = seed_claude_into(mem, seeds, dry_run) or rc
+    return rc
+
+
+def seed_claude_into(mem: Path, seeds: list[Path], dry_run: bool) -> int:
     home = str(Path.home())
     shown = "~" + str(mem)[len(home):] if str(mem).startswith(home) else str(mem)
     print(f"Starting memories for Claude (in {shown})")

@@ -99,19 +99,52 @@ def run(cmd: list, timeout: int = 20) -> tuple[int, str]:
         return 1, str(exc)
 
 
+# (v0.9.2) The vault's path before resolving. With Desktop & Documents sync
+# turned on, ~/Desktop IS a link into Mobile Documents, so a resolved path no
+# longer begins with ~/Desktop and the F29 check for that very folder was
+# skipped on exactly the Macs that needed it. The installer, which tests the
+# string the owner typed, got it right — so the check-up silently contradicted
+# what the installer had told the same owner.
+VAULT_AS_NAMED: Path | None = None
+
+
 def find_vault(explicit: str | None) -> Path | None:
+    global VAULT_AS_NAMED
     for cand in (explicit, os.environ.get("MOBLEE_VAULT")):
         if cand and (Path(cand).expanduser() / "wiki").is_dir():
-            return Path(cand).expanduser().resolve()
+            VAULT_AS_NAMED = Path(cand).expanduser()
+            return VAULT_AS_NAMED.resolve()
     cfg = CONFIG / "vault-path"
     if cfg.exists():
         p = Path(cfg.read_text().strip()).expanduser()
         if (p / "wiki").is_dir():
+            VAULT_AS_NAMED = p
             return p.resolve()
     here = Path.cwd().resolve()
     for d in (here, *here.parents):
         if (d / "wiki" / "Index.md").exists():
+            VAULT_AS_NAMED = d
             return d
+    return None
+
+
+# Where macOS blocks a scheduled job, by every name the folder goes under. The
+# iCloud forms matter because that is what ~/Desktop resolves to once Desktop &
+# Documents sync is on, which is the case this check kept missing.
+ICLOUD = Path.home() / "Library" / "Mobile Documents" / "com~apple~CloudDocs"
+PROTECTED_ROOTS = [("Desktop", Path.home() / "Desktop"), ("Documents", Path.home() / "Documents"),
+                   ("Downloads", Path.home() / "Downloads"),
+                   ("Desktop", ICLOUD / "Desktop"), ("Documents", ICLOUD / "Documents")]
+
+
+def protected_folder(vault: Path) -> str | None:
+    """The name of the protected folder this wiki sits in, by any of its paths."""
+    for cand in (vault, VAULT_AS_NAMED):
+        if cand is None:
+            continue
+        for name, root in PROTECTED_ROOTS:
+            if str(cand) == str(root) or str(cand).startswith(str(root) + os.sep):
+                return name
     return None
 
 
@@ -255,7 +288,11 @@ def check_guard(f: Findings, settings: dict | None, pack: Path | None) -> None:
         else:
             f.add(LOOK, "The delete guard is on, but it is not the same copy as this Moblee's (older, newer, or changed by the owner).", "F02")
     else:
-        f.add(OK, "The delete guard is installed and switched on.")
+        f.add(UNSEEN,
+              "The delete guard is installed and switched on, but the Moblee folder could not be found, "
+              "so it could not be compared with Moblee's own copy. That comparison is what shows the "
+              "guard has not been swapped or edited, and it is the one the safety guide tells you to "
+              "rely on. Run the check-up from the Moblee folder to make it.", "F31")
 
 
 def check_vault(f: Findings, vault: Path | None, pack: Path | None) -> None:
@@ -298,8 +335,7 @@ def check_vault(f: Findings, vault: Path | None, pack: Path | None) -> None:
     # reminder had almost certainly never run unattended, and his weekly job
     # failed the same way, for five days, unnoticed (21 September 2026). This is
     # true whether or not iCloud is syncing the folder, so it is its own check.
-    protected = next((n for n in ("Desktop", "Documents", "Downloads")
-                      if str(vault) == str(HOME / n) or str(vault).startswith(str(HOME / n) + os.sep)), None)
+    protected = protected_folder(vault)
     if protected:
         f.add(PROBLEM,
               f"The wiki is inside your {protected} folder, where macOS blocks scheduled jobs. "
@@ -410,6 +446,11 @@ def check_skills(f: Findings, pack: Path | None, where: Path = SKILLS, who: str 
                   "(an older version, or something of the owner's own): " + ", ".join(different) + ".", "F23")
         if not missing and not different:
             f.add(OK, f"All {len(core)} core skills are installed{tag}, and each is this Moblee's copy.")
+    elif have:
+        f.add(UNSEEN,
+              f"{len(have)} skill folder(s) are installed{tag}, but the Moblee folder could not be found, "
+              "so whether they are Moblee's own copies, and whether any are missing, could not be checked. "
+              "Run the check-up from the Moblee folder.", "F31")
     if not who and "get-started" in have and "companion" in have:
         f.add(LOOK, "An old get-started skill sits beside the companion.", "F19")
 
@@ -455,7 +496,10 @@ def check_codex_guard(f: Findings, pack: Path | None) -> bool:
             f.add(LOOK, "The delete guard is entered in ChatGPT's hooks file, but it is not the same copy as this "
                         "Moblee's (older, newer, or changed by the owner).", "F02")
     else:
-        f.add(OK, "The delete guard is installed for ChatGPT and entered in its hooks file.")
+        f.add(UNSEEN,
+              "The delete guard is installed for ChatGPT and entered in its hooks file, but the Moblee "
+              "folder could not be found, so it could not be compared with Moblee's own copy. Run the "
+              "check-up from the Moblee folder to make that comparison.", "F31")
     return True
 
 
