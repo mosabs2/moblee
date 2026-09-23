@@ -812,7 +812,16 @@ if [[ -f "$IN_PROGRESS" ]] && ! grep -q "^finished " "$IN_PROGRESS" 2>/dev/null;
   fi
 fi
 if [[ $PROGRESS -eq 1 ]]; then
-  printf '@@moblee {"step":"done","state":"ok","n":%d,"of":%d}\n' "$USTEP_TOTAL" "$USTEP_TOTAL"
+  # (v0.9.1) The run-level signal must agree with the step that just spoke. It
+  # used to say done/ok unconditionally, moments after the closing step had
+  # reported needs-commit, so the app heard "finished" last and showed the owner
+  # a green screen over an update that was never committed. The whole point of
+  # the state below is that the app can tell the difference.
+  if [[ $COMMIT_WAS_REFUSED -eq 1 ]]; then
+    printf '@@moblee {"step":"done","state":"needs-commit","n":%d,"of":%d}\n' "$USTEP_TOTAL" "$USTEP_TOTAL"
+  else
+    printf '@@moblee {"step":"done","state":"ok","n":%d,"of":%d}\n' "$USTEP_TOTAL" "$USTEP_TOTAL"
+  fi
 fi
 
 echo ""

@@ -21,6 +21,12 @@ final class InstallRun: ObservableObject {
         case idle
         case running
         case finished
+        /// Every file landed, but git refused the closing commit. Its own phase
+        /// rather than a flavour of `failed`, because nothing is broken and
+        /// nothing is lost — and rather than a flavour of `finished`, because
+        /// the owner has something left to do and will hit the same refusal on
+        /// their own next commit if they are not told.
+        case needsCommit
         case failed(why: String)
     }
 
@@ -30,6 +36,15 @@ final class InstallRun: ObservableObject {
     /// The run said ChatGPT will not use the delete guard until the owner
     /// trusts it there. The owner is shown how once the run has finished.
     @Published var trustNeeded = false
+
+    /// (v0.9.1) The files all landed but git refused the closing commit, so the
+    /// update is staged and not committed. Not a failure — nothing is broken and
+    /// nothing is lost — but emphatically not a finish either, and the owner has
+    /// to be told, because the same refusal will meet their own next commit.
+    /// Before this existed the app discarded the state and showed a green screen
+    /// over an uncommitted update, and then never offered the update again
+    /// because the version on disk had already been written.
+    @Published var needsCommit = false
 
     /// Steps whose failure the engine itself carries on past.
     private var softSteps: Set<String> = ["skills"]
@@ -195,7 +210,25 @@ final class InstallRun: ObservableObject {
             case "stopped":
                 set(step, .failed)
                 if case .failed = phase {} else { phase = .failed(why: "stopped") }
-            default: break
+            case "needs-commit":
+                // The step's work is on disk, so the tile is not red; the run as
+                // a whole is not a finish, so `ended` must not green everything.
+                set(step, .done)
+                needsCommit = true
+            default:
+                // (v0.9.1) A state this version of the app does not know, on a
+                // step it is counting, used to be dropped on the floor: the tile
+                // stayed grey, the script exited 0, and every tile was then
+                // turned green. That is how a refused commit came to read as
+                // "your wiki is up to date". An unrecognised state now means
+                // "not finished", which is the safe reading of a message from a
+                // newer pack, and makes the next such state safe by default.
+                if items.contains(where: { $0.key == step }) {
+                    set(step, .failed)
+                    if case .failed = phase {} else {
+                        phase = .failed(why: "unknown-state:\(state)")
+                    }
+                }
             }
         }
     }
@@ -211,12 +244,24 @@ final class InstallRun: ObservableObject {
             if code == 0 {
                 if vaultPath == nil { vaultPath = fallbackVault }   // the updater, or a hand-over to it
                 for i in items.indices where items[i].state != .failed { items[i].state = .done }
-                phase = .finished
+                // (v0.9.1) The updater exits 0 when the files are all in place,
+                // whether or not the closing commit went through, so a zero exit
+                // is not on its own a finish. Greening the tiles is right — the
+                // work really did land — but the phase is not `.finished`, so
+                // the screen can say the one thing that is still outstanding.
+                phase = needsCommit ? .needsCommit : .finished
             } else {
                 phase = .failed(why: code == -1 ? "could-not-start" : "stopped")
             }
         }
     }
+
+    /// Test seams for LogicCheck, which has no engine to run. They exist so the
+    /// progress protocol can be exercised end to end in the app's own checks —
+    /// the layer where a refused commit was being turned into a green screen,
+    /// and the one layer nothing was testing.
+    func startUpdateItemsForTest() { items = InstallRun.updateItems() }
+    func finishForTest(code: Int32) { ended(code: code, fallbackVault: "/tmp/test-wiki") }
 
     func showDiary() {
         guard let diaryURL, FileManager.default.fileExists(atPath: diaryURL.path) else { return }

@@ -1,0 +1,124 @@
+{
+  "": {
+    "swift-dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/primary.swiftdeps"
+  },
+  "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/Sources/Moblee/Assistant.swift": {
+    "dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Assistant.d",
+    "object": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Assistant.swift.o",
+    "swiftmodule": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Assistant~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Assistant.swiftdeps",
+    "diagnostics": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Assistant.dia"
+  },
+  "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/Sources/Moblee/BuildScreen.swift": {
+    "dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/BuildScreen.d",
+    "object": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/BuildScreen.swift.o",
+    "swiftmodule": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/BuildScreen~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/BuildScreen.swiftdeps",
+    "diagnostics": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/BuildScreen.dia"
+  },
+  "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/Sources/Moblee/CheckupScreen.swift": {
+    "dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/CheckupScreen.d",
+    "object": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/CheckupScreen.swift.o",
+    "swiftmodule": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/CheckupScreen~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/CheckupScreen.swiftdeps",
+    "diagnostics": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/CheckupScreen.dia"
+  },
+  "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/Sources/Moblee/Engine.swift": {
+    "dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Engine.d",
+    "object": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Engine.swift.o",
+    "swiftmodule": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Engine~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Engine.swiftdeps",
+    "diagnostics": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Engine.dia"
+  },
+  "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/Sources/Moblee/HandoffScreen.swift": {
+    "dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/HandoffScreen.d",
+    "object": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/HandoffScreen.swift.o",
+    "swiftmodule": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/HandoffScreen~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/HandoffScreen.swiftdeps",
+    "diagnostics": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/HandoffScreen.dia"
+  },
+  "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/Sources/Moblee/HomeModel.swift": {
+    "dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/HomeModel.d",
+    "object": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/HomeModel.swift.o",
+    "swiftmodule": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/HomeModel~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/HomeModel.swiftdeps",
+    "diagnostics": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/HomeModel.dia"
+  },
+  "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/Sources/Moblee/HomeScreen.swift": {
+    "dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/HomeScreen.d",
+    "object": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/HomeScreen.swift.o",
+    "swiftmodule": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/HomeScreen~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/HomeScreen.swiftdeps",
+    "diagnostics": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/HomeScreen.dia"
+  },
+  "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/Sources/Moblee/InstallRun.swift": {
+    "dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/InstallRun.d",
+    "object": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/InstallRun.swift.o",
+    "swiftmodule": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/InstallRun~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/InstallRun.swiftdeps",
+    "diagnostics": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/InstallRun.dia"
+  },
+  "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/Sources/Moblee/LogicCheck.swift": {
+    "dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/LogicCheck.d",
+    "object": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/LogicCheck.swift.o",
+    "swiftmodule": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/LogicCheck~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/LogicCheck.swiftdeps",
+    "diagnostics": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/LogicCheck.dia"
+  },
+  "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/Sources/Moblee/MobleeApp.swift": {
+    "dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/MobleeApp.d",
+    "object": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/MobleeApp.swift.o",
+    "swiftmodule": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/MobleeApp~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/MobleeApp.swiftdeps",
+    "diagnostics": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/MobleeApp.dia"
+  },
+  "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/Sources/Moblee/NameScreen.swift": {
+    "dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/NameScreen.d",
+    "object": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/NameScreen.swift.o",
+    "swiftmodule": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/NameScreen~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/NameScreen.swiftdeps",
+    "diagnostics": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/NameScreen.dia"
+  },
+  "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/Sources/Moblee/Placement.swift": {
+    "dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Placement.d",
+    "object": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Placement.swift.o",
+    "swiftmodule": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Placement~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Placement.swiftdeps",
+    "diagnostics": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Placement.dia"
+  },
+  "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/Sources/Moblee/SelfDrive.swift": {
+    "dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/SelfDrive.d",
+    "object": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/SelfDrive.swift.o",
+    "swiftmodule": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/SelfDrive~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/SelfDrive.swiftdeps",
+    "diagnostics": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/SelfDrive.dia"
+  },
+  "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/Sources/Moblee/Snapshots.swift": {
+    "dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Snapshots.d",
+    "object": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Snapshots.swift.o",
+    "swiftmodule": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Snapshots~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Snapshots.swiftdeps",
+    "diagnostics": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Snapshots.dia"
+  },
+  "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/Sources/Moblee/Theme.swift": {
+    "dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Theme.d",
+    "object": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Theme.swift.o",
+    "swiftmodule": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Theme~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Theme.swiftdeps",
+    "diagnostics": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/Theme.dia"
+  },
+  "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/Sources/Moblee/TrustScreen.swift": {
+    "dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/TrustScreen.d",
+    "object": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/TrustScreen.swift.o",
+    "swiftmodule": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/TrustScreen~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/TrustScreen.swiftdeps",
+    "diagnostics": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/TrustScreen.dia"
+  },
+  "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/Sources/Moblee/WelcomeScreen.swift": {
+    "dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/WelcomeScreen.d",
+    "object": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/WelcomeScreen.swift.o",
+    "swiftmodule": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/WelcomeScreen~partial.swiftmodule",
+    "swift-dependencies": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/WelcomeScreen.swiftdeps",
+    "diagnostics": "/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee/app/.build/arm64-apple-macosx/debug/Moblee.build/WelcomeScreen.dia"
+  }
+}

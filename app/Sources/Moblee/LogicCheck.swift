@@ -118,13 +118,40 @@ enum LogicCheck {
         let run = InstallRun()
         run.handle(["step": "trust", "state": "needed", "assistant": "chatgpt"])
         check("the trust-needed line is noticed", run.trustNeeded)
+        // A line about something the app does not count — a step it has no tile
+        // for, a line with no step at all — is still ignored. That is right: it
+        // says nothing about the work the app is showing.
         let quiet = InstallRun()
         quiet.handle(["step": "trust", "state": "something-new"])
         quiet.handle(["step": "a-step-from-the-future", "state": "start", "n": 3, "of": 9])
         quiet.handle(["state": "needed"])
-        quiet.handle(["step": "safety", "state": "a-state-from-the-future"])
-        check("lines that are not understood are ignored: no trust step, nothing failed, no tile changed",
+        check("lines about steps the app does not count are ignored",
               !quiet.trustNeeded && quiet.phase == .idle && quiet.items.allSatisfy { $0.state == .waiting })
+
+        // (v0.9.1) But an unknown state on a step the app IS counting must never
+        // be ignored. This assertion used to say the opposite, and in doing so
+        // it certified the fault: `needs-commit` was dropped, the tile stayed
+        // grey, the script exited 0, every tile went green, and the owner was
+        // told "Your wiki is up to date" over an update that was never
+        // committed. An unrecognised state on a counted step now means
+        // "not finished", which is the safe reading of a newer pack's message.
+        let newer = InstallRun()
+        newer.handle(["step": "safety", "state": "a-state-from-the-future"])
+        check("an unknown state on a counted step is not treated as success",
+              newer.phase != .finished && newer.items.contains { $0.key == "safety" && $0.state == .failed })
+
+        // The state that fault was found through, end to end: the closing step
+        // reports it, the run-level line repeats it, and a zero exit afterwards
+        // must not turn it into a finish.
+        let staged = InstallRun()
+        staged.startUpdateItemsForTest()
+        staged.handle(["step": "finish", "state": "needs-commit", "n": 9, "of": 9])
+        check("needs-commit is recorded and the step is not shown as broken",
+              staged.needsCommit && staged.items.contains { $0.key == "finish" && $0.state == .done })
+        staged.handle(["step": "done", "state": "needs-commit", "n": 9, "of": 9])
+        staged.finishForTest(code: 0)
+        check("a refused commit does not end as finished",
+              staged.phase == .needsCommit && staged.phase != .finished)
         // ChatGPT keeps its trust by the entry in its hooks list and takes no
         // account of the guard file. So what a repair printed when it only
         // replaced that file sets nothing waiting; only the scripts' own line
