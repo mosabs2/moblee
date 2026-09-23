@@ -32,7 +32,7 @@ How the owner works day to day, how they like the assistant to work with them, a
 
 ## Said no to
 
-*(One line per item the owner turned down, in the same form: a dash, the key in backticks, the date, and the reason if one was given. The assistant does not suggest these again for ninety days unless the owner raises them, and the weekly health check stays quiet about them too. A no to the "get me started" conversation or a setup review is written with the key `get-started`.)*
+*(One line per item the owner turned down, in the same form: a dash, the key in backticks, the date, and the reason if one was given. The assistant does not suggest these again for ninety days unless the owner raises them, and the weekly health check stays quiet about them too. A no to the "get me started" conversation or a setup review is written with the key `companion`; a vault made before v0.9.1 may carry `get-started` instead, which still counts.)*
 
 ## Review history
 

@@ -724,7 +724,11 @@ def check_outputs_size(vault: Path, findings: list[str]) -> tuple[int, int]:
 CHARS_PER_TOKEN = 4
 CONTEXT_TOKEN_CAP = 12_000     # wiki/_context.md — loaded in full at every session start
 INDEX_TOKEN_CAP = 8_000        # wiki/Index.md — a one-line-per-page catalogue by design
-CLAUDE_MD_TOKEN_CAP = 10_000   # the instruction file (CLAUDE.md or AGENTS.md) — schema, loaded every session
+# (v0.9.1) 16,000, not 10,000, and it must match scripts/vault-gate.py, which
+# refuses a commit on the same figure. The pack ships a rules file of about
+# 9,100 tokens, so a 10,000 cap left an owner 900 of their own before every
+# commit in their vault was refused; the derivation of 16,000 is in the gate.
+CLAUDE_MD_TOKEN_CAP = 16_000   # the instruction file (CLAUDE.md or AGENTS.md) — schema, loaded every session
 PAGE_TOKEN_FLAG = 25_000       # wiki pages — extraction-candidate threshold
 
 
@@ -1808,15 +1812,23 @@ def check_habits(vault: Path, findings: list[str]) -> tuple[int, int]:
             m = re.search(r"^last_reviewed:[ \t]*(.*)$", fm.group(1), re.MULTILINE)
             raw_reviewed = m.group(1).strip() if m else ""
         reviewed = _parse_day(raw_reviewed) if raw_reviewed else None
-        quiet = "get-started" in declined and (today - declined["get-started"]).days <= HABITS_REVIEW_DAYS
+        # (v0.9.1) Either key quiets it. The skill that holds this conversation
+        # was called `get-started` until v0.8.1 and is now `companion`, and the
+        # two names had come apart: the rules file told the assistant to record
+        # `companion` while this test looked only for `get-started`, so an owner
+        # who said no was asked again every week for ever — the one thing the
+        # ninety-day rule exists to prevent. New nos are written `companion`;
+        # a `get-started` already on an owner's page still counts.
+        declined_setup = [d for k, d in declined.items() if k in ("companion", "get-started")]
+        quiet = bool(declined_setup) and (today - max(declined_setup)).days <= HABITS_REVIEW_DAYS
         if raw_reviewed and reviewed is None:
             notes.append(f"the review date on the Habits and Tools page (`{raw_reviewed}`) could not be read; write it as 19 September 2026")
         elif quiet:
             pass
         elif reviewed is None:
-            notes.append("the \"get me started\" conversation has not been held yet; offer it to the owner once, and record a no as `get-started` under \"Said no to\"")
+            notes.append("the \"get me started\" conversation has not been held yet; offer it to the owner once, and record a no as `companion` under \"Said no to\"")
         elif (today - reviewed).days > HABITS_REVIEW_DAYS:
-            notes.append(f"the setup was last reviewed on {reviewed.strftime('%-d %B %Y')}; offer the owner a setup review once, and record a no as `get-started` under \"Said no to\"")
+            notes.append(f"the setup was last reviewed on {reviewed.strftime('%-d %B %Y')}; offer the owner a setup review once, and record a no as `companion` under \"Said no to\"")
 
     roots = [vault / "raw", vault / "Clippings", vault / "Daily Notes"]
     cutoff = datetime.datetime.now().timestamp() - HABITS_WINDOW_DAYS * 86400

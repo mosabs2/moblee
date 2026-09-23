@@ -233,6 +233,36 @@ if [[ "$ASSISTANT" != "claude" || $ASSISTANT_FLAG -eq 1 ]]; then
 fi
 echo ""
 
+# (v0.9.1) The closing commit stages four pages the assistant is told to write
+# to, so an owner's half-finished work on any of them was being committed under
+# "moblee: updated from X to Y" — their words, in a commit message that names
+# Moblee. The rules file and the Index already get this care; these did not.
+# Recorded here, before any step runs, because "was it the owner's already?"
+# cannot be asked once the update has written to it. Two lists, one index apart,
+# rather than a map: this has to run under the bash 3.2 that ships with macOS.
+OWNER_DIRTY=()
+OWNER_SUM=()
+if [[ -d "$VAULT/.git" ]]; then
+  for p in wiki/Identity.md "wiki/Wiki Operations/Habits and Tools.md" "wiki/Wiki Operations/Moblee Learning Path.md" "wiki/Wiki Operations/Assistant Memory.md"; do
+    if git -C "$VAULT" ls-files --error-unmatch -- "$p" >/dev/null 2>&1; then
+      if ! git -C "$VAULT" diff --quiet -- "$p" 2>/dev/null || ! git -C "$VAULT" diff --cached --quiet -- "$p" 2>/dev/null; then
+        OWNER_DIRTY+=("$p")
+        OWNER_SUM+=("$(cksum < "$VAULT/$p" 2>/dev/null || true)")
+      fi
+    fi
+  done
+fi
+# owner_dirty_sum <path> : print what the file held before this run, and succeed,
+# if the owner had uncommitted work in it; fail silently if they did not.
+owner_dirty_sum() {
+  local q i=0
+  for q in ${OWNER_DIRTY[@]+"${OWNER_DIRTY[@]}"}; do
+    if [[ "$q" == "$1" ]]; then printf '%s' "${OWNER_SUM[$i]}"; return 0; fi
+    i=$((i+1))
+  done
+  return 1
+}
+
 keep_copy() {
   # keep_copy <path inside vault or home> : copy to the backup folder, keeping the relative name
   local src="$1"
@@ -721,6 +751,16 @@ if [[ -d "$VAULT/.git" ]]; then
       if [[ $RULES_DIRTY -eq 1 && ( "$p" == "CLAUDE.md" || "$p" == "AGENTS.md" ) ]]; then continue; fi
       # the ChatGPT memory page goes in only when this run made it
       if [[ "$p" == "wiki/Wiki Operations/Assistant Memory.md" && $MEMORY_PAGE_NEW -eq 0 ]]; then continue; fi
+      # (v0.9.1) a page the owner had uncommitted work in before this run is
+      # theirs, and stays theirs; if the update also wrote to it, say so
+      if SUM_BEFORE="$(owner_dirty_sum "$p")"; then
+        if [[ "$(cksum < "$p" 2>/dev/null || true)" != "$SUM_BEFORE" ]]; then
+          echo "   $p held changes of yours that were not yet committed, so what this update added to it"
+          echo "   is left for your own next commit, with those changes; nothing of yours was committed."
+          diary "    $p held uncommitted changes of the owner's; what the update added was left for their own commit"
+        fi
+        continue
+      fi
       if [[ -e "$p" || -L "$p" ]]; then
         git add -A -- "$p" 2>/dev/null || true
         # named in the commit only if git now knows it: a path git ignores
@@ -728,6 +768,20 @@ if [[ -d "$VAULT/.git" ]]; then
         if git ls-files --error-unmatch -- "$p" >/dev/null 2>&1; then COMMIT_PATHS+=("$p"); fi
       fi
     done
+    # (v0.9.1) scripts/orient-extras.sh is the owner's. The step that adds it
+    # says so in this same file — "copied in only when absent, never
+    # overwritten, never staged for the update's commit" — and then the line
+    # above staged the whole scripts folder and committed the owner's own file
+    # under "moblee: updated from X to Y". It is taken back out of the index,
+    # and excluded from the commit's own pathspec as well, because a commit that
+    # names its paths takes the working tree for them and would otherwise carry
+    # the file in whatever the index said.
+    if [[ -e scripts/orient-extras.sh ]]; then
+      git reset -q -- scripts/orient-extras.sh >/dev/null 2>&1 || true
+      if [[ ${#COMMIT_PATHS[@]} -gt 0 ]]; then
+        COMMIT_PATHS+=(":(exclude)scripts/orient-extras.sh")
+      fi
+    fi
     # AGENTS.md renamed above, its own commit not made and the link not made
     # either: the old name's removal belongs in this commit with the new name
     if [[ $RULES_RENAMED -eq 1 && $RULES_DIRTY -eq 0 && ! -e AGENTS.md && ! -L AGENTS.md ]] && ! git diff --cached --quiet -- AGENTS.md 2>/dev/null; then

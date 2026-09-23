@@ -786,6 +786,57 @@ def check_chatgpt(f: Findings, vault: Path | None, pack: Path | None, assistant:
     check_skills(f, pack, CODEX_SKILLS, "ChatGPT")
 
 
+# (v0.9.1) The commit gate refuses a commit when one of the always-loaded files
+# is over its cap, and it refuses EVERY commit in the vault, not only Moblee's.
+# Nothing told an owner they were near the line: the first they knew was a
+# refusal with a rule name in it, which is what happened on 21 September 2026.
+# The figures match scripts/vault-gate.py and scripts/lint-v2.py; a vault whose
+# copy of the gate is older may still hold a lower cap, and this says so.
+WEIGHT_CAPS = (("wiki/_context.md", 12000), ("wiki/Index.md", 8000))
+INSTRUCTION_CAP = 16000
+
+
+def check_weights(f: Findings, vault: Path | None) -> None:
+    """How near the always-loaded files are to the size the commit gate allows."""
+    if vault is None:
+        return
+    rules = None
+    for name in ("CLAUDE.md", "AGENTS.md"):
+        p = vault / name
+        if p.is_file() and not p.is_symlink():
+            rules = (name, INSTRUCTION_CAP)
+            break
+    checks = list(WEIGHT_CAPS) + ([rules] if rules else [])
+    over, near = [], []
+    for rel, cap in checks:
+        p = vault / rel
+        if not p.is_file():
+            continue
+        try:
+            tok = len(p.read_text(errors="replace")) // 4
+        except OSError:
+            continue
+        if tok > cap:
+            over.append(f"{rel} at about {tok:,} tokens, over its {cap:,}")
+        elif cap - tok < 1000:
+            near.append(f"{rel} at about {tok:,} tokens, within {cap - tok:,} of its {cap:,}")
+    if over:
+        f.add(PROBLEM,
+              "A file your assistant reads at every session is over the size the commit gate allows ("
+              + "; ".join(over) + "). While it is, every commit in this vault is refused, not only "
+              "Moblee's. Ask your assistant to shorten it: move the parts you rarely need into a page "
+              "of their own and link to it.",
+              "F30")
+    elif near:
+        f.add(LOOK,
+              "A file your assistant reads at every session is close to the size the commit gate allows ("
+              + "; ".join(near) + "). Over the line, every commit in this vault is refused. Worth "
+              "shortening before that happens.",
+              "F30")
+    elif checks:
+        f.add(OK, "The files your assistant reads at every session are well within their size caps.")
+
+
 def check_diary(f: Findings) -> None:
     diary = CONFIG / "install-diary.txt"
     if not diary.exists():
@@ -805,7 +856,7 @@ def check_diary(f: Findings) -> None:
         detail = tidy(refused.split("  ", 1)[-1]) if refused else "the closing commit was refused"
         f.add(PROBLEM,
               f"The last {what} put every file in place but was not committed: {detail} "
-              f"Ask your assistant: \"the Moblee update did not commit, please look and commit it\".",
+              f"Ask your assistant: \"the Moblee {what} did not commit, please look and commit it\".",
               "F11")
     elif any("finished ===" in l for l in tail):
         f.add(OK, f"The last {what} ran to the end.")
@@ -857,6 +908,7 @@ def main() -> int:
     elif args.prove_guard:
         f.add(OK, "--prove-guard tests the delete guard inside ChatGPT, and this wiki is set up for Claude only, "
                   "so there was nothing to put to the test.")
+    check_weights(f, vault)
     check_jobs(f)
     check_diary(f)
     check_mac(f, assistant)

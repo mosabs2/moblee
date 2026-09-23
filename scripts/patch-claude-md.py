@@ -261,7 +261,36 @@ def main() -> int:
         print(f"  previous copy at {bdir / path.name}")
     elif new == original:
         print("  nothing to change")
+    report_weight(path, new, a.dry_run)
     return 0
+
+
+# (v0.9.1) The commit gate refuses a commit when the rules file is over its cap,
+# and it refuses every commit in the vault, not only Moblee's. This file adds to
+# that rules file, so it is the one place that knows it has just pushed an owner
+# towards the line — and until now it said nothing, which is how a real owner
+# came to find every commit refused on 21 September 2026 with no idea why. The
+# cap lives in scripts/vault-gate.py; the figure is repeated here rather than
+# imported because this script is run on its own, from a pack folder, against a
+# vault whose gate may be an older copy.
+INSTRUCTION_CAP = 16000
+
+
+def report_weight(path: Path, text: str, dry_run: bool) -> None:
+    """Say where the rules file now stands against the gate's cap."""
+    tok = len(text) // 4
+    left = INSTRUCTION_CAP - tok
+    where = "would leave" if dry_run else "leaves"
+    if tok > INSTRUCTION_CAP:
+        print(f"  {path.name} is now about {tok:,} tokens, over the commit gate's "
+              f"{INSTRUCTION_CAP:,} cap. Until it is shorter, every commit in this vault "
+              f"will be refused, not only Moblee's.")
+        print(f"  Ask your assistant to shorten {path.name}: move the parts you rarely need "
+              f"into a page of their own and link to it.")
+    elif left < 1000:
+        print(f"  {path.name} is about {tok:,} tokens, which {where} {left:,} before the "
+              f"commit gate's {INSTRUCTION_CAP:,} cap. Worth shortening soon; over the cap, "
+              f"every commit in the vault is refused.")
 
 
 if __name__ == "__main__":

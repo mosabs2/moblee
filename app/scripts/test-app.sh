@@ -25,6 +25,19 @@ if bash "$here/build-app.sh" > "$WORK/build.txt" 2>&1; then ok "the app builds";
 APP="$(cat "${MOBLEE_BUILD_DIR:-$HOME/Library/Caches/moblee-build}/latest.txt")"
 BIN="$APP/Contents/MacOS/Moblee"
 [[ -f "$APP/Contents/Resources/pack/scripts/install.sh" ]] && ok "the pack is inside the app" || bad "the pack is inside the app"
+# (v0.9.1) The guard skips its file scan for the pack's own tooling by SHA-256.
+# When a hash drifts the guard refuses that script on every owner's Mac — the
+# check-up among them, which is the thing owners are told to ask for when
+# something is wrong. v0.9.0 shipped with six of the seven stale. The signing
+# script refuses a release on this, but the signing run is the owner's and comes
+# last; this is the same check in the test that is run before anyone is asked to
+# open the app, which is the loop the pack is actually developed in.
+if ( cd "$here/../.." && python3 safety/release-hashes.py --check ) > "$WORK/hashes.txt" 2>&1; then
+  ok "the guard's pinned hashes are current"
+else
+  bad "the guard's pinned hashes are current — run: python3 safety/release-hashes.py"
+  sed 's/^/      /' "$WORK/hashes.txt"
+fi
 
 mkdir -p "$WORK/home-draw" "$WORK/home-rehearse" "$WORK/home-drive"
 

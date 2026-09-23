@@ -82,6 +82,15 @@ fi
 DIARY_DIR="$HOME/.config/moblee"
 DIARY="$DIARY_DIR/install-diary.txt"
 mkdir -p "$DIARY_DIR"
+# (v0.9.1) Where a commit git refused leaves word. Two of this script's commits
+# run inside subshells, which cannot set a variable the rest of the script would
+# see, so they write a plain sentence here instead and the closing report reads
+# them all out. One line per thing that is not committed; cleared at the start of
+# every run, so a refusal from a previous install is never reported as this one's.
+# The updater keeps its own note file, in its own format, and the two never run
+# in the same process: the hand-over to the updater is an exec.
+NOT_COMMITTED="$DIARY_DIR/.install-not-committed"
+: > "$NOT_COMMITTED" 2>/dev/null || true
 STEP_TOTAL=6
 STEP_N=0
 CURRENT_STEP="starting"
@@ -539,9 +548,13 @@ fi
 if git -C "$VAULT_LOCATION" rev-parse --verify --quiet HEAD >/dev/null 2>&1; then
   step_ok history
 else
-  # the wiki works without its first commit, so this is recorded and not fatal
-  diary "step $STEP_N of $STEP_TOTAL, history: the first commit was not made"
-  emit history ok
+  # (v0.9.1) The wiki works without its first commit, so this is not fatal and
+  # the step is not shown as broken. It is not "done" either, and calling it done
+  # is how an owner comes to be told a finished install over a wiki with nothing
+  # in its history. The refusal is carried to the end of the run and said once.
+  diary "step $STEP_N of $STEP_TOTAL, history: the first commit was REFUSED; nothing in the wiki is in its history yet"
+  echo "the wiki's first commit: nothing in the wiki is in its history yet" >> "$NOT_COMMITTED" 2>/dev/null || true
+  emit history needs-commit
 fi
 
 # ----- safety layer (v0.5; not optional) --------------------------------------
@@ -694,9 +707,25 @@ step_start finish
     if [[ -e "$p" || -L "$p" ]]; then git add -A -- "$p" 2>/dev/null || true; fi
   done
   if ! git diff --cached --quiet 2>/dev/null; then
-    git commit --quiet -m "moblee: safety layer, settings and chosen options" 2>/dev/null || true
+    STAGED_N=$(git diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
+    # (v0.9.1) The commit gate is wired a few lines above, *before* this commit,
+    # so git can and does refuse it. Until now the refusal was silenced twice
+    # over — stderr to /dev/null, the exit code to `|| true` — and the script
+    # went straight on to "=== Moblee install finished ===" and the Done banner,
+    # over settings that were staged and never saved. This is the same fault the
+    # updater carried on 21 September; it was fixed there and never carried
+    # across. The gate's own explanation is now left on the screen, where the
+    # owner can read why, and the refusal is noted for the closing report.
+    if ! git commit --quiet -m "moblee: safety layer, settings and chosen options"; then
+      echo "the install's own settings: $STAGED_N file(s) staged and not committed" >> "$NOT_COMMITTED" 2>/dev/null || true
+    fi
   fi
 )
+# (v0.9.1) Read whatever the subshells left, and tell the truth about it in all
+# three places the owner or their assistant might look: the step state the app
+# shows, the diary the check-up reads, and the screen.
+COMMIT_WAS_REFUSED=0
+if [[ -s "$NOT_COMMITTED" ]]; then COMMIT_WAS_REFUSED=1; fi
 
 # ----- record the vault path for the tooling ----------------------------------
 # lint-v2, the gate, the galaxy and the dashboard all find the vault through
@@ -709,13 +738,37 @@ echo "$VAULT_LOCATION" > "$HOME/.config/moblee/vault-path"
 echo "$PACKAGE_ROOT" > "$HOME/.config/moblee/package-path"
 # the install is whole, so it is no longer "in progress": the note says so
 echo "finished $(date '+%Y-%m-%d %H:%M')" >> "$IN_PROGRESS"
-step_ok finish
+if [[ $COMMIT_WAS_REFUSED -eq 1 ]]; then
+  # the files are all on disk, so the step is done and not broken; what is
+  # outstanding is the saving of them into the wiki's history
+  # one diary line per outstanding thing, each one standing on its own: the
+  # check-up quotes the first REFUSED line it finds straight back to the owner
+  while IFS= read -r l; do
+    diary "step $STEP_N of $STEP_TOTAL, finish: a commit was REFUSED — $l"
+  done < "$NOT_COMMITTED"
+  emit finish needs-commit
+else
+  step_ok finish
+fi
 CURRENT_STEP="finished"
-diary "=== Moblee install finished ==="
+if [[ $COMMIT_WAS_REFUSED -eq 1 ]]; then
+  diary "=== Moblee install finished, BUT THE INSTALL IS NOT COMMITTED ==="
+else
+  diary "=== Moblee install finished ==="
+fi
 if [[ $PROGRESS -eq 1 ]]; then
   JSON_VAULT="${VAULT_LOCATION//\\/\\\\}"
   JSON_VAULT="${JSON_VAULT//\"/\\\"}"
-  printf '@@moblee {"step":"done","state":"ok","n":%d,"of":%d,"vault":"%s"}\n' "$STEP_TOTAL" "$STEP_TOTAL" "$JSON_VAULT"
+  # (v0.9.1) The run-level signal must agree with the step that just spoke. It
+  # used to say done/ok whatever had happened, which is how the app came to show
+  # nine green tiles over an update that was never committed; the installer said
+  # the same thing over an install that was never committed, and nothing at all
+  # about it anywhere else.
+  if [[ $COMMIT_WAS_REFUSED -eq 1 ]]; then
+    printf '@@moblee {"step":"done","state":"needs-commit","n":%d,"of":%d,"vault":"%s"}\n' "$STEP_TOTAL" "$STEP_TOTAL" "$JSON_VAULT"
+  else
+    printf '@@moblee {"step":"done","state":"ok","n":%d,"of":%d,"vault":"%s"}\n' "$STEP_TOTAL" "$STEP_TOTAL" "$JSON_VAULT"
+  fi
 fi
 
 # ----- done -------------------------------------------------------------------
@@ -723,6 +776,14 @@ echo ""
 echo "==================================================================="
 echo "  Done."
 echo "==================================================================="
+if [[ $COMMIT_WAS_REFUSED -eq 1 ]]; then
+  echo ""
+  echo "   One thing is not finished."
+  echo "   Your wiki is built and every file is in place, but a commit was"
+  echo "   refused, so this is not saved into the wiki's history:"
+  while IFS= read -r l; do echo "     - $l"; done < "$NOT_COMMITTED"
+  echo "   Tell $ASSISTANT_LABEL: \"the Moblee install did not commit, please look and commit it\"."
+fi
 echo ""
 echo "Your vault lives at:"
 echo "  $VAULT_LOCATION"
