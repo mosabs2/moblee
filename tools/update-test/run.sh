@@ -52,31 +52,40 @@ make_wiki() {
   printf '%s\n' "$sbx" | tee "$home/.config/moblee/vault-path" >/dev/null
 }
 
-# run_update <home> <sandbox> [args...] — echoes the exit code.
+# run_update <home> <sandbox> [args...] — runs the updater and sets RC.
 #
 # stdin comes from /dev/null, and that is not a detail. The updater asks three
 # questions (the weekly health check, the learning path, the checklist) and is
 # written to take its default when input ends. Left attached to a terminal it
-# waits for an answer for ever, and because output is redirected the question is
-# invisible: the run simply appears to hang after printing the case name. That
-# is what the first run of this rig did on 23 September 2026.
-# A cap as well, so that a future hang fails the run loudly instead of sitting
-# there looking like work. macOS has no timeout(1), hence the killer subshell.
+# waits for an answer for ever, and because output was redirected the question
+# was invisible: the run simply appeared to hang after printing the case name.
+# That is what the first run of this rig did on 23 September 2026.
+#
+# It sets a variable rather than echoing the exit code, and that is deliberate.
+# Called as rc=$(run_update …) the command substitution waits for every writer
+# to the pipe to finish, and the background timeout below is one of them: the
+# rig then sat silent for the whole timeout after the updater had already
+# finished, which looked exactly like the hang it was meant to catch. Setting a
+# variable keeps it out of a subshell entirely. (Found on 23 September 2026,
+# twice in one afternoon, by the owner watching a cursor not blink.)
+#
+# The updater's own progress is shown as it happens as well as captured, so a
+# real hang is obvious: the last line printed says which step it stopped on.
 UPDATE_TIMEOUT="${UPDATE_TIMEOUT:-240}"
+RC=0
 run_update() {
   local home="$1" sbx="$2"; shift 2
-  printf '    …running the updater\n' >&2
   ( cd "$PACKAGE_ROOT" && HOME="$home" bash scripts/update.sh "$sbx" "$@" ) \
-    < /dev/null > "$home/update-output.txt" 2>&1 &
+    < /dev/null 2>&1 | tee "$home/update-output.txt" | sed 's/^/      | /' &
   local pid=$!
-  ( sleep "$UPDATE_TIMEOUT"; kill -9 "$pid" 2>/dev/null ) & local killer=$!
-  wait "$pid"; local rc=$?
-  kill "$killer" 2>/dev/null
-  if [[ $rc -ge 128 ]]; then
-    printf 'the updater did not finish within %ss and was stopped\n' "$UPDATE_TIMEOUT" \
-      >> "$home/update-output.txt"
+  # The killer must not hold the pipeline open, hence its own redirection.
+  ( sleep "$UPDATE_TIMEOUT"; kill -9 "$pid" 2>/dev/null ) >/dev/null 2>&1 &
+  local killer=$!
+  wait "$pid"; RC=$?
+  kill "$killer" >/dev/null 2>&1
+  if [[ $RC -ge 128 ]]; then
+    bad "the updater did not finish within ${UPDATE_TIMEOUT}s and was stopped"
   fi
-  echo $rc
 }
 
 start() {
@@ -96,7 +105,7 @@ wanted() { [[ "$WANT" == "all" || "$WANT" == "$1" ]]; }
 case_happy() {
   start happy
   make_wiki "$HOME_DIR" "$SBX"
-  local rc; rc=$(run_update "$HOME_DIR" "$SBX")
+  run_update "$HOME_DIR" "$SBX"; local rc=$RC
   same "$rc" "0" "the updater exits cleanly"
   same "$(cat "$SBX/VERSION")" "$(cat "$PACKAGE_ROOT/VERSION")" "the wiki is on the new version"
   has   "$HOME_DIR/.config/moblee/install-diary.txt" "=== Moblee update finished ===" "the diary records a finish"
@@ -116,7 +125,7 @@ case_refused() {
   mkdir -p "$SBX/.git/hooks"
   cp "$FIXTURES/refusing-pre-commit" "$SBX/.git/hooks/pre-commit"
   chmod +x "$SBX/.git/hooks/pre-commit"
-  run_update "$HOME_DIR" "$SBX" >/dev/null
+  run_update "$HOME_DIR" "$SBX"
   local diary="$HOME_DIR/.config/moblee/install-diary.txt"
   has   "$diary" "NOT COMMITTED" "the diary says the update is not committed"
   has   "$diary" "REFUSED" "and names the refusal on the closing step"
@@ -131,13 +140,13 @@ case_refused() {
 case_extras() {
   start extras
   make_wiki "$HOME_DIR" "$SBX"
-  run_update "$HOME_DIR" "$SBX" >/dev/null
+  run_update "$HOME_DIR" "$SBX"
   isfile "$SBX/scripts/orient-extras.sh" "the owner's extras file is created"
   has "$SBX/scripts/vault-orient-preflight.sh" "orient-extras.sh" "the preflight knows to run it"
   cp "$FIXTURES/owners-own-check.sh" "$SBX/scripts/orient-extras.sh"
   cp "$FIXTURES/old-wiki/VERSION" "$SBX/VERSION"
   ( cd "$SBX" && git add -A && git commit -qm "the owner adds his own check" ) >/dev/null 2>&1
-  run_update "$HOME_DIR" "$SBX" >/dev/null
+  run_update "$HOME_DIR" "$SBX"
   has "$SBX/scripts/orient-extras.sh" "the owner wrote this check himself" \
       "and a second update leaves it exactly as he left it"
 }
@@ -147,7 +156,7 @@ case_extras() {
 case_index() {
   start index
   make_wiki "$HOME_DIR" "$SBX"
-  run_update "$HOME_DIR" "$SBX" >/dev/null
+  run_update "$HOME_DIR" "$SBX"
   same "$(grep -c '^- Wiki Operations' "$SBX/wiki/Index.md" 2>/dev/null | tr -d ' ')" "1" \
        "the Index keeps exactly one Wiki Operations line"
 }
@@ -157,9 +166,9 @@ case_index() {
 case_twice() {
   start twice
   make_wiki "$HOME_DIR" "$SBX"
-  run_update "$HOME_DIR" "$SBX" >/dev/null
+  run_update "$HOME_DIR" "$SBX"
   local first; first=$(cd "$SBX" && git rev-parse HEAD)
-  run_update "$HOME_DIR" "$SBX" >/dev/null
+  run_update "$HOME_DIR" "$SBX"
   same "$(cd "$SBX" && git rev-parse HEAD)" "$first" "a second run makes no new commit"
   same "$(cd "$SBX" && git status --porcelain | wc -l | tr -d ' ')" "0" "and leaves nothing staged"
 }
