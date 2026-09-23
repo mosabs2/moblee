@@ -12,6 +12,11 @@ The honesty release. Every change here comes from one owner's real update on 21 
 - **A second "Wiki Operations" line was added to the Index** when the existing one pointed at another page. The habits page now extends the line that is there instead of adding its own.
 - **The commit gate's superlative advisory fired on ordinary words.** "First", "every", "the first section" all tripped it, three times in one owner's update and ten at once in v0.5.1, and an advisory that is almost always wrong teaches people to ignore the gate. It now wants a superlative actually claiming a record or a primacy — "the first time", "the largest ever", "unprecedented", "the only one".
 - **The rules file still named the retired `get-started` skill** in its habits section, replaced by `companion` in v0.8.
+- **An update left two of its own changes uncommitted.** The check that decides whether the Index may be committed sat between the two steps that edit it, so it saw the link the starting memories add and not the one the habits page adds: every owner finished a clean update with a modified Index they had not touched. The Daily Notes template arrived untracked and stayed that way. Both now go in with the update's own commit, and an Index that already held the owner's uncommitted work is still left entirely alone. Found by the new end-to-end test, not by an owner.
+
+### Added
+
+- **An end-to-end test for the updater** (`tools/update-test/`). It runs the real `scripts/update.sh` against throwaway wikis under `TMPDIR` with a sandboxed HOME and checks what it actually did: an ordinary update, a refused closing commit, the owner's own orientation checks surviving, the Index staying single-lined, and a second run changing nothing. Nineteen checks. **A release that touches the updater runs this first.** Until now there was no way to run the updater end to end off a real person's Mac, which is why every fault above was found by an owner after release.
 
 ## v0.9.0 (21 September 2026)
 
