@@ -78,9 +78,12 @@ run_update() {
   ( cd "$PACKAGE_ROOT" && HOME="$home" bash scripts/update.sh "$sbx" "$@" ) \
     < /dev/null 2>&1 | tee "$home/update-output.txt" | sed 's/^/      | /' &
   local pid=$!
-  # The killer must not hold the pipeline open, hence its own redirection.
+  # The killer must not hold the pipeline open, hence its own redirection, and
+  # it is disowned so that the shell does not print "Terminated: 15" every time
+  # the timeout is cancelled, which it is on every ordinary run.
   ( sleep "$UPDATE_TIMEOUT"; kill -9 "$pid" 2>/dev/null ) >/dev/null 2>&1 &
   local killer=$!
+  disown "$killer" 2>/dev/null
   wait "$pid"; RC=$?
   kill "$killer" >/dev/null 2>&1
   if [[ $RC -ge 128 ]]; then
