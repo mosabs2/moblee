@@ -230,15 +230,22 @@ case_partly() {
   # was working. The failure has to be narrow or it tests nothing.
   cp "$FIXTURES/old-wiki/VERSION" "$SBX/wiki/Wiki Operations/Moblee Learning Path.md"
   chmod 500 "$SBX/wiki/Wiki Operations"
-  run_update "$HOME_DIR" "$SBX"
+  run_update "$HOME_DIR" "$SBX" --progress
   chmod 700 "$SBX/wiki/Wiki Operations"
   local diary="$HOME_DIR/.config/moblee/install-diary.txt"
   has  "$diary" "DID NOT FINISH" "the diary names what did not finish"
   has  "$diary" "done, except" "and the step says it finished all but that"
   has  "$HOME_DIR/update-output.txt" "did not finish" "the screen says so at the end"
   has  "$HOME_DIR/update-output.txt" '"state":"partial"' "and the app is told, so it can say so too"
-  has  "$HOME_DIR/update-output.txt" "Habits and Tools page" "the first failure is named"
-  has  "$HOME_DIR/update-output.txt" "learning path" "and so is the second, three steps later"
+  has  "$HOME_DIR/update-output.txt" "Habits and Tools page" "and names which thing it was"
+  # The note belongs to the step it happened in and must not spread to the next.
+  # The learning-path step runs three steps later and finishes properly here: it
+  # leaves an existing lessons page alone and writes only outside the folder this
+  # case made read-only, so there is nothing for it to fail at. That is the code
+  # being right, and an assertion that expected it to fail was the test being
+  # wrong (23 September 2026, the second time this case was written).
+  has  "$HOME_DIR/update-output.txt" '"step":"pages","state":"partial"' "the note lands on the step it happened in"
+  has  "$HOME_DIR/update-output.txt" '"step":"lessons","state":"ok"' "and a later step that finished properly still closes clean"
   hasnt "$diary" "=== Moblee update finished, BUT" "the update itself still finished"
 }
 
