@@ -106,7 +106,7 @@ KNOWN_SAFE_SHA256 = {
     "9f31dddc0b348023906a575cfa86991a539673eae0b7a5da21e6f84d6fd33e44": "dashboard/server.py",
     "a4294253dcd091c30997668bd55ce359076597de23e4bf341e690168373ea65c": "learning-path/moblee-tip.sh",
     "55d0d3e672b19c957383968006569114f4b4f5277b1da9b844612f1a054b6f5a": "safety/install-safety.py",
-    "3ec728a43a0f426a87ba4c862d8a372693a823156552e0f42b876c11a9a3569b": "safety/test-guard.py",
+    "29e959b46468588941ab6022050b8246f0186cba9313f0bf15541e9c1020c699": "safety/test-guard.py",
     "7f3a7048063503cb11ab2b3ec42a34128ca85f8924e71eeb25ce3e93ca50637e": "scripts/add-habits-page.py",
     "4b2f688c92a7b56fb2fc98c25a922ecf958b77b13659173e0b86cfa336aff211": "scripts/add-identity.py",
     "749ed9603f05e1a633f9586383e86777289fb0eb78b8b7bd9c7e2e0706c6672d": "scripts/cadence/run-weekly-lint.sh",
@@ -554,6 +554,19 @@ HEREDOC_RE = re.compile(
     r"|\"([^\"\n]+)\""
     r"|([A-Za-z_][A-Za-z0-9_]*)"
     r")")
+
+
+def heredoc_quoted(text):
+    """True if the first heredoc opened in `text` has a quoted delimiter.
+
+    <<'EOF', <<"EOF" and <<\\EOF all stop the shell rewriting the body; a bare
+    <<EOF does not. Asked by name because the groups moved when the pattern
+    learned the other three spellings.
+    """
+    m = HEREDOC_RE.search(blank_noncode(text))
+    if not m:
+        return False
+    return m.group(4) is None      # group 4 is the only unquoted spelling
 
 
 def heredoc_delims(line):
@@ -1315,6 +1328,41 @@ def rule_interp_e(b, rest, seg, depth):
     return scan_stdin_code(seg, b, depth)
 
 
+# A redirect inside an awk program: `print > "wiki/Index.md"`. Truncating only;
+# `>>` appends, as it does in the shell.
+AWK_REDIR_RE = re.compile(r"(?<!>)>\s*(['\"])([^'\"]+)\1")
+# Applications that run what they are given rather than showing it.
+RUNNING_APPS = ("terminal", "iterm", "hyper", "warp", "kitty", "alacritty", "wezterm")
+# Extensions macOS executes when they are opened.
+RUNNING_EXTS = (".command", ".app", ".scpt", ".applescript", ".workflow", ".term")
+
+
+def rule_open(b, rest):
+    """(v0.9.2) `open` hands a file to an application, and some of them run it.
+
+    `open -a Terminal x.sh` runs the script in a window the hook never sees, and
+    a .command file runs on being opened at all. Opening a page, a folder or a
+    URL is ordinary work and stays so.
+    """
+    if b != "open":
+        return None
+    i = 0
+    while i < len(rest):
+        tok = rest[i]
+        if tok in ("-a", "--application") and i + 1 < len(rest):
+            app = os.path.basename(rest[i + 1]).lower()
+            if any(k in app for k in RUNNING_APPS):
+                return ("open -a %s runs what it is given, in a window outside this "
+                        "guard" % rest[i + 1])
+            i += 2
+            continue
+        if not tok.startswith("-"):
+            if os.path.splitext(tok)[1].lower() in RUNNING_EXTS:
+                return "open runs %s rather than showing it" % tok
+        i += 1
+    return None
+
+
 def rule_awk(b, rest, seg, depth):
     if b not in AWKS:
         return None
@@ -1334,6 +1382,12 @@ def rule_awk(b, rest, seg, depth):
         if t.startswith("-"):
             i += 1
             continue
+        # (v0.9.2) awk redirects inside its own program — print > "file" — and
+        # the shell never sees that `>`, so no redirect rule applied to it.
+        for m in AWK_REDIR_RE.finditer(t):
+            target = m.group(2)
+            if is_content_path(target) or is_self_path(target):
+                return "awk writes over %s with its own redirect" % target
         k = keyword_hit(t, "awk")
         return ("awk program contains %s" % k) if k else None
     return None
@@ -1723,8 +1777,7 @@ def _apply_patch_shell(rest, seg):
         why = "the command changes folder first, so the paths cannot be placed"
     else:
         body = line.bodies[0]
-        m = HEREDOC_RE.search(line.text)
-        if (not m or not m.group(1)) and ("$" in body or "`" in body):
+        if not heredoc_quoted(line.text) and ("$" in body or "`" in body):
             why = ("the heredoc is unquoted and the patch holds $ or a "
                    "backtick, which the shell would rewrite")
         else:
@@ -1744,6 +1797,62 @@ def rule_apply_patch(b, rest, seg):
         if loose_patch_line(text):
             return PATCH_SHELL_WHY % "it holds a delete or move line and could not be read"
         return None
+
+
+def rule_direct_script(b, head, rest, depth):
+    """(v0.9.2) A script run as itself, rather than handed to an interpreter.
+
+    `bash scripts/x.sh` was scanned and `./scripts/x.sh` was not, though the
+    shebang makes them the same work. Only a path is considered — a bare word is
+    a command on PATH and has its own rules — and only a file that reads as a
+    script: an extension the guard knows, or a shebang. That keeps the scanner
+    away from binaries, whose bytes would otherwise be read as text.
+    """
+    if "/" not in head:
+        return None
+    p = resolve(head)
+    if not p or not os.path.isfile(p):
+        return None
+    if os.path.splitext(p)[1].lower() not in EXT_LANG:
+        try:
+            with open(p, "rb") as fh:
+                if fh.read(2) != b"#!":
+                    return None
+        except OSError:
+            return None
+    return scan_file(head, "", depth)
+
+
+def rule_text_writers(b, rest):
+    """(v0.9.2) Three tools that write a file while looking like readers.
+
+    `sort -o page`, `uniq input page` and awk's own `print > "page"` each empty
+    or replace what is there, and every one of these heads was allow-listed, so
+    a page could be cleared by a command with no delete word anywhere in it.
+    """
+    if b == "sort":
+        i = 0
+        while i < len(rest):
+            tok = rest[i]
+            if tok in ("-o", "--output") and i + 1 < len(rest):
+                if is_content_path(rest[i + 1]) or is_self_path(rest[i + 1]):
+                    return "sort -o writes over %s" % rest[i + 1]
+                i += 2
+                continue
+            if tok.startswith("--output="):
+                target = tok.split("=", 1)[1]
+                if is_content_path(target) or is_self_path(target):
+                    return "sort -o writes over %s" % target
+            i += 1
+        return None
+    if b == "uniq":
+        positional = [x for x in rest if not x.startswith("-")]
+        # uniq [input [output]] — the second file is written, not read
+        if len(positional) >= 2 and (is_content_path(positional[1])
+                                     or is_self_path(positional[1])):
+            return "uniq writes its output over %s" % positional[1]
+        return None
+    return None
 
 
 # ---------------------------------------------------------------- drivers
@@ -1779,6 +1888,9 @@ def scan_segment_tokens(toks, depth, seg=None, assigns=None, allow_root=False):
             (rule_tee, (b, rest)),
             (rule_git, (b, rest, depth)),
             (rule_apply_patch, (b, rest, seg)),
+            (rule_text_writers, (b, rest)),
+            (rule_open, (b, rest)),
+            (rule_direct_script, (b, head, rest, depth)),
     ):
         r = _safe(fn, *a)
         if r:
