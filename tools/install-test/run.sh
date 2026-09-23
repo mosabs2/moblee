@@ -192,8 +192,29 @@ case_skills() {
 }
 
 # --------------------------------------------------------------------------
+# The skills are what the assistant answers "get me started" with. When they do
+# not all go in, the installer used to print "Your wiki is ready." and then send
+# the owner to that very phrase, which would do nothing for them.
+case_skills_failed() {
+  start skills_failed
+  # a skill of the owner's own wearing a Moblee name: the safe install leaves it
+  # alone and reports, which is what makes the step fail
+  mkdir -p "$HOME_DIR/.claude/skills/brain"
+  printf -- "---\nname: brain\n---\n\nThe owner wrote this one himself.\n" > "$HOME_DIR/.claude/skills/brain/SKILL.md"
+  run_install "$HOME_DIR" "$SBX" claude
+  local out="$HOME_DIR/install-output.txt"
+  hasnt "$out" "  Your wiki is ready." "the banner does not simply say the wiki is ready"
+  has   "$out" "with one thing still to put right" "it says what is outstanding"
+  has   "$out" "get me started" "and still gives the owner their next step"
+  has   "$out" "install-skills.sh" "with the command that puts the skills in"
+  has   "$HOME_DIR/.claude/skills/brain/SKILL.md" "The owner wrote this one himself" \
+        "and his own skill was left exactly as it is"
+  has   "$HOME_DIR/.config/moblee/install-diary.txt" "skills: FAILED" "the diary records the step as failed"
+}
+
+# --------------------------------------------------------------------------
 printf '\n  Moblee install test — %s\n  scratch: %s\n' "$(cat "$PACKAGE_ROOT/VERSION")" "$ROOT"
-for c in happy refused skills; do
+for c in happy refused skills skills_failed; do
   if wanted "$c"; then "case_$c"; fi
 done
 

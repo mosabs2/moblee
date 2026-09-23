@@ -154,7 +154,10 @@ def add_coaching_rule(vault: Path, assistant: str | None = None) -> None:
 
 
 def backup_plist() -> Path:
-    keep = BACKUPS / time.strftime("%Y%m%d-%H%M%S")
+    # (v0.9.2) the run that called this passes its own backup folder, so the
+    # one its closing banner names holds everything that run replaced
+    keep = Path(os.environ["MOBLEE_BACKUP"]) if os.environ.get("MOBLEE_BACKUP") \
+        else BACKUPS / time.strftime("%Y%m%d-%H%M%S")
     keep.mkdir(parents=True, exist_ok=True)
     shutil.copy2(PLIST, keep / PLIST.name)
     return keep

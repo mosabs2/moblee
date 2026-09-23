@@ -42,6 +42,12 @@ PACKAGE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 NEW_VERSION="$(cat "$PACKAGE_ROOT/VERSION" 2>/dev/null || echo unknown)"
 STAMP="$(date '+%Y%m%d-%H%M%S')"
 BACKUP="$HOME/.config/moblee/backups/$STAMP"
+# (v0.9.2) The closing banner names this folder as where everything replaced
+# was kept, and three of the scripts this one runs were each minting a folder
+# of their own, a second or two apart, so an owner who went looking for their
+# previous rules file opened the folder they were told about and found it empty
+# or absent. They now all write here, because they are told where here is.
+export MOBLEE_BACKUP="$BACKUP"
 
 # ----- progress lines for the Moblee app (--progress, anywhere on the line) ----
 # (v0.9) and --assistant <value>, likewise anywhere on the line
@@ -99,9 +105,39 @@ diary() {
   line="${line//$HOME/~}"
   printf '%s  %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$line" >> "$DIARY" 2>/dev/null || true
 }
+# (v0.9.2) A step whose work failed used to close saying "done". `ustep` closes
+# the step before it unconditionally, and the work inside a step is deliberately
+# written `|| true` or `|| echo "(… not …)"` so that one part failing never stops
+# an update that is otherwise fine. That much is right. What was wrong is that
+# the screen said so and the diary did not, so the check-up — which reads the
+# diary and not the screen — reported a clean update over a step that had not
+# done its job. A failure is now noted against the step it happened in, the step
+# closes saying so, and the run says so at the end.
+#
+# Only a genuine failure is noted. A step the owner declined, or one the Mac has
+# no way to run, is a choice and not a fault: an advisory that fires on the
+# owner's own decisions is the kind that teaches people to ignore advisories.
+USTEP_NOTES=()
+RUN_NOTES=()
+ustep_note() {
+  USTEP_NOTES+=("$1")
+  RUN_NOTES+=("${USTEP:-starting}: $1")
+  diary "update step $USTEP_N of $USTEP_TOTAL, ${USTEP:-starting}: DID NOT FINISH — $1"
+}
+ustep_close() {
+  [[ -n "$USTEP" ]] || return 0
+  if [[ ${#USTEP_NOTES[@]} -gt 0 ]]; then
+    emit "$USTEP" partial
+    diary "update step $USTEP_N of $USTEP_TOTAL, $USTEP: done, except ${#USTEP_NOTES[@]} thing(s) named above"
+  else
+    emit "$USTEP" ok
+    diary "update step $USTEP_N of $USTEP_TOTAL, $USTEP: done"
+  fi
+  USTEP_NOTES=()
+}
 ustep() {
   # closes the step before, opens the next
-  if [[ -n "$USTEP" ]]; then emit "$USTEP" ok; diary "update step $USTEP_N of $USTEP_TOTAL, $USTEP: done"; fi
+  ustep_close
   USTEP="$1"; USTEP_N=$((USTEP_N+1)); emit "$USTEP" start
   diary "update step $USTEP_N of $USTEP_TOTAL, $USTEP: started"
 }
@@ -585,7 +621,7 @@ echo "6. Identity file and starting memories"
 # the template CLAUDE.md carries, else is left for the opening conversation.
 # Written by a script that creates the file only if absent (never overwrites).
 python3 "$SCRIPT_DIR/add-identity.py" --vault "$VAULT" --assistant "$ASSISTANT" | sed 's/^/   /' \
-  || echo "   (Identity.md not added; ask $ASSISTANT_LABEL to create it from the template)"
+  || { echo "   (Identity.md not added; ask $ASSISTANT_LABEL to create it from the template)"; ustep_note "Identity.md was not added"; }
 # (v0.9) the page the starting memories go to for ChatGPT is committed by this
 # run only when this run made it; once it exists it is the owner's and the
 # assistant's to add to, and any later addition is left for their own commit
@@ -614,26 +650,9 @@ if [[ -f "$VAULT/wiki/Index.md" ]]; then
   fi
 fi
 python3 "$SCRIPT_DIR/seed-memory.py" --vault "$VAULT" --assistant "$ASSISTANT" | sed 's/^/   /' \
-  || echo "   (starting memories not seeded; harmless)"
+  || { echo "   (starting memories not seeded; harmless)"; ustep_note "the starting memories were not seeded"; }
 python3 "$SCRIPT_DIR/add-habits-page.py" --vault "$VAULT" | sed 's/^/   /' \
-  || echo "   (Habits and Tools page not added; ask $ASSISTANT_LABEL to create it from the template)"
-# (v0.9.1) This comparison used to sit between the two steps above, so it saw
-# the link the starting memories add and not the one the habits page adds. An
-# update that changed the Index only through the habits page therefore left its
-# own edit uncommitted, and every owner finished a clean update with a modified
-# Index they had not touched. Both steps have now run, so one comparison covers
-# them. The owner's own uncommitted work is protected exactly as before: an
-# Index that was already dirty is still left alone, entirely.
-if [[ -n "$INDEX_SUM_BEFORE" && -f "$VAULT/wiki/Index.md" ]] \
-   && [[ "$(cksum < "$VAULT/wiki/Index.md" 2>/dev/null || true)" != "$INDEX_SUM_BEFORE" ]]; then
-  if [[ $INDEX_CLEAN_BEFORE -eq 1 ]]; then
-    INDEX_SEEDED=1
-  elif [[ $INDEX_DIRTY_BEFORE -eq 1 ]]; then
-    echo "   wiki/Index.md held changes of yours that were not yet committed, so the new link in it"
-    echo "   is left for your own next commit, with those changes; nothing of yours was committed."
-    diary "    wiki/Index.md held uncommitted changes of the owner's; the link added to it was left for their own commit"
-  fi
-fi
+  || { echo "   (Habits and Tools page not added; ask $ASSISTANT_LABEL to create it from the template)"; ustep_note "the Habits and Tools page was not added"; }
 # A wiki made before 0.8.1 still has a first log entry headed "YYYY-MM-DD".
 # It is dated from the wiki's first commit; a line already written over is left
 # alone. Each of the three pages that had no uncommitted work of the owner's
@@ -678,7 +697,8 @@ ustep weekly
 echo "7. Weekly health check"
 if [[ "$(uname)" == "Darwin" && -f "$SCRIPT_DIR/install-schedule.sh" ]]; then
   if [[ -f "$HOME/Library/LaunchAgents/com.moblee.weekly-lint.plist" ]]; then
-    bash "$SCRIPT_DIR/install-schedule.sh" | sed 's/^/   /' || true
+    bash "$SCRIPT_DIR/install-schedule.sh" | sed 's/^/   /' \
+      || { echo "   (the weekly health check was not re-scheduled)"; ustep_note "the weekly health check was not re-scheduled"; }
   elif [[ ! -t 0 ]]; then
     # no Terminal to ask in (for example, run by Claude for a clinic note): never
     # schedule unasked, and never stop the updater on an unanswerable question
@@ -687,7 +707,7 @@ if [[ "$(uname)" == "Darwin" && -f "$SCRIPT_DIR/install-schedule.sh" ]]; then
     read -r -p "   Schedule the weekly health check to run every Saturday? [Y/n]: " INSTALL_SCHED || INSTALL_SCHED="n"  # no answer (end of input): never schedule unasked, never stop
     if [[ ! "$INSTALL_SCHED" =~ ^[Nn]$ ]]; then
       bash "$SCRIPT_DIR/install-schedule.sh" | sed 's/^/   /' \
-        || echo "   (schedule not installed; ask $ASSISTANT_LABEL to set it up later)"
+        || { echo "   (schedule not installed; ask $ASSISTANT_LABEL to set it up later)"; ustep_note "the weekly health check was not scheduled"; }
     else
       echo "   skipped; ask $ASSISTANT_LABEL to set it up whenever you like"
     fi
@@ -713,13 +733,32 @@ elif [[ -t 0 ]]; then
   read -r -p "   Add the learning path? [y/N]: " INSTALL_LESSONS || INSTALL_LESSONS=""  # no answer: skip, and carry on
   if [[ "$INSTALL_LESSONS" =~ ^[Yy]$ ]]; then
     python3 "$SCRIPT_DIR/install-learning-path.py" --vault "$VAULT" --assistant "$ASSISTANT" | sed 's/^/   /' \
-      || echo "   (not fully added; run the updater again later)"
+      || { echo "   (not fully added; run the updater again later)"; ustep_note "the learning path was not fully added"; }
   else
     echo "   skipped; add it any time with: python3 \"$SCRIPT_DIR/install-learning-path.py\" --vault \"$VAULT\""
   fi
 else
   echo "   not added (the updater was not run in a Terminal window that can ask);"
   echo "   add it any time with: python3 \"$SCRIPT_DIR/install-learning-path.py\" --vault \"$VAULT\""
+fi
+
+# (v0.9.2) Three steps can add a line to wiki/Index.md — the starting memories,
+# the habits page and the learning path — and this comparison has now been moved
+# twice to keep up with them. At v0.9.1 it sat between the first two, so it saw
+# one link and not the other; it then sat after both, and the learning path,
+# which runs three steps later, was still outside it. It now sits after every
+# step that can touch the Index and before the commit that would carry it, which
+# is the only place it cannot go stale again. The owner's own uncommitted work is
+# protected exactly as before: an Index that was already dirty is left alone.
+if [[ -n "$INDEX_SUM_BEFORE" && -f "$VAULT/wiki/Index.md" ]] \
+   && [[ "$(cksum < "$VAULT/wiki/Index.md" 2>/dev/null || true)" != "$INDEX_SUM_BEFORE" ]]; then
+  if [[ $INDEX_CLEAN_BEFORE -eq 1 ]]; then
+    INDEX_SEEDED=1
+  elif [[ $INDEX_DIRTY_BEFORE -eq 1 ]]; then
+    echo "   wiki/Index.md held changes of yours that were not yet committed, so the new link in it"
+    echo "   is left for your own next commit, with those changes; nothing of yours was committed."
+    diary "    wiki/Index.md held uncommitted changes of the owner's; the link added to it was left for their own commit"
+  fi
 fi
 
 # ----- 10. version and commit -------------------------------------------------
@@ -843,11 +882,24 @@ if [[ -n "$USTEP" ]]; then
   if [[ $COMMIT_WAS_REFUSED -eq 1 ]]; then
     emit "$USTEP" needs-commit
     diary "update step $USTEP_N of $USTEP_TOTAL, $USTEP: the files are in place but the closing commit was REFUSED; $REFUSED_COUNT file(s) staged and not committed"
+    USTEP_NOTES=()
   else
-    emit "$USTEP" ok
-    diary "update step $USTEP_N of $USTEP_TOTAL, $USTEP: done"
+    ustep_close
   fi
   USTEP=""
+fi
+# (v0.9.2) Everything a step could not finish, said once at the end where the
+# owner is actually looking, and written into the diary the check-up reads.
+if [[ ${#RUN_NOTES[@]} -gt 0 ]]; then
+  diary "=== ${#RUN_NOTES[@]} thing(s) in this update did not finish ==="
+  echo
+  echo "   The update is done, but ${#RUN_NOTES[@]} thing(s) in it did not finish:"
+  for n in ${RUN_NOTES[@]+"${RUN_NOTES[@]}"}; do
+    echo "     - $n"
+    diary "    | $n"
+  done
+  echo "   Nothing of yours was changed by them. Tell $ASSISTANT_LABEL what it says here."
+  echo
 fi
 if [[ $COMMIT_WAS_REFUSED -eq 1 ]]; then
   diary "=== Moblee update finished, BUT THE UPDATE IS NOT COMMITTED ==="
@@ -890,8 +942,14 @@ echo "==================================================================="
 echo "  Updated to $NEW_VERSION."
 echo "==================================================================="
 echo ""
-echo "Your wiki's content was not touched. Replaced files were kept at:"
-echo "  $BACKUP"
+echo "Your wiki's content was not touched."
+# (v0.9.2) Named only when there is something in it. The folder is made by the
+# first thing that copies into it, so a run that replaced nothing leaves no
+# folder at all, and the banner was sending owners to one that was not there.
+if [[ -d "$BACKUP" ]] && [[ -n "$(ls -A "$BACKUP" 2>/dev/null)" ]]; then
+  echo "Everything it replaced was kept at:"
+  echo "  $BACKUP"
+fi
 echo ""
 # ----- the wiki is somewhere macOS will not let jobs read (v0.9.1) ------------
 # The installer warns about this while the location can still be typed again.

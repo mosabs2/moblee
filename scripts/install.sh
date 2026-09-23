@@ -626,9 +626,11 @@ python3 "$PACKAGE_ROOT/scripts/seed-memory.py" --vault "$VAULT_LOCATION" --assis
 echo ""
 echo "Installing the core skills (brain, capture, interview, PDF, galaxy and more)..."
 SKILLS_OUT="$(mktemp)"
+SKILLS_OK=1
 if bash "$SCRIPT_DIR/install-skills.sh" --quiet --assistant "$ASSISTANT" 2>&1 | tee "$SKILLS_OUT"; then
   step_ok skills
 else
+  SKILLS_OK=0
   if grep -q "was NOT installed" "$SKILLS_OUT"; then
     # a different skill already had one of Moblee's names; said plainly above
     step_fail skills skills-skipped
@@ -647,9 +649,23 @@ fi
 # would rather choose alone can open it here.
 echo ""
 echo "==================================================================="
-echo "  Your wiki is ready."
+if [[ $SKILLS_OK -eq 1 ]]; then
+  echo "  Your wiki is ready."
+else
+  # (v0.9.2) The skills are what the assistant answers "get me started" with, so
+  # a banner saying the wiki is ready and then telling the owner to say it sends
+  # them to a phrase that will do nothing. The step's own failure is already on
+  # screen and in the diary; this is the sentence they actually read.
+  echo "  Your wiki is ready, with one thing still to put right."
+fi
 echo "==================================================================="
 echo ""
+if [[ $SKILLS_OK -eq 0 ]]; then
+  echo "The skills did not all go in, and they are what your assistant answers"
+  echo "\"get me started\" with. Put them in with this, then carry on below:"
+  echo "  bash \"$SCRIPT_DIR/install-skills.sh\""
+  echo ""
+fi
 if [[ "$ASSISTANT" != "chatgpt" ]]; then
   echo "Moblee can also connect your wiki to your Mac's Calendar, Mail and"
   echo "Reminders, Google, GitHub and Chrome, and add tools for videos, documents"

@@ -446,7 +446,13 @@ struct UpdateScreen: View {
             // into its history and whose own next commit would be refused too.
             sentence: install.phase == .needsCommit
                 ? "Your wiki is updated, but the change was not saved into its history. Open your assistant and say: the Moblee update did not commit, please look and commit it."
-                : (install.phase == .finished ? "Your wiki is up to date."
+                // (v0.9.2) A step can finish while one part inside it does not,
+                // and the run used to end on a flat "up to date" over exactly
+                // that. What was skipped is in the diary, which is one press away.
+                : (install.phase == .finished
+                    ? (install.partial
+                        ? "Your wiki is up to date, but one or two things in the update did not finish. Press Show what happened."
+                        : "Your wiki is up to date.")
                 : (failed ? "The update stopped. Your pages were not touched." : "Updating your wiki…")),
             buttonTitle: failed ? "Try again" : "Done",
             buttonEnabled: install.phase == .finished || install.phase == .needsCommit || failed,
@@ -466,7 +472,7 @@ struct UpdateScreen: View {
                 // offered whenever there is something to read about, not only on
                 // a failure. Before v0.9.1 a refused commit reached the owner as
                 // a green screen with no way through to the one file that said so.
-                if failed || install.phase == .needsCommit {
+                if failed || install.phase == .needsCommit || install.partial {
                     QuietButton(title: "Show what happened", action: { install.showDiary() })
                 }
             }
