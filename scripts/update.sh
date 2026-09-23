@@ -578,6 +578,15 @@ if [[ -f "$VAULT/wiki/Index.md" ]]; then
 fi
 python3 "$SCRIPT_DIR/seed-memory.py" --vault "$VAULT" --assistant "$ASSISTANT" | sed 's/^/   /' \
   || echo "   (starting memories not seeded; harmless)"
+python3 "$SCRIPT_DIR/add-habits-page.py" --vault "$VAULT" | sed 's/^/   /' \
+  || echo "   (Habits and Tools page not added; ask $ASSISTANT_LABEL to create it from the template)"
+# (v0.9.1) This comparison used to sit between the two steps above, so it saw
+# the link the starting memories add and not the one the habits page adds. An
+# update that changed the Index only through the habits page therefore left its
+# own edit uncommitted, and every owner finished a clean update with a modified
+# Index they had not touched. Both steps have now run, so one comparison covers
+# them. The owner's own uncommitted work is protected exactly as before: an
+# Index that was already dirty is still left alone, entirely.
 if [[ -n "$INDEX_SUM_BEFORE" && -f "$VAULT/wiki/Index.md" ]] \
    && [[ "$(cksum < "$VAULT/wiki/Index.md" 2>/dev/null || true)" != "$INDEX_SUM_BEFORE" ]]; then
   if [[ $INDEX_CLEAN_BEFORE -eq 1 ]]; then
@@ -588,8 +597,6 @@ if [[ -n "$INDEX_SUM_BEFORE" && -f "$VAULT/wiki/Index.md" ]] \
     diary "    wiki/Index.md held uncommitted changes of the owner's; the link added to it was left for their own commit"
   fi
 fi
-python3 "$SCRIPT_DIR/add-habits-page.py" --vault "$VAULT" | sed 's/^/   /' \
-  || echo "   (Habits and Tools page not added; ask $ASSISTANT_LABEL to create it from the template)"
 # A wiki made before 0.8.1 still has a first log entry headed "YYYY-MM-DD".
 # It is dated from the wiki's first commit; a line already written over is left
 # alone. Each of the three pages that had no uncommitted work of the owner's
@@ -618,10 +625,15 @@ mkdir -p "$HOME/.config/moblee"
 echo "$PACKAGE_ROOT" > "$HOME/.config/moblee/package-path"
 # Vaults from before v0.4 have no Daily Notes layer; the brain skill's daily
 # patterns need the template. Added only when absent; nothing is overwritten.
+DAILY_NOTES_ADDED=0
 if [[ ! -f "$VAULT/Daily Notes/_TEMPLATE.md" && -f "$PACKAGE_ROOT/vault-template/Daily Notes/_TEMPLATE.md" ]]; then
   mkdir -p "$VAULT/Daily Notes"
   cp "$PACKAGE_ROOT/vault-template/Daily Notes/_TEMPLATE.md" "$VAULT/Daily Notes/_TEMPLATE.md"
   echo "   added Daily Notes/_TEMPLATE.md (the brain skill's daily patterns need it)"
+  # (v0.9.1) Commit it with the update. Left out of the commit list, this
+  # template arrived as an untracked folder and sat in every owner's working
+  # tree afterwards, looking like work of theirs they had forgotten.
+  DAILY_NOTES_ADDED=1
 fi
 
 # ----- 8. schedule ------------------------------------------------------------
@@ -697,10 +709,13 @@ if [[ -d "$VAULT/.git" ]]; then
     # The commit names its paths, so anything else the owner had staged stays
     # staged for their own commit and is not swept into this one.
     COMMIT_PATHS=()
-    for p in scripts dashboard VERSION CLAUDE.md AGENTS.md .gitignore .claude wiki/Identity.md "wiki/Wiki Operations/Moblee Learning Path.md" "wiki/Wiki Operations/Habits and Tools.md" "wiki/Wiki Operations/Assistant Memory.md"; do
+    for p in scripts dashboard VERSION CLAUDE.md AGENTS.md .gitignore .claude wiki/Identity.md "wiki/Wiki Operations/Moblee Learning Path.md" "wiki/Wiki Operations/Habits and Tools.md" "wiki/Wiki Operations/Assistant Memory.md" "Daily Notes/_TEMPLATE.md"; do
       # in a wiki for Claude alone, an AGENTS.md that is a file of its own is the
       # owner's, kept for some other tool, and is left for them to commit
       if [[ "$p" == "AGENTS.md" && "$ASSISTANT" == "claude" && ! -L "$p" ]]; then continue; fi
+      # (v0.9.1) the Daily Notes template goes in only when this run added it,
+      # so an owner's own notes folder is never swept into Moblee's commit
+      if [[ "$p" == "Daily Notes/_TEMPLATE.md" && $DAILY_NOTES_ADDED -eq 0 ]]; then continue; fi
       # a rules file renamed while it held the owner's uncommitted changes is
       # left, under both names, for the owner's own next commit
       if [[ $RULES_DIRTY -eq 1 && ( "$p" == "CLAUDE.md" || "$p" == "AGENTS.md" ) ]]; then continue; fi

@@ -122,9 +122,13 @@ case_happy() {
 case_refused() {
   start refused
   make_wiki "$HOME_DIR" "$SBX"
-  mkdir -p "$SBX/.git/hooks"
-  cp "$FIXTURES/refusing-pre-commit" "$SBX/.git/hooks/pre-commit"
-  chmod +x "$SBX/.git/hooks/pre-commit"
+  # Trip the pack's OWN commit gate, by giving the wiki a rules file past its
+  # size cap — which is exactly what happened to a real owner. An earlier
+  # version of this case installed a pre-commit hook of its own; the updater
+  # moved it aside, as it is written to do so that only one gate runs, and the
+  # case passed while testing nothing. Found by running the rig, 23 September.
+  python3 "$FIXTURES/make-oversized-claude-md.py" "$SBX/CLAUDE.md" >/dev/null
+  ( cd "$SBX" && git add -A && git commit -qm "the owner's rules file grows past the cap" ) >/dev/null 2>&1
   run_update "$HOME_DIR" "$SBX"
   local diary="$HOME_DIR/.config/moblee/install-diary.txt"
   has   "$diary" "NOT COMMITTED" "the diary says the update is not committed"
