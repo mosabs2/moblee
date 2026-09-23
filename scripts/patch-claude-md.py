@@ -29,6 +29,9 @@ import time
 from pathlib import Path
 
 BACKUP_ROOT = Path.home() / ".config" / "moblee" / "backups"
+# (v0.9.2) One folder for everything a single run replaced: the updater passes
+# its own in, and the closing banner then names the folder it is all actually in.
+RUN_BACKUP = os.environ.get("MOBLEE_BACKUP")
 
 # Each block: (name, anchor heading regex, where, marker phrase, text)
 #   where: "first-bullet" inserts after the heading's blank line as the first
@@ -253,8 +256,7 @@ def main() -> int:
     for n in added:
         print(f"  {'would add' if a.dry_run else 'added'}: {n}")
     if new != original and not a.dry_run:
-        stamp = time.strftime("%Y%m%d-%H%M%S")
-        bdir = BACKUP_ROOT / stamp
+        bdir = Path(RUN_BACKUP) if RUN_BACKUP else BACKUP_ROOT / time.strftime("%Y%m%d-%H%M%S")
         bdir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, bdir / path.name)
         path.write_text(new, encoding="utf-8")

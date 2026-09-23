@@ -204,6 +204,54 @@ case_owners_pages() {
 }
 
 # --------------------------------------------------------------------------
+# A step whose work failed used to close saying "done": `ustep` closes the step
+# before it whatever happened, and the work inside is written `|| true` so that
+# one part failing never stops an otherwise sound update. The screen said so and
+# the diary did not, so the check-up — which reads the diary — reported a clean
+# update over a step that had not done its job.
+#
+# The failure is made real rather than simulated: python3 is put out of reach for
+# the run, so the three scripts the `pages` step calls cannot start. The wiki is
+# not harmed by that, which is exactly the shape the swallowing was written for.
+case_partly() {
+  start partly
+  make_wiki "$HOME_DIR" "$SBX"
+  mkdir -p "$HOME_DIR/nopython"
+  printf '#!/bin/sh\nexit 127\n' > "$HOME_DIR/nopython/python3"
+  chmod +x "$HOME_DIR/nopython/python3"
+  ( cd "$PACKAGE_ROOT" && PATH="$HOME_DIR/nopython:$PATH" HOME="$HOME_DIR" \
+      bash scripts/update.sh "$SBX" --progress ) < /dev/null > "$HOME_DIR/update-output.txt" 2>&1
+  local diary="$HOME_DIR/.config/moblee/install-diary.txt"
+  has  "$diary" "DID NOT FINISH" "the diary names what did not finish"
+  has  "$diary" "done, except" "and the step says it finished all but that"
+  has  "$HOME_DIR/update-output.txt" "did not finish" "the screen says so at the end"
+  has  "$HOME_DIR/update-output.txt" '"state":"partial"' "and the app is told, so it can say so too"
+}
+
+# --------------------------------------------------------------------------
+# The closing banner names one folder as where everything replaced was kept.
+# Three of the scripts the updater runs were each minting a folder of their own,
+# a second or two apart, so an owner who went looking for their previous rules
+# file opened the folder they were told about and found it empty or absent.
+case_backups() {
+  start backups
+  make_wiki "$HOME_DIR" "$SBX"
+  run_update "$HOME_DIR" "$SBX"
+  local named; named=$(grep -A 1 "Everything it replaced was kept at" "$HOME_DIR/update-output.txt" | tail -1 | tr -d ' ')
+  if [[ -z "$named" ]]; then
+    # a run that replaced nothing names no folder, which is the other half of it
+    hasnt "$HOME_DIR/update-output.txt" "Everything it replaced was kept at" \
+          "a run that replaced nothing names no backup folder"
+  else
+    if [[ -d "$named" ]]; then ok "the folder the banner names exists"; else bad "the folder the banner names exists — $named"; fi
+    if [[ -n "$(ls -A "$named" 2>/dev/null)" ]]; then ok "and has what was replaced in it"; else bad "and has what was replaced in it"; fi
+    # everything one run replaced in one folder, not three a second apart
+    same "$(ls -d "$HOME_DIR/.config/moblee/backups"/*/ 2>/dev/null | wc -l | tr -d ' ')" "1" \
+         "and it is the only backup folder the run made"
+  fi
+}
+
+# --------------------------------------------------------------------------
 # An Index that already keeps a Wiki Operations line must not gain a second.
 case_index() {
   start index
@@ -243,7 +291,7 @@ case_twice() {
   same "$(cd "$SBX" && git status --porcelain | wc -l | tr -d ' ')" "0" "and leaves nothing staged"
 }
 
-for c in happy refused extras owners_pages index protected twice; do
+for c in happy refused extras owners_pages partly backups index protected twice; do
   wanted "$c" && "case_$c"
 done
 

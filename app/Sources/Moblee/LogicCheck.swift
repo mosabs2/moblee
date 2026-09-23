@@ -152,6 +152,19 @@ enum LogicCheck {
         staged.finishForTest(code: 0)
         check("a refused commit does not end as finished",
               staged.phase == .needsCommit && staged.phase != .finished)
+
+        // (v0.9.2) A step that finished while a part of it did not. The tile is
+        // not red, the run does finish, and the screen must still have something
+        // to say: a step closing "done" over failed work is how an owner came to
+        // be told nothing at all about a schedule that was never installed.
+        let part = InstallRun()
+        part.startUpdateItemsForTest()
+        part.handle(["step": "weekly", "state": "partial", "n": 7, "of": 9])
+        check("a partly-finished step is recorded and is not shown as broken",
+              part.partial && part.items.contains { $0.key == "weekly" && $0.state == .done })
+        part.finishForTest(code: 0)
+        check("and the run still finishes, with the screen able to say so",
+              part.phase == .finished && part.partial)
         // ChatGPT keeps its trust by the entry in its hooks list and takes no
         // account of the guard file. So what a repair printed when it only
         // replaced that file sets nothing waiting; only the scripts' own line

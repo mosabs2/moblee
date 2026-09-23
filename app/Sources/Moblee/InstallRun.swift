@@ -45,6 +45,8 @@ final class InstallRun: ObservableObject {
     /// over an uncommitted update, and then never offered the update again
     /// because the version on disk had already been written.
     @Published var needsCommit = false
+    /// Set when a step finished but something inside it did not (v0.9.2).
+    @Published var partial = false
 
     /// Steps whose failure the engine itself carries on past.
     private var softSteps: Set<String> = ["skills"]
@@ -116,6 +118,11 @@ final class InstallRun: ObservableObject {
         phase = .running
         vaultPath = nil
         trustNeeded = false
+        // (v0.9.2) Cleared with the rest: the same object runs again when the
+        // owner presses Try again, and a flag left set from the run before
+        // would tell them about something that had just been put right.
+        needsCommit = false
+        partial = false
         self.home = home
         diaryURL = home.appendingPathComponent(".config/moblee/install-diary.txt")
 
@@ -210,6 +217,14 @@ final class InstallRun: ObservableObject {
             case "stopped":
                 set(step, .failed)
                 if case .failed = phase {} else { phase = .failed(why: "stopped") }
+            case "partial":
+                // (v0.9.2) The step did its job, and one part inside it did not.
+                // The tile is not red — the update is sound and the owner's
+                // pages are untouched — but the run must not end saying nothing
+                // happened, which is what a step closing "done" over a failed
+                // piece of work used to do.
+                set(step, .done)
+                partial = true
             case "needs-commit":
                 // The step's work is on disk, so the tile is not red; the run as
                 // a whole is not a finish, so `ended` must not green everything.

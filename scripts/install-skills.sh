@@ -98,7 +98,10 @@ QUIET=0
 if [[ "${1:-}" == "--quiet" ]]; then
   QUIET=1
 fi
-BACKUP_ROOT="$HOME/.config/moblee/backups/$(date '+%Y%m%d-%H%M%S')"
+# (v0.9.2) The updater and installer pass their own backup folder in, so that
+# everything one run replaced is kept in one place and the folder their closing
+# banner names is the folder it is all in. Run on its own, this mints its own.
+BACKUP_ROOT="${MOBLEE_BACKUP:-$HOME/.config/moblee/backups/$(date '+%Y%m%d-%H%M%S')}"
 
 # ----- destinations -----------------------------------------------------------
 # One entry per assistant wanted, in three lists that run side by side (bash 3.2
