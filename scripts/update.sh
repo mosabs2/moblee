@@ -81,7 +81,13 @@ emit_trust() {
 # no names, the home folder written as "~". It is what the app shows, and what
 # the check-up reads, when an update stops part-way.
 DIARY="$HOME/.config/moblee/install-diary.txt"
+# (v0.9.1) Where the closing-commit step leaves word if git refuses it. The
+# commit runs in a subshell, which cannot set a variable the rest of the script
+# would see, so it writes the staged paths here instead. Cleared at the start of
+# every run so a refusal from a previous update is never reported as this one's.
+COMMIT_REFUSED="$HOME/.config/moblee/.commit-refused"
 mkdir -p "$HOME/.config/moblee"
+: > "$COMMIT_REFUSED" 2>/dev/null || true
 diary() {
   local line="$*"
   if [[ -n "${VAULT:-}" ]]; then
@@ -242,11 +248,28 @@ keep_copy() {
 ustep tools
 echo "1. Vault tooling"
 mkdir -p "$VAULT/scripts"
+# (v0.9.1) The owner's own orientation checks, shipped once and never again.
+# scripts/vault-orient-preflight.sh below is replaced whole at every update, so
+# anything an owner added to it disappeared quietly — one owner lost a freshness
+# check at v0.5.0 and did not notice for five days. The preflight now runs
+# scripts/orient-extras.sh if it exists, and that file is the owner's: copied in
+# only when absent, never overwritten, never staged for the update's commit.
+if [[ -f "$SCRIPT_DIR/orient-extras.sh.example" && ! -f "$VAULT/scripts/orient-extras.sh" ]]; then
+  cp "$SCRIPT_DIR/orient-extras.sh.example" "$VAULT/scripts/orient-extras.sh"
+  chmod +x "$VAULT/scripts/orient-extras.sh" 2>/dev/null || true
+  echo "   added scripts/orient-extras.sh (yours; updates never change it)"
+  diary "added scripts/orient-extras.sh, the owner's own orientation checks"
+fi
+
 for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh log-append.py; do
   if [[ -f "$SCRIPT_DIR/$tool" ]]; then
     if [[ -f "$VAULT/scripts/$tool" ]] && ! cmp -s "$SCRIPT_DIR/$tool" "$VAULT/scripts/$tool"; then
       keep_copy "$VAULT/scripts/$tool"
-      echo "   replaced scripts/$tool (old copy kept)"
+      # (v0.9.1) Say which file and where the old one went. "old copy kept" on
+      # its own told an owner nothing about what he had just lost.
+      echo "   replaced scripts/$tool — if you had edited it, your copy is in ~${BACKUP#$HOME}"
+      [[ "$tool" == "vault-orient-preflight.sh" ]] && \
+        echo "     (own checks belong in scripts/orient-extras.sh, which updates never touch)"
     elif [[ ! -f "$VAULT/scripts/$tool" ]]; then
       echo "   added scripts/$tool"
     else
@@ -715,15 +738,52 @@ if [[ -d "$VAULT/.git" ]]; then
         echo "   nothing new to commit"
       fi
     else
-      git commit --quiet -m "moblee: updated from $OLD_VERSION to $NEW_VERSION$STAMP_NOTE" -- "${COMMIT_PATHS[@]}" \
-        && echo "   committed: moblee: updated from $OLD_VERSION to $NEW_VERSION" \
-        || echo "   (commit did not go through; ask $ASSISTANT_LABEL to commit the update)"
+      # (v0.9.1) A refused commit used to be reported and then forgotten: the
+      # step was marked done, the diary said the update had finished, and the
+      # check-up agreed, while the owner was left with the update staged and
+      # never committed. It happened to a real owner on 21 September 2026, whose
+      # CLAUDE.md had grown past the commit gate's size cap. The subshell cannot
+      # set a variable the rest of the script will see, so it leaves a note.
+      if git commit --quiet -m "moblee: updated from $OLD_VERSION to $NEW_VERSION$STAMP_NOTE" -- "${COMMIT_PATHS[@]}"; then
+        echo "   committed: moblee: updated from $OLD_VERSION to $NEW_VERSION"
+      else
+        echo "   the closing commit was refused; the update is staged but not committed"
+        printf '%s\n' "${COMMIT_PATHS[@]}" > "$COMMIT_REFUSED" 2>/dev/null || true
+      fi
     fi
   )
 fi
 
-if [[ -n "$USTEP" ]]; then emit "$USTEP" ok; diary "update step $USTEP_N of $USTEP_TOTAL, $USTEP: done"; USTEP=""; fi
-diary "=== Moblee update finished ==="
+# (v0.9.1) Read the note the subshell may have left, and tell the truth about it
+# everywhere the owner or their assistant might look: the step state the app
+# shows, the diary the check-up reads, and the screen.
+COMMIT_WAS_REFUSED=0
+if [[ -s "$COMMIT_REFUSED" ]]; then
+  COMMIT_WAS_REFUSED=1
+  REFUSED_COUNT=$(wc -l < "$COMMIT_REFUSED" | tr -d ' ')
+fi
+
+if [[ -n "$USTEP" ]]; then
+  if [[ $COMMIT_WAS_REFUSED -eq 1 ]]; then
+    emit "$USTEP" needs-commit
+    diary "update step $USTEP_N of $USTEP_TOTAL, $USTEP: the files are in place but the closing commit was REFUSED; $REFUSED_COUNT file(s) staged and not committed"
+  else
+    emit "$USTEP" ok
+    diary "update step $USTEP_N of $USTEP_TOTAL, $USTEP: done"
+  fi
+  USTEP=""
+fi
+if [[ $COMMIT_WAS_REFUSED -eq 1 ]]; then
+  diary "=== Moblee update finished, BUT THE UPDATE IS NOT COMMITTED ==="
+  echo
+  echo "   One thing is not finished."
+  echo "   The new files are all in place, but the closing commit was refused,"
+  echo "   so $REFUSED_COUNT file(s) are staged and not committed."
+  echo "   Tell $ASSISTANT_LABEL: \"the Moblee update did not commit, please look and commit it\"."
+  echo
+else
+  diary "=== Moblee update finished ==="
+fi
 # (v0.9) An install of this wiki that stopped part-way has now been finished by
 # the updater, so its note is closed. Left open, a later run of the installer
 # would take the wiki for one still being made and finish it "from the top".

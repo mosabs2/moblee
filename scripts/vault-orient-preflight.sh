@@ -119,5 +119,20 @@ fi
 echo ""
 echo "[INFO] Vault root: $VAULT_ROOT"
 
+# --- E. The owner's own checks (v0.9.1) -------------------------------------
+# This file is the pack's, and an update replaces it whole. Anything an owner
+# added here was therefore lost at the next update, quietly: one owner's own
+# freshness check disappeared at v0.5.0 and was not missed for five days.
+# scripts/orient-extras.sh is the owner's, the updater never touches it, and
+# whatever it prints appears here. Add checks there, not in this file.
+if [ -f "$VAULT_ROOT/scripts/orient-extras.sh" ]; then
+  echo ""
+  echo "--- Your own checks ---"
+  # Run it in a subshell so a mistake in it cannot stop the preflight, and give
+  # it the vault root it will almost certainly want.
+  ( VAULT_ROOT="$VAULT_ROOT" sh "$VAULT_ROOT/scripts/orient-extras.sh" ) \
+    || echo "[WARN] scripts/orient-extras.sh exited with an error — the rest of the preflight is unaffected"
+fi
+
 echo ""
 echo "=== Preflight complete ==="

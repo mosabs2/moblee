@@ -291,6 +291,21 @@ def check_vault(f: Findings, vault: Path | None, pack: Path | None) -> None:
             in_cloud = True
     if in_cloud:
         f.add(LOOK, "The wiki sits inside a folder that iCloud syncs.", "F13")
+    # (v0.9.1) A separate fault with the same folders and a different cause.
+    # macOS protects Desktop, Documents and Downloads, and a scheduled job runs
+    # without the permission a person's own Terminal has, so it fails with
+    # "Operation not permitted" and nothing is shown. A real owner's nightly
+    # reminder had almost certainly never run unattended, and his weekly job
+    # failed the same way, for five days, unnoticed (21 September 2026). This is
+    # true whether or not iCloud is syncing the folder, so it is its own check.
+    protected = next((n for n in ("Desktop", "Documents", "Downloads")
+                      if str(vault) == str(HOME / n) or str(vault).startswith(str(HOME / n) + os.sep)), None)
+    if protected:
+        f.add(PROBLEM,
+              f"The wiki is inside your {protected} folder, where macOS blocks scheduled jobs. "
+              f"Anything Moblee runs on a schedule — the evening lesson, the weekly health check — "
+              f"will fail silently there. Moving the wiki out of {protected} fixes it.",
+              "F29")
     lint = vault / "outputs" / "lint"
     reports = sorted(lint.glob("*.md")) if lint.is_dir() else []
     if reports:
@@ -781,7 +796,18 @@ def check_diary(f: Findings) -> None:
         return
     what = "update" if "update begins" in lines[last_begin] else "install"
     tail = lines[last_begin:]
-    if any("finished ===" in l for l in tail):
+    # (v0.9.1) An update whose files all landed but whose closing commit git
+    # refused. It did reach the end, so saying "did not finish" would be wrong,
+    # and saying "ran to the end" is what left a real owner believing a staged,
+    # uncommitted update was done. It is its own finding, with its own words.
+    if any("NOT COMMITTED" in l for l in tail):
+        refused = next((l for l in tail if "REFUSED" in l), "")
+        detail = tidy(refused.split("  ", 1)[-1]) if refused else "the closing commit was refused"
+        f.add(PROBLEM,
+              f"The last {what} put every file in place but was not committed: {detail} "
+              f"Ask your assistant: \"the Moblee update did not commit, please look and commit it\".",
+              "F11")
+    elif any("finished ===" in l for l in tail):
         f.add(OK, f"The last {what} ran to the end.")
     else:
         stopped = next((l for l in tail if "stopped during" in l or "FAILED" in l), "it did not reach the end")

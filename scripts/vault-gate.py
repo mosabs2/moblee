@@ -131,8 +131,23 @@ EXEMPT_LINK_SOURCES = {"wiki/log.md", "wiki/Wiki Operations/Context Archive.md",
                        "wiki/Index.md", "wiki/_context.md"}
 HEADER_FULL = re.compile(r"^## \[(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2}) ([^\]]+)\] .+\|")
 HEADER_ANY = re.compile(r"^## \[(\d{4}-\d{2}-\d{2})([^\]]*)\] ")
+# (v0.9.1) This fired on every ordinary use of "first" and "every" — three times
+# in one real owner's update, ten at once in v0.5.1 — and an advisory that is
+# almost always wrong teaches people to ignore the gate, which is worse than not
+# having it. What it is actually for is an unearned claim of record or primacy,
+# so it now wants a superlative doing that job: "the first time", "the largest
+# ever", "the only one". Ordinary uses — "the first section", "first, do this",
+# "every morning" — no longer match.
 SUPERLATIVE = re.compile(
-    r"\b(first|largest|biggest|densest|smallest|longest|highest ever|lowest ever|on record|never before|the only)\b",
+    r"\b(?:"
+    r"(?:the\s+)?first\s+(?:ever|time|person|man|woman|country|state)\b"
+    # up to two words may sit between the superlative and what makes it a claim,
+    # so "the largest bag ever recorded" is caught as well as "the largest ever"
+    r"|(?:the\s+)?(?:largest|biggest|densest|smallest|longest|greatest|worst|best)\s+"
+    r"(?:\w+\s+){0,2}(?:ever|on record|in history|of all time)\b"
+    r"|highest ever|lowest ever|on record|never before|unprecedented"
+    r"|the only (?:one|person|country|time|way)\b"
+    r")",
     re.IGNORECASE)
 # Pages the pack itself installs. Their wording is the pack's, so a style advisory on
 # them is noise the owner can do nothing about (an update printed ten at once in v0.5.1).

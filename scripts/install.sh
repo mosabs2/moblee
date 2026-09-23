@@ -190,6 +190,32 @@ VAULT_LOCATION="${VAULT_LOCATION:-$DEFAULT_LOCATION}"
 # expand a leading ~ if the user typed one
 VAULT_LOCATION="${VAULT_LOCATION/#\~/$HOME}"
 
+# (v0.9.1) Say it now, while the location can still be changed by typing another
+# one. macOS protects Desktop, Documents and Downloads, and a scheduled job does
+# not carry the permission a person's own Terminal has, so everything Moblee runs
+# on a schedule fails there silently. A real owner's nightly reminder had almost
+# certainly never run and nobody knew for five days. The warning does not block:
+# the owner may have good reasons, and the check-up will say so again (F29).
+for _protected in Desktop Documents Downloads; do
+  if [[ "$VAULT_LOCATION" == "$HOME/$_protected" || "$VAULT_LOCATION" == "$HOME/$_protected/"* ]]; then
+    echo
+    echo "   One thing about that location."
+    echo "   $_protected is a folder macOS protects, and anything Moblee runs on a"
+    echo "   schedule — the evening lesson, the weekly health check — cannot read"
+    echo "   files there. Those jobs will fail without telling you."
+    echo "   Somewhere like $HOME/Wiki has no such problem."
+    echo
+    if [[ -z "$ARG_LOCATION" ]]; then
+      read -r -p "   Type another location, or press Return to keep this one: " _relocate || _relocate=""
+      if [[ -n "$_relocate" ]]; then
+        VAULT_LOCATION="${_relocate/#\~/$HOME}"
+        echo "   Using $VAULT_LOCATION"
+      fi
+    fi
+    break
+  fi
+done
+
 # ----- which assistant the wiki is for (v0.9) ---------------------------------
 # claude, chatgpt or both, kept as one word in ~/.config/moblee/assistant; no
 # file means claude. The question is put only in a Terminal run that is already
