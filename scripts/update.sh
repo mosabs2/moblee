@@ -723,9 +723,11 @@ if [[ -f "$VAULT/wiki/Wiki Operations/Moblee Learning Path.md" ]]; then
   # already chosen: refresh the reminder script and make sure the rule is present;
   # the lessons page and its Progress list are never replaced
   if [[ -f "$HOME/Library/LaunchAgents/com.moblee.nightly-tip.plist" ]]; then
-    python3 "$SCRIPT_DIR/install-learning-path.py" --vault "$VAULT" --assistant "$ASSISTANT" | sed 's/^/   /' || true
+    python3 "$SCRIPT_DIR/install-learning-path.py" --vault "$VAULT" --assistant "$ASSISTANT" | sed 's/^/   /' \
+      || { echo "   (the learning path was not refreshed)"; ustep_note "the learning path was not refreshed"; }
   else
-    python3 "$SCRIPT_DIR/install-learning-path.py" --vault "$VAULT" --assistant "$ASSISTANT" --no-reminder | sed 's/^/   /' || true
+    python3 "$SCRIPT_DIR/install-learning-path.py" --vault "$VAULT" --assistant "$ASSISTANT" --no-reminder | sed 's/^/   /' \
+      || { echo "   (the learning path was not refreshed)"; ustep_note "the learning path was not refreshed"; }
   fi
 elif [[ -t 0 ]]; then
   echo "   Thirty-two short lessons on getting the most from this wiki, one an evening,"
