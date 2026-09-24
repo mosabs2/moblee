@@ -282,6 +282,28 @@ struct HomeScreen: View {
         }
         .buttonStyle(.plain).foregroundStyle(Theme.accent)
         .accessibilityIdentifier(id)
+        .background(DrawnAt(id: id))
+    }
+}
+
+/// In a practice run only: where a small control was drawn, in the window's
+/// own coordinates (from the top left), so the self-drive walk can click the
+/// control itself rather than where it is expected to be. A released app
+/// records nothing.
+@MainActor
+enum DrawnPlaces {
+    static var frames: [String: CGRect] = [:]
+}
+
+struct DrawnAt: View {
+    let id: String
+    var body: some View {
+        GeometryReader { g in
+            Color.clear
+                .onAppear { if Practice.on { DrawnPlaces.frames[id] = g.frame(in: .global) } }
+                .onChange(of: g.frame(in: .global)) { _, f in if Practice.on { DrawnPlaces.frames[id] = f } }
+                .onDisappear { if Practice.on { DrawnPlaces.frames[id] = nil } }
+        }
     }
 }
 
