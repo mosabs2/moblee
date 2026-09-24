@@ -58,6 +58,9 @@ final class HomeModel: ObservableObject {
     @Published var guardStale = false      // on, but an older copy than this Moblee's
     @Published var listUnreadable = false
     @Published var updateSetAside = false
+    /// A newer Moblee published on GitHub than this app carries, if the daily
+    /// look found one and the owner has not said Not now to it (see `NewerRelease`).
+    @Published var newerRelease: String?
     @Published var loaded = false
     @Published var explaining: Tile?
     /// Which assistant this wiki is for, as the pack's scripts will read it:
@@ -102,7 +105,7 @@ final class HomeModel: ObservableObject {
             && Self.isNewer(packVersion, than: wikiVersion)
     }
 
-    static func isNewer(_ a: String, than b: String) -> Bool {
+    nonisolated static func isNewer(_ a: String, than b: String) -> Bool {
         let pa = a.split(separator: ".").map { Int($0) ?? 0 }
         let pb = b.split(separator: ".").map { Int($0) ?? 0 }
         for i in 0..<max(pa.count, pb.count) {
@@ -142,6 +145,7 @@ final class HomeModel: ObservableObject {
         wikiVersion = Self.read(vault.appendingPathComponent("VERSION"))
         if let bundledPack { packVersion = Self.read(bundledPack.appendingPathComponent("VERSION")) }
         checkSafety()
+        lookForNewerRelease()
 
         guard let bundledPack else { readRequests(); loaded = true; return }
         // Copying the pack into place is file work, so it happens off the main thread.
@@ -149,6 +153,45 @@ final class HomeModel: ObservableObject {
             let settled = try? InstallRun.settlePack(bundledPack, home: home)
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.packSettled(settled) } }
         }
+    }
+
+    /// Only ever reached with a wiki already in place: an install never asks.
+    /// A practice run never goes to the network unless told to: `--latest <v>`
+    /// pretends GitHub said v, `--release-url <url>` asks that address instead
+    /// (a dead one proves the silent give-up), and `--live-release` asks GitHub
+    /// itself. Without any of them a practice run asks nobody.
+    func lookForNewerRelease() {
+        let current = packVersion
+        guard NewerRelease.isPlainVersion(current) else { return }
+        let home = self.home
+        let offer: (String?) -> Void = { [weak self] latest in
+            guard let self else { return }
+            self.newerRelease = NewerRelease.offer(latest: latest, current: current,
+                                                   setAside: NewerRelease.setAside(home: home))
+        }
+        var source: URL? = NewerRelease.latestURL
+        if Practice.on {
+            if let v = Flow.value(after: "--latest", in: Practice.args) { offer(NewerRelease.version(fromTag: v)); return }
+            if let u = Flow.value(after: "--release-url", in: Practice.args) { source = URL(string: u) }
+            else if !Practice.args.contains("--live-release") { source = nil }
+        }
+        guard let source else { return }
+        let seen = NewerRelease.askedToday(home: home)
+        if seen.asked, source == NewerRelease.latestURL { offer(seen.version); return }
+        NewerRelease.fetch(from: source) { latest in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    if let latest, source == NewerRelease.latestURL { NewerRelease.note(home: home, version: latest) }
+                    offer(latest)
+                }
+            }
+        }
+    }
+
+    /// Not now: this version is not offered again; a newer one will be.
+    func setAsideNewerRelease() {
+        if let v = newerRelease { NewerRelease.setAside(v, home: home) }
+        newerRelease = nil
     }
 
     private func packSettled(_ settled: URL?) {

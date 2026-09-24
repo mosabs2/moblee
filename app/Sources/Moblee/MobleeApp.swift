@@ -25,6 +25,9 @@ struct MobleeApp: App {
                 print("--self-drive and --rehearse only run with --home <practice folder>; nothing was done.")
                 exit(2)
             }
+            // Asks for the latest release exactly as a returning owner's app
+            // does, prints what came back and how long it took, and stops.
+            if args.contains("--ask-release") { NewerRelease.askAndReport() }
             Snapshots.runIfAsked()
         }
     }
@@ -42,8 +45,9 @@ struct MobleeApp: App {
 }
 
 /// The practice switches (`--home`, `--pack`, `--pretend-missing`, `--snapshot`,
-/// `--rehearse`, `--self-drive`, `--check-logic`, `--dark`, `--owner`, `--step`, `--fresh`) exist
-/// for testing. They are read only when the environment says this is a practice
+/// `--rehearse`, `--self-drive`, `--check-logic`, `--dark`, `--owner`, `--step`, `--fresh`,
+/// and `--latest`, `--release-url`, `--live-release`, `--ask-release` for the
+/// check for a newer Moblee) exist for testing. They are read only when the environment says this is a practice
 /// run (MOBLEE_PRACTICE=1, which the test scripts set), so that a released,
 /// signed Moblee cannot be pointed at some other folder of scripts, or at some
 /// other home, by whoever starts it. Without it the app sees no switches at all.
@@ -52,7 +56,8 @@ enum Practice {
     static let args: [String] = on ? CommandLine.arguments : []
     static let switches: Set<String> = ["--home", "--pack", "--pretend-missing", "--snapshot", "--rehearse",
                                         "--self-drive", "--dark", "--owner", "--step", "--fresh", "--icon",
-                                        "--move-to", "--move-break", "--check-logic", "--fixtures"]
+                                        "--move-to", "--move-break", "--check-logic", "--fixtures",
+                                        "--latest", "--release-url", "--live-release", "--ask-release"]
 }
 
 /// Quitting half-way through a build or an update would leave it half done, so

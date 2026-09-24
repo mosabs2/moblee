@@ -47,10 +47,10 @@ mkdir -p "$WORK/home-draw" "$WORK/home-rehearse" "$WORK/home-drive"
 export MOBLEE_PRACTICE=1
 
 "$BIN" --home "$WORK/home-draw" --snapshot "$WORK/screens" > "$WORK/draw.txt" 2>&1
-[[ "$(ls "$WORK/screens" 2>/dev/null | grep -c '\.png$')" == "42" ]] && ok "forty-two screens drawn to picture files ($WORK/screens)" || bad "forty-two screens drawn (see $WORK/draw.txt)"
+[[ "$(ls "$WORK/screens" 2>/dev/null | grep -c '\.png$')" == "44" ]] && ok "forty-four screens drawn to picture files ($WORK/screens)" || bad "forty-four screens drawn (see $WORK/draw.txt)"
 "$BIN" --dark --home "$WORK/home-draw" --snapshot "$WORK/screens-dark" > "$WORK/draw-dark.txt" 2>&1
-[[ "$(ls "$WORK/screens-dark" 2>/dev/null | grep -c '\.png$')" == "42" ]] && ok "and the same forty-two in dark mode ($WORK/screens-dark)" || bad "forty-two dark screens drawn (see $WORK/draw-dark.txt)"
-for s in 01b-checkup-older-chatgpt 03c-assistant-unanswered 06a-trust-open-folder 06b-trust-steps 06e-trust-proved 07b-handoff-chatgpt 07c-handoff-both 08c-home-wiki-newer 10b-home-chatgpt 12b-home-repair-wiki-newer 15a-update-asks-assistant; do
+[[ "$(ls "$WORK/screens-dark" 2>/dev/null | grep -c '\.png$')" == "44" ]] && ok "and the same forty-four in dark mode ($WORK/screens-dark)" || bad "forty-four dark screens drawn (see $WORK/draw-dark.txt)"
+for s in 01b-checkup-older-chatgpt 03c-assistant-unanswered 06a-trust-open-folder 06b-trust-steps 06e-trust-proved 07b-handoff-chatgpt 07c-handoff-both 08c-home-wiki-newer 10b-home-chatgpt 12b-home-repair-wiki-newer 15a-update-asks-assistant 08d-home-newer-release 11b-home-update-newer-release-hidden; do
   [[ -s "$WORK/screens/$s.png" ]] || bad "  drawn: $s"
 done
 [[ ! -e "$WORK/home-draw/.claude" && ! -e "$WORK/home-draw/.codex" && ! -e "$WORK/home-draw/.config" ]] && ok "drawing screens installs nothing" || bad "drawing screens installs nothing"
@@ -106,6 +106,21 @@ grep -q "^logic: ok: a ChatGPT app with no agent inside is an older one, not a r
 grep -q "^logic: ok: the check-up's own sample not-running.json is read as notRunning" "$WORK/logic.txt" && grep -q "^logic: ok: the check-up in this app's pack still opens its proved line" "$WORK/logic.txt" && ok "  the proof is read from the check-up's own samples, and the check-up in the app still says what they say" || bad "  the proof's samples"
 [[ ! -e "$WORK/home-logic/.claude" && ! -e "$WORK/home-logic/.codex" && ! -e "$WORK/home-logic/Wiki" ]] && ok "  and checking them installs nothing" || bad "  checking the decisions installs nothing"
 ( unset MOBLEE_PRACTICE; "$BIN" --check-logic > "$WORK/logic-refused.txt" 2>&1 ); [[ $? -eq 2 ]] && ok "  without a practice run the check is refused" || bad "  without a practice run the logic check is refused"
+
+# (v0.9.3) The look for a newer Moblee: what is taken from GitHub's answer and
+# what is done with it, then the request itself against the real network — the
+# real GitHub, an address that never answers, and two that answer wrongly.
+grep -q "^logic: ok: anything but a plain version is refused, including addresses, paths and commands" "$WORK/logic.txt" && grep -q "^logic: ok: and no address is built from anything but a plain version" "$WORK/logic.txt" && ok "  only a plain version is taken from GitHub's answer, and the download address is built by the app" || bad "  only a plain version is taken from GitHub's answer"
+grep -q "^logic: ok: a draft or a pre-release is never offered" "$WORK/logic.txt" && grep -q "^logic: ok: Not now keeps that version away, and a newer one is offered again" "$WORK/logic.txt" && grep -q "^logic: ok: an answer had today is used today without asking again" "$WORK/logic.txt" && ok "  a newer version is offered once a day, never a draft, and Not now holds until the next one" || bad "  what is offered, and when"
+grep -q "^logic: ok: a practice run with no release switch asks nobody and offers nothing" "$WORK/logic.txt" && ok "  a practice run goes to the network only when told to" || bad "  a practice run goes to the network only when told to"
+asked() { perl -e 'alarm 20; exec @ARGV' "$BIN" --ask-release "$@" 2>&1; }
+A=$(asked); echo "      GitHub: $A"
+[[ "$A" =~ ^release:\ [0-9]+\.[0-9]+(\.[0-9]+)*\ in\ [0-4]\.[0-9]s$ ]] && ok "  GitHub itself answers with a plain version, inside five seconds" || bad "  GitHub itself answers with a plain version (no network? got: $A)"
+A=$(asked --release-url http://10.255.255.1/x); echo "      never answers: $A"
+[[ "$A" =~ ^release:\ none\ in\ [45]\.[0-9]s$ ]] && ok "  an address that never answers is given up on, quietly, at five seconds" || bad "  an address that never answers is given up on at five seconds (got: $A)"
+A=$(asked --release-url https://api.github.com/repos/mosabs2/moblee/releases/tags/v999.0.0); B2=$(asked --release-url https://example.com/)
+[[ "$A" == release:\ none* && "$B2" == release:\ none* ]] && ok "  a missing release and a page that is not GitHub's answer both give nothing" || bad "  wrong answers give nothing (got: $A / $B2)"
+( unset MOBLEE_PRACTICE; "$BIN" --ask-release > "$WORK/ask-refused.txt" 2>&1 ); [[ $? -eq 2 ]] && ok "  and outside a practice run the probe is refused" || bad "  outside a practice run the probe is refused"
 
 "$BIN" --home "$WORK/home-rehearse" --owner "Tom & Sam" --rehearse "$WORK/screens" > "$WORK/rehearse.txt" 2>&1
 RC=$?
@@ -172,7 +187,7 @@ grep -q "^self-drive: already there" "$WORK/move-again.txt" && [[ -f "$MOVED/Con
 # app's. `open` does not pass the app's exit code on, so the walk's last line
 # is what says whether it passed.
 open -n -W -a "$APP" --env MOBLEE_PRACTICE=1 --stdout "$WORK/drive.txt" --stderr "$WORK/drive.txt" \
-     --args --home "$WORK/home-drive" --self-drive
+     --args --home "$WORK/home-drive" --self-drive --latest 99.0.0
 if grep -q "^self-drive: every screen opened, the install finished" "$WORK/drive.txt" && ! grep -q "^self-drive: FAILED" "$WORK/drive.txt"; then RC=0; else RC=1; fi
 if grep -q "^self-drive: NOT RUN" "$WORK/drive.txt"; then
   echo ""
@@ -192,6 +207,9 @@ grep -q "^self-drive: ok: the answer went to the installer as --assistant claude
 grep -q "^self-drive: ok: an install for Claude asks for no Trust step" "$WORK/drive.txt" && [[ ! -e "$WORK/home-drive/.codex" && ! -e "$WORK/home-drive/.config/moblee/trust-pending" ]] && ok "  an install for Claude puts nothing of ChatGPT's on the Mac and asks for no Trust step" || bad "  an install for Claude asks for no Trust step"
 grep -q "^self-drive: ok: at home the wiki is known to be for Claude, and an update would ask nothing" "$WORK/drive.txt" && ok "  at home the choice is read from the record, so an update would ask nothing" || bad "  at home the choice is read from the record"
 grep -q "^self-drive: tiles waiting: trips, videos" "$WORK/drive.txt" && ok "home screen shows the two things agreed with Claude" || bad "home screen shows the two things agreed with Claude"
+# (v0.9.3) Walked with --latest 99.0.0 standing in for GitHub.
+grep -q "^self-drive: an install looked for a newer Moblee: false" "$WORK/drive.txt" && grep -q "^self-drive: ok: at home, a newer Moblee is offered, and the install before it never looked" "$WORK/drive.txt" && ok "  a newer Moblee is never looked for during an install, and is offered at home" || bad "  a newer Moblee: not during an install, offered at home"
+grep -q "^self-drive: ok: the line is on the screen, with Download and Not now" "$WORK/drive.txt" && grep -q "^self-drive: ok: Not now takes the line away, and the version is remembered" "$WORK/drive.txt" && grep -q "^self-drive: ok: and the same version is not offered again" "$WORK/drive.txt" && ok "  the line is on the real window, its Not now works when clicked, and the version stays away" || bad "  the newer-Moblee line on the real window"
 grep -q "^self-drive: trips ended: .*done" "$WORK/drive.txt" && [[ -f "$WORK/home-drive/.claude/skills/trips/SKILL.md" ]] && ok "pressing Add on a quiet item adds it (the skill is really there)" || bad "pressing Add on a quiet item adds it"
 grep -q "^self-drive: videos ended: .*handedOver" "$WORK/drive.txt" && [[ -x "$WORK/home-drive/Library/Application Support/Moblee/run/add-videos.command" ]] && ok "a Terminal item is explained, then handed over as a command file" || bad "a Terminal item is explained, then handed over as a command file"
 CMD="$WORK/home-drive/Library/Application Support/Moblee/run/add-videos.command"

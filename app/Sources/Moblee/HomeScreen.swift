@@ -121,6 +121,12 @@ struct HomeScreen: View {
         .overlay(alignment: .bottomTrailing) {
             if showsMain && !repairing { assistantControl }
         }
+        // Bottom left, the corner the assistant control leaves free: a newer
+        // Moblee is out. Only on the ordinary home screen, never over an
+        // update, a repair or the Trust steps, and never in an install.
+        .overlay(alignment: .bottomLeading) {
+            if showsMain && !repairing, let v = home.newerRelease { newerReleaseLine(v) }
+        }
         .onAppear {
             guard !still else { return }
             home.startWatching()
@@ -242,6 +248,26 @@ struct HomeScreen: View {
         // Low enough that the upper line clears the big button, and far enough
         // right that the lower one clears the quiet button in the middle.
         .padding(.trailing, 12).padding(.bottom, 4)
+    }
+
+    /// "Moblee 0.9.3 is out." with Download (the app itself, opened in the
+    /// browser; nothing is downloaded or run by this app) and Not now (this
+    /// version is not offered again).
+    private func newerReleaseLine(_ version: String) -> some View {
+        HStack(spacing: 2) {
+            Text("Moblee \(version) is out.")
+                .foregroundStyle(.secondary)
+                .padding(.leading, 9).padding(.trailing, 6)
+            cornerButton("Download", id: "download-newer") {
+                if !flow.isTestMode, let url = NewerRelease.downloadURL(for: version) {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            cornerButton("Not now", id: "newer-not-now") { home.setAsideNewerRelease() }
+        }
+        .font(.system(size: 12, weight: .semibold, design: .rounded))
+        .padding(.leading, 12).padding(.bottom, 4)
+        .accessibilityElement(children: .contain)
     }
 
     /// Small words, but a target a finger on a trackpad does not miss: the

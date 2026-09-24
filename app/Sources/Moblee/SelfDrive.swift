@@ -74,6 +74,19 @@ enum SelfDrive {
             if !test() { say("FAILED: \(what)"); exit(1) }
             say("ok: \(what)")
         }
+        /// Where a control with this accessibility identifier is drawn, in
+        /// window coordinates, found the way a screen reader finds it: so a
+        /// click lands on the control itself, not where it is expected to be.
+        func control(_ id: String) -> CGPoint? {
+            func walk(_ node: Any, _ depth: Int) -> NSRect? {
+                guard depth < 60, let e = node as? NSAccessibilityProtocol else { return nil }
+                if e.accessibilityIdentifier() == id { return e.accessibilityFrame() }
+                for child in e.accessibilityChildren() ?? [] { if let r = walk(child, depth + 1) { return r } }
+                return nil
+            }
+            guard let content = window.contentView, let r = walk(content, 0), r.width > 0 else { return nil }
+            return window.convertPoint(fromScreen: CGPoint(x: r.midX, y: r.midY))
+        }
 
         // Started with --move-to <practice folder>, the app first offers to move
         // itself to Applications, as it does when opened from Downloads. This
@@ -273,6 +286,12 @@ enum SelfDrive {
         let pointer = flow.home.appendingPathComponent(".config/moblee/package-path")
         try? "/somewhere/an/older/moblee/was\n".write(to: pointer, atomically: true, encoding: .utf8)
 
+        // The test starts this walk with --latest 99.0.0, standing in for GitHub
+        // saying a newer Moblee is out. Through the whole install it must not
+        // have been looked for: an install never shows or waits on it.
+        let installOffered = flow.homeModel.newerRelease
+        say("an install looked for a newer Moblee: \(installOffered != nil)")
+
         flow.homeModel.load(home: flow.home, bundledPack: flow.bundledPack)
         flow.mode = .home
         say("home")
@@ -417,6 +436,27 @@ enum SelfDrive {
         try? (pointsAt + "\n").write(to: pointer, atomically: true, encoding: .utf8)
         if let level = try? Data(contentsOf: packGuard) { try? level.write(to: installedGuard) }
 
+        // (v0.9.3) The line saying a newer Moblee is out, on the real window.
+        // The home screen is loaded again over the put-back wiki, found by
+        // its controls, and its Not now pressed for real.
+        flow.homeModel.load(home: flow.home, bundledPack: flow.bundledPack)
+        let reloadBy = Date().addingTimeInterval(30)
+        while !flow.homeModel.loaded && Date() < reloadBy { await pause(0.2) }
+        await expect("at home, a newer Moblee is offered, and the install before it never looked") {
+            flow.homeModel.newerRelease == "99.0.0" && installOffered == nil
+        }
+        await expect("the line is on the screen, with Download and Not now", within: 5) {
+            control("download-newer") != nil && control("newer-not-now") != nil
+        }
+        if let p = control("newer-not-now") { click(p) }
+        await expect("Not now takes the line away, and the version is remembered") {
+            flow.homeModel.newerRelease == nil && NewerRelease.setAside(home: flow.home) == "99.0.0"
+        }
+        flow.homeModel.lookForNewerRelease()
+        await pause(0.5)
+        await expect("and the same version is not offered again") { flow.homeModel.newerRelease == nil }
+        let releaseLine = true
+
         let skills = flow.home.appendingPathComponent(".claude/skills", isDirectory: true)
         let tripsThere = fm.fileExists(atPath: skills.appendingPathComponent("trips/SKILL.md").path)
         let gymThere = fm.fileExists(atPath: skills.appendingPathComponent("gym-log/.made-for-you").path)
@@ -424,7 +464,7 @@ enum SelfDrive {
         let brainSame = (try? Data(contentsOf: skills.appendingPathComponent("brain/SKILL.md"))) == brainBefore
         let noSmuggle = !fm.fileExists(atPath: "/tmp/moblee-pwned")
             && !flow.homeModel.tiles.contains { $0.key.contains("/") || $0.key.contains(";") }
-        let ok = tripsState == .done && videosState == .handedOver && tripsThere && googleState == .done && pointerRight && guardLevel && newerLeftAlone
+        let ok = tripsState == .done && videosState == .handedOver && tripsThere && googleState == .done && pointerRight && guardLevel && newerLeftAlone && releaseLine
             && skill("gym-log")?.state == .done && gymThere
             && skill("sneaky")?.state == .blocked && sneakyKept
             && skill("brain")?.state == .blocked && brainSame && noSmuggle
