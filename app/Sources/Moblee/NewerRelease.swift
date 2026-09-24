@@ -1,8 +1,8 @@
 import Foundation
 
 /// Whether a newer Moblee has been published: a returning owner's app asks
-/// GitHub's public list of releases, at most once a day, and says so in one
-/// quiet line if there is one.
+/// GitHub's public list of releases, once a day once it has had an answer,
+/// and says so in one quiet line if there is one.
 ///
 /// What it does not do matters as much. It never runs during an install (only
 /// a wiki that already exists is checked for). It downloads nothing and runs
@@ -34,12 +34,27 @@ enum NewerRelease {
     }
 
     /// The version in GitHub's answer for the latest release, or nothing.
-    /// A draft or a pre-release is never offered.
+    /// A draft or a pre-release is never offered, and neither is a release
+    /// that does not yet carry the app itself (`Moblee-<version>.zip`), so
+    /// Download never opens a file that is not there. Only a yes or no is
+    /// taken from the list of files; the address is still built here.
     static func version(fromResponse data: Data) -> String? {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let tag = object["tag_name"] as? String else { return nil }
         if (object["draft"] as? Bool) == true || (object["prerelease"] as? Bool) == true { return nil }
-        return version(fromTag: tag)
+        guard let v = version(fromTag: tag) else { return nil }
+        let names = (object["assets"] as? [[String: Any]] ?? []).compactMap { $0["name"] as? String }
+        return names.contains("Moblee-\(v).zip") ? v : nil
+    }
+
+    /// Where a look goes, or nowhere. A released app always asks GitHub. A
+    /// practice run asks nobody unless told: `--release-url <url>` asks that
+    /// address, `--live-release` asks GitHub. (`--latest <v>` never reaches
+    /// here: it stands in for the answer itself.)
+    static func source(practice: Bool, args: [String]) -> URL? {
+        guard practice else { return latestURL }
+        if let i = args.firstIndex(of: "--release-url"), i + 1 < args.count { return URL(string: args[i + 1]) }
+        return args.contains("--live-release") ? latestURL : nil
     }
 
     /// What the Download button opens: the app itself, straight from this
@@ -65,14 +80,16 @@ enum NewerRelease {
     static func today(_ date: Date = Date()) -> String {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_GB_POSIX")
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = .current
         f.dateFormat = "yyyy-MM-dd"
         return f.string(from: date)
     }
 
     /// Today's answer if one was already had today; otherwise nothing, and the
-    /// caller asks. Only an answer is noted, so a Mac that was offline asks
-    /// again the next time the app is opened.
+    /// caller asks. Only an answer is noted, so a Mac that was offline (or was
+    /// turned away by GitHub) asks again the next time the app is opened: one
+    /// small request in the background, with nothing shown if it fails again.
     static func askedToday(home: URL, now: Date = Date()) -> (asked: Bool, version: String?) {
         guard let text = try? String(contentsOf: noteFile(home: home), encoding: .utf8) else { return (false, nil) }
         let parts = text.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: " ").map(String.init)
@@ -136,7 +153,9 @@ enum NewerRelease {
         config.timeoutIntervalForRequest = timeout
         config.timeoutIntervalForResource = timeout
         config.waitsForConnectivity = false
-        config.httpAdditionalHeaders = ["Accept": "application/vnd.github+json", "User-Agent": "Moblee"]
+        // A fixed language, so not even the owner's language preference goes.
+        config.httpAdditionalHeaders = ["Accept": "application/vnd.github+json", "User-Agent": "Moblee",
+                                        "Accept-Language": "en"]
         let session = URLSession(configuration: config)
         session.dataTask(with: url) { data, response, _ in
             defer { session.finishTasksAndInvalidate() }

@@ -169,13 +169,10 @@ final class HomeModel: ObservableObject {
             self.newerRelease = NewerRelease.offer(latest: latest, current: current,
                                                    setAside: NewerRelease.setAside(home: home))
         }
-        var source: URL? = NewerRelease.latestURL
-        if Practice.on {
-            if let v = Flow.value(after: "--latest", in: Practice.args) { offer(NewerRelease.version(fromTag: v)); return }
-            if let u = Flow.value(after: "--release-url", in: Practice.args) { source = URL(string: u) }
-            else if !Practice.args.contains("--live-release") { source = nil }
+        if Practice.on, let v = Flow.value(after: "--latest", in: Practice.args) {
+            offer(NewerRelease.version(fromTag: v)); return
         }
-        guard let source else { return }
+        guard let source = NewerRelease.source(practice: Practice.on, args: Practice.args) else { return }
         let seen = NewerRelease.askedToday(home: home)
         if seen.asked, source == NewerRelease.latestURL { offer(seen.version); return }
         NewerRelease.fetch(from: source) { latest in
@@ -186,6 +183,13 @@ final class HomeModel: ObservableObject {
                 }
             }
         }
+    }
+
+    /// Whether the newer-Moblee line may be on the screen: never over an
+    /// explanation, an update this app can make, or a repair. (The home screen
+    /// also keeps it off the Trust steps, which are the screen's own state.)
+    var newerReleaseLineAllowed: Bool {
+        newerRelease != nil && explaining == nil && !updateAvailable && !needsRepair && !repairIsForANewerMoblee
     }
 
     /// Not now: this version is not offered again; a newer one will be.
