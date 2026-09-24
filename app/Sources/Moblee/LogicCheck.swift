@@ -425,11 +425,17 @@ enum LogicCheck {
         check("anything but a plain version is refused, including addresses, paths and commands",
               hostile.allSatisfy { NewerRelease.version(fromTag: $0) == nil })
         func answer(_ o: [String: Any]) -> Data { (try? JSONSerialization.data(withJSONObject: o)) ?? Data() }
+        let app = [["name": "Moblee-0.9.3.zip"]]
         check("GitHub's answer for the latest release is read for its tag",
-              NewerRelease.version(fromResponse: answer(["tag_name": "v0.9.3", "draft": false, "prerelease": false])) == "0.9.3")
+              NewerRelease.version(fromResponse: answer(["tag_name": "v0.9.3", "draft": false, "prerelease": false,
+                                                         "assets": app])) == "0.9.3")
         check("a draft or a pre-release is never offered",
-              NewerRelease.version(fromResponse: answer(["tag_name": "v0.9.3", "draft": true])) == nil
-              && NewerRelease.version(fromResponse: answer(["tag_name": "v0.9.3", "prerelease": true])) == nil)
+              NewerRelease.version(fromResponse: answer(["tag_name": "v0.9.3", "draft": true, "assets": app])) == nil
+              && NewerRelease.version(fromResponse: answer(["tag_name": "v0.9.3", "prerelease": true, "assets": app])) == nil)
+        check("a release that does not yet carry the app, or carries another version's, is not offered",
+              NewerRelease.version(fromResponse: answer(["tag_name": "v0.9.3"])) == nil
+              && NewerRelease.version(fromResponse: answer(["tag_name": "v0.9.3", "assets": [["name": "Moblee-0.9.2.zip"]]])) == nil
+              && NewerRelease.version(fromResponse: answer(["tag_name": "v0.9.3", "assets": [["name": "Source code (zip)"]]])) == nil)
         check("an answer without a tag, a tag that is not a version, or no JSON at all gives nothing",
               NewerRelease.version(fromResponse: answer(["name": "Moblee 0.9.3"])) == nil
               && NewerRelease.version(fromResponse: answer(["tag_name": "latest"])) == nil
@@ -460,10 +466,23 @@ enum LogicCheck {
               NewerRelease.askedToday(home: home, now: day.addingTimeInterval(86_400)).asked == false)
         try? "rubbish\n".write(to: NewerRelease.noteFile(home: home), atomically: true, encoding: .utf8)
         check("a note that cannot be read counts as not asked", NewerRelease.askedToday(home: home, now: day).asked == false)
-        let noSwitch = HomeModel()
-        noSwitch.packVersion = "0.9.2"
-        noSwitch.lookForNewerRelease()
-        check("a practice run with no release switch asks nobody and offers nothing", noSwitch.newerRelease == nil)
+        check("a practice run with no release switch asks nobody",
+              NewerRelease.source(practice: true, args: ["Moblee", "--home", "/tmp/x", "--check-logic"]) == nil)
+        check("told --live-release it asks GitHub, told --release-url it asks that address",
+              NewerRelease.source(practice: true, args: ["--live-release"]) == NewerRelease.latestURL
+              && NewerRelease.source(practice: true, args: ["--release-url", "http://10.255.255.1/x"])?.absoluteString == "http://10.255.255.1/x")
+        check("a released app always asks GitHub itself, whatever it is started with",
+              NewerRelease.source(practice: false, args: []) == NewerRelease.latestURL
+              && NewerRelease.source(practice: false, args: ["--release-url", "https://example.com"]) == NewerRelease.latestURL)
+        let shown = HomeModel()
+        shown.wikiVersion = "0.9.2"; shown.packVersion = "0.9.2"; shown.newerRelease = "9.9.9"
+        check("the line may show on the ordinary home screen", shown.newerReleaseLineAllowed)
+        shown.wikiVersion = "0.7.0"
+        check("but never over an update this app can make", shown.updateAvailable && !shown.newerReleaseLineAllowed)
+        shown.wikiVersion = "0.9.2"; shown.needsRepair = true
+        check("nor over a repair", !shown.newerReleaseLineAllowed)
+        shown.needsRepair = false; shown.explaining = HomeModel.Tile(kind: .item, key: "x", title: "", why: "", detail: "", how: .silent, paid: false)
+        check("nor over an explanation", !shown.newerReleaseLineAllowed)
 
         print(failed == 0 ? "logic: every check held" : "logic: \(failed) check(s) FAILED")
         exit(failed == 0 ? 0 : 1)

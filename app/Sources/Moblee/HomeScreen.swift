@@ -125,7 +125,7 @@ struct HomeScreen: View {
         // Moblee is out. Only on the ordinary home screen, never over an
         // update, a repair or the Trust steps, and never in an install.
         .overlay(alignment: .bottomLeading) {
-            if showsMain && !repairing, let v = home.newerRelease { newerReleaseLine(v) }
+            if showsMain && !repairing && home.newerReleaseLineAllowed, let v = home.newerRelease { newerReleaseLine(v) }
         }
         .onAppear {
             guard !still else { return }
@@ -263,7 +263,9 @@ struct HomeScreen: View {
                     NSWorkspace.shared.open(url)
                 }
             }
+            .accessibilityLabel("Download Moblee \(version)")
             cornerButton("Not now", id: "newer-not-now") { home.setAsideNewerRelease() }
+                .accessibilityLabel("Not now, do not offer Moblee \(version) again")
         }
         .font(.system(size: 12, weight: .semibold, design: .rounded))
         .padding(.leading, 12).padding(.bottom, 4)

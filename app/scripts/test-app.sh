@@ -112,14 +112,22 @@ grep -q "^logic: ok: the check-up's own sample not-running.json is read as notRu
 # real GitHub, an address that never answers, and two that answer wrongly.
 grep -q "^logic: ok: anything but a plain version is refused, including addresses, paths and commands" "$WORK/logic.txt" && grep -q "^logic: ok: and no address is built from anything but a plain version" "$WORK/logic.txt" && ok "  only a plain version is taken from GitHub's answer, and the download address is built by the app" || bad "  only a plain version is taken from GitHub's answer"
 grep -q "^logic: ok: a draft or a pre-release is never offered" "$WORK/logic.txt" && grep -q "^logic: ok: Not now keeps that version away, and a newer one is offered again" "$WORK/logic.txt" && grep -q "^logic: ok: an answer had today is used today without asking again" "$WORK/logic.txt" && ok "  a newer version is offered once a day, never a draft, and Not now holds until the next one" || bad "  what is offered, and when"
-grep -q "^logic: ok: a practice run with no release switch asks nobody and offers nothing" "$WORK/logic.txt" && ok "  a practice run goes to the network only when told to" || bad "  a practice run goes to the network only when told to"
+grep -q "^logic: ok: a practice run with no release switch asks nobody" "$WORK/logic.txt" && grep -q "^logic: ok: a released app always asks GitHub itself, whatever it is started with" "$WORK/logic.txt" && ok "  a practice run goes to the network only when told to, and a released app only to GitHub" || bad "  where the look goes"
+grep -q "^logic: ok: a release that does not yet carry the app, or carries another version's, is not offered" "$WORK/logic.txt" && ok "  a release is offered only once the app itself is on it, so Download never opens a missing file" || bad "  a release without the app on it is not offered"
+grep -q "^logic: ok: but never over an update this app can make" "$WORK/logic.txt" && grep -q "^logic: ok: nor over a repair" "$WORK/logic.txt" && grep -q "^logic: ok: nor over an explanation" "$WORK/logic.txt" && ok "  the line never shows over an update, a repair or an explanation" || bad "  where the line may show"
 asked() { perl -e 'alarm 20; exec @ARGV' "$BIN" --ask-release "$@" 2>&1; }
-A=$(asked); echo "      GitHub: $A"
-[[ "$A" =~ ^release:\ [0-9]+\.[0-9]+(\.[0-9]+)*\ in\ [0-4]\.[0-9]s$ ]] && ok "  GitHub itself answers with a plain version, inside five seconds" || bad "  GitHub itself answers with a plain version (no network? got: $A)"
-A=$(asked --release-url http://10.255.255.1/x); echo "      never answers: $A"
-[[ "$A" =~ ^release:\ none\ in\ [45]\.[0-9]s$ ]] && ok "  an address that never answers is given up on, quietly, at five seconds" || bad "  an address that never answers is given up on at five seconds (got: $A)"
-A=$(asked --release-url https://api.github.com/repos/mosabs2/moblee/releases/tags/v999.0.0); B2=$(asked --release-url https://example.com/)
-[[ "$A" == release:\ none* && "$B2" == release:\ none* ]] && ok "  a missing release and a page that is not GitHub's answer both give nothing" || bad "  wrong answers give nothing (got: $A / $B2)"
+# The four below need the internet. Offline (or with GitHub unreachable) they are
+# skipped and said to be skipped: not a pass, and not a fault in the app.
+if curl -m 5 -sfI https://api.github.com > /dev/null 2>&1; then
+  A=$(asked); echo "      GitHub: $A"
+  [[ "$A" =~ ^release:\ [0-9]+\.[0-9]+(\.[0-9]+)*\ in\ [0-4]\.[0-9]s$ ]] && ok "  GitHub itself answers with a plain version, inside five seconds" || bad "  GitHub itself answers with a plain version (rate-limited? got: $A)"
+  A=$(asked --release-url http://10.255.255.1/x); echo "      never answers: $A"
+  [[ "$A" =~ ^release:\ none\ in\ [45]\.[0-9]s$ ]] && ok "  an address that never answers is given up on, quietly, at five seconds" || bad "  an address that never answers is given up on at five seconds (got: $A)"
+  A=$(asked --release-url https://api.github.com/repos/mosabs2/moblee/releases/tags/v999.0.0); B2=$(asked --release-url https://example.com/)
+  [[ "$A" == release:\ none* && "$B2" == release:\ none* ]] && ok "  a missing release and a page that is not GitHub's answer both give nothing" || bad "  wrong answers give nothing (got: $A / $B2)"
+else
+  echo "SKIP  the four live checks against GitHub: this Mac cannot reach api.github.com just now"
+fi
 ( unset MOBLEE_PRACTICE; "$BIN" --ask-release > "$WORK/ask-refused.txt" 2>&1 ); [[ $? -eq 2 ]] && ok "  and outside a practice run the probe is refused" || bad "  outside a practice run the probe is refused"
 
 "$BIN" --home "$WORK/home-rehearse" --owner "Tom & Sam" --rehearse "$WORK/screens" > "$WORK/rehearse.txt" 2>&1
