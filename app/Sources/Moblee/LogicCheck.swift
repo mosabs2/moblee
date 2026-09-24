@@ -414,6 +414,57 @@ enum LogicCheck {
         check("the name question names no assistant",
               !NameScreen.words.contains("Claude") && !NameScreen.words.contains("ChatGPT"))
 
+        // --- the look for a newer Moblee (v0.9.3) ---
+        // Only a plain version is ever taken from GitHub's answer, and the
+        // download address is built here, so nothing in a tampered answer can
+        // choose where an owner is sent.
+        check("a release tag reads as its version, with or without the v",
+              NewerRelease.version(fromTag: "v0.9.3") == "0.9.3" && NewerRelease.version(fromTag: "0.10.0") == "0.10.0")
+        let hostile = ["", "v", "1", "1.2.3.4.5", "1.2.x", "1..2", "-1.2", "12345.1", "0.9.3 ", " 0.9.3",
+                       "v0.9.3;rm -rf ~", "0.9.3/../../x", "https://example.com/x.zip", "0.9.3\n", "１.２.３"]
+        check("anything but a plain version is refused, including addresses, paths and commands",
+              hostile.allSatisfy { NewerRelease.version(fromTag: $0) == nil })
+        func answer(_ o: [String: Any]) -> Data { (try? JSONSerialization.data(withJSONObject: o)) ?? Data() }
+        check("GitHub's answer for the latest release is read for its tag",
+              NewerRelease.version(fromResponse: answer(["tag_name": "v0.9.3", "draft": false, "prerelease": false])) == "0.9.3")
+        check("a draft or a pre-release is never offered",
+              NewerRelease.version(fromResponse: answer(["tag_name": "v0.9.3", "draft": true])) == nil
+              && NewerRelease.version(fromResponse: answer(["tag_name": "v0.9.3", "prerelease": true])) == nil)
+        check("an answer without a tag, a tag that is not a version, or no JSON at all gives nothing",
+              NewerRelease.version(fromResponse: answer(["name": "Moblee 0.9.3"])) == nil
+              && NewerRelease.version(fromResponse: answer(["tag_name": "latest"])) == nil
+              && NewerRelease.version(fromResponse: Data("<html>rate limited</html>".utf8)) == nil)
+        check("Download opens the app itself, on this project's own releases",
+              NewerRelease.downloadURL(for: "0.9.3")?.absoluteString
+                == "https://github.com/mosabs2/moblee/releases/download/v0.9.3/Moblee-0.9.3.zip")
+        check("and no address is built from anything but a plain version",
+              hostile.allSatisfy { NewerRelease.downloadURL(for: $0) == nil })
+        check("a newer version is offered", NewerRelease.offer(latest: "0.9.3", current: "0.9.2", setAside: nil) == "0.9.3")
+        check("the same or an older version is not",
+              NewerRelease.offer(latest: "0.9.2", current: "0.9.2", setAside: nil) == nil
+              && NewerRelease.offer(latest: "0.9.1", current: "0.9.2", setAside: nil) == nil)
+        check("0.10.0 counts as newer than 0.9.9", NewerRelease.offer(latest: "0.10.0", current: "0.9.9", setAside: nil) == "0.10.0")
+        check("Not now keeps that version away, and a newer one is offered again",
+              NewerRelease.offer(latest: "0.9.3", current: "0.9.2", setAside: "0.9.3") == nil
+              && NewerRelease.offer(latest: "0.9.4", current: "0.9.2", setAside: "0.9.3") == "0.9.4")
+        check("no answer offers nothing", NewerRelease.offer(latest: nil, current: "0.9.2", setAside: nil) == nil)
+        NewerRelease.setAside("0.9.3", home: home)
+        check("Not now is remembered in the owner's own Moblee settings", NewerRelease.setAside(home: home) == "0.9.3")
+        NewerRelease.setAside("0.9.3; rm -rf ~", home: home)
+        check("and only a plain version is ever written there", NewerRelease.setAside(home: home) == "0.9.3")
+        let day = Date(timeIntervalSince1970: 1_790_236_800)   // 24 September 2026, midday UTC
+        NewerRelease.note(home: home, version: "0.9.3", now: day)
+        check("an answer had today is used today without asking again",
+              NewerRelease.askedToday(home: home, now: day) == (true, "0.9.3"))
+        check("and tomorrow the app asks again",
+              NewerRelease.askedToday(home: home, now: day.addingTimeInterval(86_400)).asked == false)
+        try? "rubbish\n".write(to: NewerRelease.noteFile(home: home), atomically: true, encoding: .utf8)
+        check("a note that cannot be read counts as not asked", NewerRelease.askedToday(home: home, now: day).asked == false)
+        let noSwitch = HomeModel()
+        noSwitch.packVersion = "0.9.2"
+        noSwitch.lookForNewerRelease()
+        check("a practice run with no release switch asks nobody and offers nothing", noSwitch.newerRelease == nil)
+
         print(failed == 0 ? "logic: every check held" : "logic: \(failed) check(s) FAILED")
         exit(failed == 0 ? 0 : 1)
     }

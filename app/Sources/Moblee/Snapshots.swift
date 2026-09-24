@@ -210,6 +210,14 @@ enum Snapshots {
             f.homeModel.safetyOff = true; f.homeModel.needsRepair = true
         }, "12b-home-repair-wiki-newer", to: folder)
         draw(homeScene { $0.homeModel.wikiVersion = "0.7.0" }, "11-home-update", to: folder)
+        // a newer Moblee published: one quiet line, bottom left, on the ordinary
+        // home screen; and not over an update this app can already make
+        draw(homeScene { f in
+            f.homeModel.tiles = sample; f.homeModel.newerRelease = "0.9.3"
+        }, "08d-home-newer-release", to: folder)
+        draw(homeScene { f in
+            f.homeModel.wikiVersion = "0.7.0"; f.homeModel.newerRelease = "0.9.3"
+        }, "11b-home-update-newer-release-hidden", to: folder)
         draw(homeScene { $0.homeModel.needsRepair = true }, "12-home-repair", to: folder)
         draw(homeScene { $0.homeModel.tiles = sample; $0.homeModel.explaining = sample[1] }, "13-explain-terminal", to: folder)
         draw(homeScene { $0.homeModel.tiles = sample; $0.homeModel.explaining = sample[2] }, "14-explain-clicks", to: folder)

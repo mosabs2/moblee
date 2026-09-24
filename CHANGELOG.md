@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.9.3 (24 September 2026)
+
+**The app now says when a newer Moblee is out.** Until this version the app had no way of knowing: it compared the wiki with the Moblee it carried inside itself, so an owner who never downloaded a new copy was told, correctly as far as the app knew, that they were up to date.
+
+### Added
+
+- **One quiet line on the home screen when a newer version has been published**: "Moblee 0.9.4 is out.", with **Download** and **Not now**, in the bottom-left corner. Download opens the new app's download in the browser, the app itself rather than the release page, so there is no page on which to pick GitHub's "Source code" archive by mistake. Not now keeps that version from being offered again; a later one is offered in its turn.
+- **How it behaves, and what it does not do.** A returning owner's app asks GitHub's public list of releases for the latest one, at most once a day. It never asks during an install, so a first install is exactly as it was. It downloads nothing and runs nothing itself: the owner downloads and opens the new app as before, and macOS checks its signature as before. It sends nothing about the owner. It never waits and never reports a failure: with no network, a slow answer (it gives up at five seconds) or an answer it cannot read, nothing is shown and the app is as it always was. A draft or a pre-release is never offered.
+- **Only a version number is taken from GitHub's answer**, and only a plain one (digits and dots); the download address is built by the app from that number. An answer that had been tampered with could not send an owner anywhere but this project's own releases.
+- It remembers two small things in `~/.config/moblee/`: `latest-release` (the day it last asked and what it was told) and `release-set-aside` (the version Not now was pressed on).
+
+### Tested
+
+- The app's logic check gains eighteen checks: fifteen kinds of answer that must be refused (addresses, paths, commands, stray spaces and newlines, non-ASCII digits, too many or too few parts), drafts and pre-releases, the exact download address, the once-a-day note, Not now and the version after it, and that a practice run goes to the network only when told to.
+- The request is made against the real network in `test-app.sh`: GitHub itself (a plain version inside five seconds), an address that never answers (given up on at five seconds, quietly), a release that does not exist and a page that is not GitHub's answer (both give nothing).
+- The live-window walk is started with a stand-in for GitHub's answer and checks that nothing is looked for during the install, that the line appears at home, and that pressing Not now, found and clicked on the real window, takes it away for good.
+- Two new screens drawn in light and dark: the line on the home screen, and the update screen with a newer release on record, where the line must not appear.
+
+**This version has to be fetched by hand once**, like every one before it. From then on, new versions announce themselves.
+
 ## v0.9.2 (23 September 2026)
 
 The nine owner-facing faults a four-part code review found after v0.9.1's own fixes had gone in. They have one thing in common with that release: in every case Moblee either did something to an owner's own work without asking, or said something about itself that was not true.
