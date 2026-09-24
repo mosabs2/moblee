@@ -74,18 +74,13 @@ enum SelfDrive {
             if !test() { say("FAILED: \(what)"); exit(1) }
             say("ok: \(what)")
         }
-        /// Where a control with this accessibility identifier is drawn, in
-        /// window coordinates, found the way a screen reader finds it: so a
-        /// click lands on the control itself, not where it is expected to be.
+        /// Where a small control is drawn right now, as the control itself
+        /// recorded it (`DrawnAt`, practice runs only), turned into the window
+        /// coordinates a click needs (from the bottom left). Nothing if it is
+        /// not on the screen.
         func control(_ id: String) -> CGPoint? {
-            func walk(_ node: Any, _ depth: Int) -> NSRect? {
-                guard depth < 60, let e = node as? NSAccessibilityProtocol else { return nil }
-                if e.accessibilityIdentifier() == id { return e.accessibilityFrame() }
-                for child in e.accessibilityChildren() ?? [] { if let r = walk(child, depth + 1) { return r } }
-                return nil
-            }
-            guard let content = window.contentView, let r = walk(content, 0), r.width > 0 else { return nil }
-            return window.convertPoint(fromScreen: CGPoint(x: r.midX, y: r.midY))
+            guard let r = DrawnPlaces.frames[id], r.width > 0, let content = window.contentView else { return nil }
+            return CGPoint(x: r.midX, y: content.bounds.height - r.midY)
         }
 
         // Started with --move-to <practice folder>, the app first offers to move
@@ -444,6 +439,18 @@ enum SelfDrive {
         while !flow.homeModel.loaded && Date() < reloadBy { await pause(0.2) }
         await expect("at home, a newer Moblee is offered, and the install before it never looked") {
             flow.homeModel.newerRelease == "99.0.0" && installOffered == nil
+        }
+        await pause(1.0)
+        if control("download-newer") == nil {
+            // Which small controls are drawn, and a picture of the window, so
+            // a failure here says whether the line was missing or merely not found.
+            say("small controls drawn: \(DrawnPlaces.frames.keys.sorted().joined(separator: ", "))")
+            if let view = window.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                view.cacheDisplay(in: view.bounds, to: rep)
+                let file = flow.home.appendingPathComponent("home-at-release-line.png")
+                try? rep.representation(using: .png, properties: [:])?.write(to: file)
+                say("picture of the window: \(file.path)")
+            }
         }
         await expect("the line is on the screen, with Download and Not now", within: 5) {
             control("download-newer") != nil && control("newer-not-now") != nil
