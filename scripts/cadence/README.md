@@ -10,6 +10,8 @@ This folder holds the pieces that run the structural health check on a timer, so
 
 **Checking it ran.** Each run leaves a short log at `~/.config/moblee/logs/weekly-lint-<date>.log`. The last line says either where the report was written, that today's report already existed, or why the run failed in plain words. Logs older than 90 days are moved into `~/.config/moblee/logs/archive/`, never deleted. The easiest way to check is to ask Claude: "did the weekly lint run, and what did it find?" It can read the log folder and the newest report.
 
+**The card that follows it.** The check writes a report for the assistant, not for you. What you see is one short page, offered once, the next time you are back: what the wiki learned that week, what is still unresolved, and three things you could do. A week with nothing in it is one line saying so, and that is all. The page is written to `outputs/weekly/<date>.md` and dated for the Saturday, so there is one a week at most; once it exists it is not raised again, whether you read it or not. Nothing is counted and no week is scored. The facts behind it come from `scripts/weekly-card.py`, which reads the week's log entries, the open items on `wiki/_context.md` and the newest report, and writes nothing.
+
 **Running it now.** `bash ~/.config/moblee/run-weekly-lint.sh` runs exactly what the schedule would run.
 
 **Switching it off.** `launchctl bootout gui/$(id -u)/com.moblee.weekly-lint` stops the schedule; the files stay in place so it can be switched back on with the installer.

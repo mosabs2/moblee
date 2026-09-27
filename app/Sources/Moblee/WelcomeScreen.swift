@@ -1,12 +1,24 @@
 import SwiftUI
 
 struct WelcomeScreen: View {
+    /// Drawn again when the owner presses "Bigger text". (v0.9.4)
+    @ObservedObject private var textSize = TextSize.shared
     @EnvironmentObject var flow: Flow
 
     var body: some View {
         ScreenFrame(
             sentence: "You talk. Your assistant keeps your wiki.",
             buttonTitle: "Start",
+            // The first screen: there is nowhere to go back to. (v0.9.4)
+            showsBack: false,
+            // (v0.9.6) The way into the example wiki, for somebody who has no
+            // wiki at all. This is the screen where "what IS a wiki?" is asked,
+            // and it is the question no amount of explaining answers: the words
+            // above say what happens, the example shows what comes out. Escape
+            // does not press it — Escape is "Not now" and nothing else; see
+            // `QuietWords`.
+            quietTitle: flow.hasExample ? ExampleReader.wayIn : nil,
+            quietAction: flow.hasExample ? { flow.openExample() } : nil,
             action: flow.next
         ) {
             TalkDiagram()
@@ -15,7 +27,16 @@ struct WelcomeScreen: View {
 }
 
 /// You -> Claude -> your wiki, with a dot travelling along the line.
+///
+/// (v0.9.4) The three are placed along the line by arithmetic, and the line is
+/// drawn by arithmetic too, so this is the sort of picture that would read
+/// backwards on a mirrored screen. It does not: SwiftUI turns `.position` and a
+/// drawn path round itself, so "You" lands on the side the reading starts from
+/// and the dot travels the way the words do. Tried, and looked at, on 26
+/// September 2026; nothing here does the flipping.
 struct TalkDiagram: View {
+    /// Drawn again when the owner presses "Bigger text". (v0.9.4)
+    @ObservedObject private var textSize = TextSize.shared
     @State private var travel: CGFloat = 0
     @State private var hasAppeared = false
     @Environment(\.stillPicture) private var still
@@ -39,7 +60,7 @@ struct TalkDiagram: View {
 
                 Circle()
                     .fill(Theme.accent)
-                    .frame(width: 14, height: 14)
+                    .frame(width: Theme.pt(14), height: Theme.pt(14))
                     .position(x: xs[0] + 56 + (xs[2] - xs[0] - 112) * ((still || reduceMotion) ? 0.25 : travel), y: y)
                     .opacity(appeared ? 1 : 0)
 
@@ -62,19 +83,19 @@ struct TalkDiagram: View {
 
     private func node(_ symbol: String, _ label: String,
                       x: CGFloat, y: CGFloat, delay: Double) -> some View {
-        VStack(spacing: 10) {
+        VStack(spacing: Theme.pt(10)) {
             ZStack {
                 Circle()
                     .fill(Theme.card)
                     .overlay(Circle().stroke(Theme.cardEdge, lineWidth: 1))
                     .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
-                    .frame(width: 104, height: 104)
+                    .frame(width: Theme.pt(104), height: Theme.pt(104))
                 Image(systemName: symbol)
-                    .font(.system(size: 44, weight: .medium))
+                    .font(Theme.font(44, .medium, .default))
                     .foregroundStyle(Theme.accent)
             }
             Text(label)
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .font(Theme.font(17, .semibold))
                 .foregroundStyle(.primary)
         }
         .position(x: x, y: y + 14)

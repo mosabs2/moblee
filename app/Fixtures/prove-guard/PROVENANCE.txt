@@ -14,6 +14,14 @@ The rows a real run adds about the Mac, the wiki's pages and the scheduled
 jobs are left out; the app reads none of them. The scratch folder's date is
 made up.
 
+timed-out.json was added on 25 September 2026 in the same way, from the
+prove_guard timeout line, with TRUST_CHECK written out in full and a made-up
+scratch folder date. It is the run that overstays the three-minute limit: the
+check-up says so at CANNOT TELL, having deleted nothing, and the app must read
+that as "could not tell" rather than as a guard that is not running.
+tools/test-doctor.py checks that the sentence in it is still the sentence the
+check-up says.
+
 The app's logic check (`--check-logic --fixtures <this folder's parent>`)
 reads them to make sure the app still knows a proved guard, a guard that is
 not running, and "could not tell" when it sees the check-up's real words.

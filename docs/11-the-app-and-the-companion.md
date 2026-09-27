@@ -19,7 +19,9 @@ The app is offered on the Releases page of the GitHub repository, signed and not
 - If you and Claude have agreed to add something, it shows tiles, each with the reason in your own words, the time, the space, the cost, and an Add button. Some items the app adds by itself, some need a Terminal window that it opens for you, and some are connected by clicks in Claude's own app (`docs/10-connections.md`). For those the app shows three cards first (where to go in Claude, what to switch on by name, and the question to ask Claude that proves it worked), and the tile is finished by you pressing Done, because a connection made inside Claude can only be seen from inside Claude.
 - If nothing is waiting, it says so, and its button opens Claude.
 
-A skill Claude has written for you appears as a tile too. Pressing Add copies it to where Claude keeps its skills; an older copy is moved to `~/.config/moblee/backups/`. The app reads a small list in your wiki, `.moblee/requests.json`, and never writes to your wiki.
+A skill Claude has written for you appears as a tile too. Pressing Add copies it to where Claude keeps its skills; an older copy is moved to `~/.config/moblee/backups/`. The app reads a small list in your wiki, `.moblee/requests.json`.
+
+**What the app writes into your wiki, and when.** It used to write nothing at all, and that is no longer true, so here is the whole of it. It never touches a page you or your assistant wrote, and it never deletes anything. It writes only into the two folders meant for things arriving: a file you drop on Moblee goes into `raw/` (v0.9.5), and the report from **Check my wiki** goes into `raw/` as well (v0.9.6). It also keeps its own small notes in the hidden `.moblee/` folder. That is all. Everything else — building the wiki, updating it, repairing it — is done by running the pack's own scripts, the same ones a Terminal user runs.
 
 ## What the companion does over the first weeks
 
@@ -41,6 +43,42 @@ Tell your assistant "something is wrong". It does not guess or start repairing. 
 
 If no entry fits, your assistant offers to write a report for whoever helps you with Moblee. It goes to `outputs/` in your wiki as `moblee-report-<date>.md`. It holds the state of the setup and nothing from your pages: no names, no page titles, and your home folder written as `~`. Your assistant shows you what it says before you send it.
 
+## When somebody is helping you: the health card
+
+Most people have somebody who is good with computers: a relative, a neighbour, a friend. That person does not want to read forty findings, and you may not want them reading your wiki. So the check-up can print one screen for them instead. Say "somebody is helping me" and your assistant offers it, or run it yourself:
+
+```bash
+python3 "<moblee folder>/scripts/moblee-doctor.py" --card
+```
+
+One screen, and nothing else on it: whether your wiki is healthy, what is wrong with the worst first and one line each, and what to do next. Beside each line is a number, and that is the entry in the field guide that explains it, so your helper can look it up or ask your assistant to read it out. If more is wrong than fits, the card says how many it has not shown and that the full check-up lists every one.
+
+**It is safe to show anybody.** It carries the same care the report does: your home folder written as `~`, your wiki's folder written as `<wiki>`, no page of your wiki named, nothing you have written on it, and no secret or any part of one. Where the check-up has found something in a page that looks like a secret, the card counts them and never says which page, because the name of a page is something you wrote.
+
+**It says what could not be checked.** Some things cannot be seen from where the check-up stands, and those get a section of their own. A card that quietly left them out would tell your helper your wiki was healthy when nothing had looked, so it never calls a wiki healthy while anything is unchecked.
+
+To keep a copy, or to hand one over, add a name for it:
+
+```bash
+python3 "<moblee folder>/scripts/moblee-doctor.py" --card --card-file ~/Desktop/health-card.txt
+```
+
+That writes the card and changes nothing else. It will replace an earlier card of the same name; if there is a file of that name that is not a health card, Moblee leaves it exactly as it is and says so.
+
+## Checking your wiki yourself: "Check my wiki"
+
+From v0.9.6 the Moblee app has a **Check my wiki** button in the corner of its home screen. Press it and the app runs the same check-up for you. You type nothing, you answer no permission prompts, and you do not have to ask your assistant. It takes a few seconds, and it changes nothing in your wiki.
+
+You then see the health card on screen, at a size you can read across a room, with a listen button beside it. And the app saves a report into your wiki's `raw/` folder. Press **Show me the file** under the card and that folder opens with the report picked out, so you do not have to go looking for it. **Send that file to whoever looks after Moblee for you.** Its name begins `clinic-report-` and carries the day it was made. If a report of that name is already there, the new one is given a number rather than written over the old one.
+
+The report carries the same care as everything else Moblee writes for somebody else to read: your home folder as `~`, your wiki's folder as `<wiki>`, no page of your wiki named, and no secret or any part of one. What it does carry is your name, counts, dates, and the health card word for word.
+
+Two things it cannot do, and says so on the report rather than leaving you to wonder. It cannot ask you the two questions a person would have asked, so that part of the report says plainly that nobody was asked and puts nothing in their place; if you want to add your answers, tell your assistant "add my answers to the clinic report in raw". And it lists what needs attention rather than every single line the check-up looked at, because the card is one screen; your assistant can print the whole of it.
+
+If the check-up cannot run at all — this Moblee has no copy of it, it stops with an error, your Mac's delete guard refuses it, or it is still going after a minute and a half and Moblee stops it — you are told which of those happened, told that nothing in your wiki has changed, and a report saying exactly that is still saved, so the person helping you learns that the check-up itself is the thing that is broken.
+
+The button is greyed out while a wiki is being made, updated or repaired, and while a dropped file is still being copied in: a check-up of a wiki that is being written to at that moment would describe neither the wiki before nor the wiki after.
+
 ## What neither of them will ever do
 
-Your assistant never runs an installer and never edits its own settings or skills folder. If you ask it to, it explains that these are yours to do. The app never writes to your wiki, and it adds only what you pressed a button for. Neither deletes anything: what is replaced is moved to a backups folder. Neither buys anything. Neither asks you to paste a file into your assistant as instructions.
+Your assistant never runs an installer and never edits its own settings or skills folder. If you ask it to, it explains that these are yours to do. The app writes into your wiki only where something is arriving — a file you dropped, a check-up report — and never into a page you or your assistant wrote; it adds only what you pressed a button for. Neither deletes anything: what is replaced is moved to a backups folder. Neither buys anything. Neither asks you to paste a file into your assistant as instructions.

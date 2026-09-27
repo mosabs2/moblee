@@ -12,7 +12,13 @@ The Karpathy pattern rests on four files, each with one job. `CLAUDE.md` is the 
 
 The templates come with opinionated defaults (British English, paragraph-first prose, no em dashes, dated absolute references, structured ingest workflows), and you can keep, change or strip any of them. `CLAUDE.md` is the source of truth for your conventions; once it is installed in your vault, you own it.
 
-**New in v0.9.3.** **The app says when a newer Moblee is out.** Open it on a wiki you already have and, if a newer version has been published, one quiet line at the bottom of the home screen says so, with Download and Not now. It looks when you open it (and not again that day once it has an answer), never during an install, downloads and runs nothing by itself, sends nothing about you, and shows nothing at all if it cannot reach GitHub. You still download and open the new version yourself, as before. Details in `CHANGELOG.md`.
+**New in v0.9.6.** **Seeing what a wiki is, and checking your own.** Before you build a wiki, you can read one: a small example wiki, made up from beginning to end, opens inside Moblee, and clicking through it answers "what is a wiki for" better than any explanation. And there is a **Check my wiki** button on the app's home screen. Press it and Moblee looks over your wiki, shows you one card saying whether it is healthy and what to look at, and saves a report into your wiki's inbox, and one more press opens the folder with the file picked out, ready to send to whoever looks after Moblee for you. You type nothing and answer no prompts. The check-up can also print that same one-screen **health card** for a relative or friend who is helping you — safe to show anybody, with no page of your wiki named and no secret on it. Details in `CHANGELOG.md`.
+
+**From v0.9.5.** **Something you will actually use.** Drag a file, a photo or a piece of text onto Moblee's window, or onto its icon in the Dock, and it lands in your wiki's inbox without your having to find the wiki folder in Finder. Moblee copies it: what you dropped stays exactly where it was, and nothing is ever written over. It tells you on screen what went in and what did not. And there is now a listen button beside every sentence the app shows, not just the big one at the top, in the Mac's own voices, with your own name read in the voice its letters call for. Details in `CHANGELOG.md`.
+
+**From v0.9.4.** **The things owners actually ran into.** The rules file your assistant reads at the start of every session is less than half as long, so more of each session goes on your work and less on reading; the rule to save your changes at the end of every piece of work is now written so it cannot be missed, and so is the rule to write summaries in words a person can read once and understand. The check-up looks through your wiki for passwords, keys and wallet recovery phrases somebody has left in a page, tells you the page and the line and never the secret itself, and changes nothing. The window can be made bigger and so can the words, and everything in the app can be reached from the keyboard. After the Saturday check you are offered one short page about your week: what the wiki learned, what is unresolved, three suggestions, and one line when the week produced nothing. Details in `CHANGELOG.md`.
+
+**From v0.9.3.** **The app says when a newer Moblee is out.** Open it on a wiki you already have and, if a newer version has been published, one quiet line at the bottom of the home screen says so, with Download and Not now. It looks when you open it (and not again that day once it has an answer), never during an install, downloads and runs nothing by itself, sends nothing about you, and shows nothing at all if it cannot reach GitHub. You still download and open the new version yourself, as before. Details in `CHANGELOG.md`.
 
 **From v0.9.2.** **Moblee stops telling you things that are not true.** A four-part review of the pack found the same fault in nineteen places: an update or an install reporting a finish over work it had not done, a check-up passing on a comparison it had not made, a banner naming a folder that held nothing. All of them are fixed, the delete guard is rewritten, and the two end-to-end test rigs that now stand behind the installer and the updater were written because every one of those faults had been found by an owner rather than by Moblee. v0.9.1 was built and held back, so nothing shipped under that number. Details in `CHANGELOG.md`.
 
@@ -88,6 +94,7 @@ moblee/
 │       ├── news-brief/        ← a news brief, every item confirmed by a second source
 │       ├── trips/             ← a page per trip, with legs and day plans
 │       └── x-capture/         ← saves X posts into raw/ through Chrome
+├── example-wiki/              ← a small made-up wiki a new owner can read before building their own; opens inside the app (v0.9.6)
 ├── safety/                    ← the delete guard and the starter permission rules (v0.5; not optional)
 ├── memory-seed/               ← four starting memories for your Claude (v0.5); for ChatGPT they go on a wiki page
 ├── clinic/                    ← tools for whoever maintains Moblee for other people (v0.5)
@@ -104,6 +111,7 @@ moblee/
 │   ├── install-learning-path.py ← adds the optional learning path to a vault (v0.5.1)
 │   ├── vault.sh               ← the `vault` session-start function (added to ~/.zshrc by the checklist)
 │   ├── lint-v2.py, vault-gate.py, log-append.py, vault-orient-preflight.sh, patch-claude-md.py, seed-memory.py
+│   ├── weekly-card.py         ← gathers the week's facts for the weekly card; reads only, writes nothing (v0.9.4)
 │   ├── hooks/                 ← the git hooks a vault runs (commit gate), wired by core.hooksPath
 │   ├── cadence/               ← the weekly lint runner and its launchd template
 │   └── wiki-galaxy/           ← the galaxy builder and viewer
@@ -121,7 +129,7 @@ moblee/
 │   └── 11-the-app-and-the-companion.md  ← the Moblee app and the companion skill, explained together (v0.8.1)
 ├── archive/
 │   └── windows/               ← retired files, kept but not maintained
-└── CHANGELOG.md               ← release notes, v0.1 to v0.9.2
+└── CHANGELOG.md               ← release notes, v0.1 to v0.9.4
 ```
 
 ## License

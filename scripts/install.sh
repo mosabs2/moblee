@@ -490,7 +490,7 @@ step_ok folder
 step_start tools
 echo "Copying vault tooling (lint, commit gate, preflight, log appender, galaxy, dashboard)..."
 mkdir -p "$VAULT_LOCATION/scripts"
-for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh log-append.py; do
+for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh log-append.py weekly-card.py; do
   if [[ -f "$SCRIPT_DIR/$tool" ]]; then
     cp "$SCRIPT_DIR/$tool" "$VAULT_LOCATION/scripts/$tool"
   fi
@@ -719,7 +719,13 @@ step_start finish
   # (v0.9) AGENTS.md sits beside CLAUDE.md: whichever of the two exists is
   # staged (-L as well, since AGENTS.md may be a link), and the page the
   # starting memories are written to for ChatGPT goes in with them.
-  for p in .claude .gitignore VERSION CLAUDE.md AGENTS.md scripts wiki/Index.md "wiki/Wiki Operations/Moblee Learning Path.md" "wiki/Wiki Operations/Assistant Memory.md"; do
+  # (v0.9.4) .moblee/seed-state.json is the record of which starting notes were
+  # given and which the owner has since taken out, so that an update never puts
+  # a removed one back. It is a fact about the wiki, not about this Mac, so it
+  # travels with the wiki and its history is kept; the updater stages it too.
+  # Only that one file: .moblee/requests.json beside it is a queue the app
+  # empties, and is ignored rather than committed.
+  for p in .claude .gitignore VERSION CLAUDE.md AGENTS.md scripts wiki/Index.md "wiki/Wiki Operations/Moblee Learning Path.md" "wiki/Wiki Operations/Assistant Memory.md" .moblee/seed-state.json; do
     if [[ -e "$p" || -L "$p" ]]; then git add -A -- "$p" 2>/dev/null || true; fi
   done
   if ! git diff --cached --quiet 2>/dev/null; then

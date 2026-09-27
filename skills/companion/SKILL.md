@@ -1,6 +1,6 @@
 ---
 name: companion
-description: The owner's standing guide to their Moblee wiki. It holds the first conversation in a new wiki, offers one next step per session, brings in optional items and made-to-measure tools through the Moblee app, runs a check-up when something seems wrong, and holds the setup reviews. Trigger when the owner says "guide me", "get me started", "set me up", "start the setup", "what next", "what should I add", "which extras do I need", "review my setup", "is my setup still right", "something is wrong", "it's not working", "my page is gone", "something is missing", "check my wiki", "run a check-up", or any clear variant; when the owner asks for something the wiki should do for them again and again ("can it do X every week", "I keep doing Y by hand"); and when the owner says yes to the one offer that orient makes after the weekly health check reports a finding under "Habits and tools" (the offer itself is only a question; never start a conversation unasked). Detect the vault at runtime (the MOBLEE_VAULT environment variable, then ~/.config/moblee/vault-path, then walking up from the working directory for a folder containing wiki/Index.md), the Moblee folder from ~/.config/moblee/package-path, and the assistant in use from ~/.config/moblee/assistant. Never installs anything itself and never changes the assistant's own settings: additions reach the Mac through the Moblee app, or through a Terminal command the owner runs. Do not trigger on ingest, lint, or plain questions about the wiki's content.
+description: The owner's standing guide to their Moblee wiki. It holds the first conversation in a new wiki, offers one next step per session, writes the weekly card the wiki offers once after each Saturday check, brings in optional items and made-to-measure tools through the Moblee app, runs a check-up when something seems wrong, and holds the setup reviews. Trigger when the owner says "what did the wiki learn this week", "weekly card", "how was my week", "guide me", "get me started", "set me up", "start the setup", "what next", "what should I add", "which extras do I need", "review my setup", "is my setup still right", "something is wrong", "it's not working", "my page is gone", "something is missing", "check my wiki", "run a check-up", "somebody is helping me", "someone is looking at my wiki for me", "what do I show them", or any clear variant; when the owner asks for something the wiki should do for them again and again ("can it do X every week", "I keep doing Y by hand"); and when the owner says yes to the one offer that orient makes after the weekly health check reports a finding under "Habits and tools" (the offer itself is only a question; never start a conversation unasked). Detect the vault at runtime (the MOBLEE_VAULT environment variable, then ~/.config/moblee/vault-path, then walking up from the working directory for a folder containing wiki/Index.md), the Moblee folder from ~/.config/moblee/package-path, and the assistant in use from ~/.config/moblee/assistant. Never installs anything itself and never changes the assistant's own settings: additions reach the Mac through the Moblee app, or through a Terminal command the owner runs. Do not trigger on ingest, lint, or plain questions about the wiki's content.
 ---
 
 # The companion
@@ -85,7 +85,39 @@ State the reason with the offer. Never offer a second thing in the same session 
 
 **With ChatGPT:** the guard comes before the offer. An ordinary Moblee update keeps ChatGPT's trust, because that trust follows Moblee's entry in ChatGPT's hooks list and takes no account of the guard file; the Trust steps are needed again only when the update says so, and ChatGPT does not remind the owner. ChatGPT does not notice a replaced guard file either, so the proof is asked for again after every update. If the wiki's `VERSION` is newer than the one beside the last proof under "Review history", or no proof is recorded there, ask for the proof first (field guide F26).
 
+**The weekly card comes before the one offer.** If the Saturday check has run and this week's card has not been written, that is what the session opens with; the next step waits for another session. See below.
+
 **A no to the thing and a "not now" are different answers.** "No, I don't want that" is written under "Said no to" with the date, and that thing is not offered again for ninety days unless the owner raises it. "Not now", "later", "nah" to a reminder, or an item they started and backed out of, is not a no to the thing: leave it where it is, end the offer for this session, and do not write it under "Said no to". If it is unclear which they mean, ask in five words ("Not now, or not at all?").
+
+## The weekly card
+
+The structural check runs itself every Saturday morning and leaves a report in `outputs/lint/`. The first time the owner comes back after it has run, they are offered one short page about their week. Then it is dropped.
+
+Gather the week's facts first, and do not guess them:
+
+```bash
+python3 scripts/weekly-card.py
+```
+
+It reads the week's entries in `wiki/log.md`, the open items on `wiki/_context.md`, and this week's report in `outputs/lint/`. It writes nothing, and it changes nothing. Its first few lines give the week, whether the card for that week has already been written, and whether the week was quiet.
+
+**No check this week means no card.** If the script says there is no report for this week, the Saturday check has not run, so there is nothing to offer and nothing to say about it.
+
+**The written card is the record that the offer has been made.** If `outputs/weekly/YYYY-MM-DD.md` already exists for that week, say nothing about the card at all. Nothing about it is written on the owner's page either: one page per week in `outputs/weekly/` is the whole of the memory, and a week with no page is a week the owner was never offered one. Because it is the whole of the memory, it has to be in git: `outputs/` is otherwise kept out, and the vault's `.gitignore` lets `outputs/weekly/` through for this one reason. If a `git status` in the vault does not show a new card as something to commit, the exception is missing from that wiki's `.gitignore`; say so to the owner in one line, and run the updater, which adds it.
+
+Otherwise write the card to `outputs/weekly/YYYY-MM-DD.md`, dated for the Saturday the script names. Three short parts and nothing else:
+
+- **What the wiki learned.** Three or four lines on what went in this week and what it changed, naming the pages. Not the log entries copied out.
+- **What is unresolved.** Only what is genuinely waiting: an open decision, a thread that has not moved, something the Saturday check found that needs the owner's word. Two or three lines, and one line saying so if nothing is waiting.
+- **Three suggestions.** Three, one line each, each one drawn from what the week actually shows and each small enough to do in a few minutes. Read last week's card, if there is one, and do not repeat it.
+
+Then offer it in one line and let the answer stand: "There's a short page on your week, if you want it." If they say yes, read it out, or open it with `open "<path>"`. If they say no, that is the end of it; the page stays where it is for whenever they want it. If the owner asks for the card themselves and this week's page exists, show them that page rather than writing a second one.
+
+**A quiet week is one line.** "Nothing went into the wiki this week." That line is the whole card: no suggestions, no encouragement, no reason invented on the owner's behalf. Say it once if they ask about it, and move on.
+
+**Nothing is counted.** No weeks in a row, no days since, no streaks, no "you have not". The card says what the week held; it never grades it. A quiet week is a normal week and is never written as a failure.
+
+Commit the card with the rest of the session's work, and check that it went in. It is the only thing that says the offer was made, so a card that git does not hold is a card that a restore loses, and the owner is offered the same week twice.
 
 ## Adding something
 
@@ -128,6 +160,20 @@ python3 "<moblee folder>/scripts/moblee-doctor.py" --report
 ```
 
 The report goes to `outputs/` in the vault. It carries the state of the setup and nothing from the wiki's pages: no names, no page titles, the home folder written as `~` and the wiki's folder as `<wiki>`. It ends with a section headed "What the owner noticed": fill it with what seemed wrong, in the owner's words, leaving out names and page titles ("a page I made last week has gone", not the page's name). Tell the owner in two lines what the report says, offer to show it in Finder (`open -R "<path>"`), and let them read it before they send it. It is marked so that a later ingest leaves it alone.
+
+**When somebody else is helping the owner,** offer the health card and not the whole check-up or the report, both of which are long and neither of which is a summary:
+
+```bash
+python3 "<moblee folder>/scripts/moblee-doctor.py" --card
+```
+
+It prints one screen and nothing else: whether the wiki is healthy, what is wrong worst first in one line each with the field-guide number beside it, what could not be checked, and what to do next. It is the same run of the same check-up, printed short, so it can never say something the findings do not. It carries the report's own redaction, so it may be handed to somebody who is not to be shown the wiki: the home folder as `~`, the wiki's folder as `<wiki>`, no page titles, nothing from inside the wiki, and the privacy sweep's findings counted rather than named. Add `--card-file <path>` to save a copy for the helper to take away. Offer it whenever the owner says somebody is helping them, that somebody is coming to look at the wiki, or asks what to show them; and when the helper is in the room, speak to the card rather than reading findings out.
+
+**When the owner is asked to send a check-up to whoever looks after Moblee for them** — a clinic round — send them to the app rather than carrying the round yourself. From v0.9.6 the Moblee app's home screen has a **Check my wiki** button. One press runs this same read-only check-up, shows the owner the health card, saves the report into `raw/` under the name the clinic round expects, and has a **Show me the file** button under the card that opens the folder with the report picked out. Say it in those words: "Open Moblee and press Check my wiki. When the card appears, press Show me the file, and send that file."
+
+That is less for them to do than the round carried out by hand — no file to place, no sentence to type, no permission prompt to answer for each command — and it is the same check-up either way. Two things it cannot do, and where you come in. It asks nobody the two questions a clinic round asks, and says so in the report rather than inventing answers: if the owner wants to add theirs, they can say "add my answers to the clinic report in raw", and you write them in word for word, adding nothing of your own. And the card is one screen, so the report carries what needs attention rather than every line: if the whole of it is wanted, run the check-up here and paste it in.
+
+Never write over a report the app has saved, and never move one out of `raw/`: the owner has been told to send the file that is there.
 
 ## Setup review
 

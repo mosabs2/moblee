@@ -33,7 +33,15 @@ enum Placement {
         case alreadyThere(URL)      // the same Moblee, or a newer one, was already there: that one is used
     }
 
-    enum Failure: Error { case copyIncomplete, somethingElseThere, anotherMobleeIsOpen, markNotCleared }
+    enum Failure: Error, CaseIterable {
+        case copyIncomplete, somethingElseThere, anotherMobleeIsOpen, markNotCleared
+        /// The copy at the destination was asked to quit and said no. It only
+        /// ever says no while it is building, updating or repairing a wiki,
+        /// putting something dropped on it into one, or moving itself
+        /// (`AppDelegate.busyWithWork`), so the owner is told that, and not to
+        /// go and close it by hand in the middle of it.
+        case otherMobleeIsBusy
+    }
 
     private static func practice(_ flag: String) -> String? {
         let args = Practice.args
@@ -149,7 +157,58 @@ enum Placement {
         try fm.moveItem(at: url, to: bin.appendingPathComponent("\(name)-\(UUID().uuidString.prefix(8)).app"))
     }
 
-    static func move(_ plan: Plan) throws -> Outcome {
+    /// The copies of Moblee open right now that are the one at `destination`,
+    /// this process excepted. Judged by where each is running FROM, as
+    /// `reopen` already judges it: an owner may have a second Moblee open in
+    /// Downloads or on a disk image, and that one is not in the way of a move
+    /// into Applications. Before v0.9.4 the filter was on the bundle
+    /// identifier alone, so any second Moblee anywhere refused the move.
+    static func others(at destination: URL) -> [NSRunningApplication] {
+        let me = ProcessInfo.processInfo.processIdentifier
+        let there = destination.resolvingSymlinksInPath().path
+        return NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "")
+            .filter { $0.processIdentifier != me && $0.bundleURL?.resolvingSymlinksInPath().path == there }
+    }
+
+    /// How long the copy at the destination is given to close itself.
+    static let quitWait: TimeInterval = 8
+
+    /// Asks the older copy to quit, the ordinary way one Mac app asks another
+    /// (`terminate()` sends the Quit Apple event), and waits a little for it to
+    /// go. That way round it gets to save what it is doing and, more to the
+    /// point, gets to REFUSE: a Moblee in the middle of building, updating or
+    /// repairing a wiki says no (`AppDelegate.busyWithWork`), and must not be
+    /// killed from under an owner's install or repair. Nothing is forced; if it
+    /// will not go, the move does not happen and the screen says which of the
+    /// two it was.
+    static func askToQuit(_ apps: [NSRunningApplication], wait: TimeInterval = quitWait) -> Failure? {
+        var sent = true
+        for app in apps where !app.isTerminated {
+            if !app.terminate() { sent = false }
+        }
+        let by = Date().addingTimeInterval(wait)
+        while Date() < by, apps.contains(where: { !$0.isTerminated }) {
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+        guard apps.contains(where: { !$0.isTerminated }) else { return nil }
+        return refusal(requestsSent: sent)
+    }
+
+    /// What it means that the other copy is still open after being asked. A
+    /// Moblee says no to a quit in one case only: it is building, updating or
+    /// repairing a wiki, or moving itself (`AppDelegate.busyWithWork`). So a
+    /// request that was taken and not acted on means work in progress, and the
+    /// owner is told THAT, rather than being sent to close an app in the middle
+    /// of their own install. A request that could not be sent at all says
+    /// nothing more than "something is open".
+    static func refusal(requestsSent: Bool) -> Failure {
+        requestsSent ? .otherMobleeIsBusy : .anotherMobleeIsOpen
+    }
+
+    /// `asking` is called, once, just before the older copy at the destination
+    /// is asked to quit, so the screen can say what is happening. It is called
+    /// on whichever thread the move is running on.
+    static func move(_ plan: Plan, asking: @escaping () -> Void = {}) throws -> Outcome {
         let fm = FileManager.default
         let from = running
         let first = original(of: from)                  // what the owner opened, if it can be told
@@ -168,11 +227,15 @@ enum Placement {
             // The same Moblee or a newer one is already in place (an old zip
             // opened again): that one is used, and nothing is copied over it.
             if !newer(ourFullVersion, than: fullVersion(of: to)) { return .alreadyThere(to) }
-            // An older one that is open right now cannot be moved from under itself.
-            let me = ProcessInfo.processInfo.processIdentifier
-            let others = NSRunningApplication.runningApplications(withBundleIdentifier: mine ?? "")
-                .filter { $0.processIdentifier != me }
-            guard others.isEmpty else { throw Failure.anotherMobleeIsOpen }
+            // An older one that is open right now cannot be moved from under
+            // itself, so it is asked to close first. Only the copy at the
+            // destination is in the way; another Moblee open somewhere else is
+            // left alone.
+            let inTheWay = others(at: to)
+            if !inTheWay.isEmpty {
+                asking()
+                if let refused = askToQuit(inTheWay) { throw refused }
+            }
         }
 
         try fm.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -270,31 +333,60 @@ enum Placement {
 
 /// "Moblee should live in Applications." One button.
 struct PlacementScreen: View {
+    /// Drawn again when the owner presses "Bigger text". (v0.9.4)
+    @ObservedObject private var textSize = TextSize.shared
     @EnvironmentObject var flow: Flow
-    enum Stage { case asking, moving, failed, movedButNotOpened }
-    @State private var stage: Stage = .asking
+    enum Stage { case asking, moving, askingTheOtherOne, failed, movedButNotOpened }
+    @State private var stage: Stage
     @State private var why: Placement.Failure?
+
+    /// `start` and `why` are only ever set by the picture-file drawing, which
+    /// has no way to reach these states otherwise: the move happens on the
+    /// Mac's own files. The same treatment `TrustScreen` has.
+    init(start: Stage = .asking, why: Placement.Failure? = nil) {
+        _stage = State(initialValue: start)
+        _why = State(initialValue: why)
+    }
+
+    static func sentence(failed why: Placement.Failure?) -> String {
+        // One sentence per reason: the general advice, given for the wrong
+        // reason, would have told an owner to drag Moblee over some other
+        // app that merely shares its name.
+        switch why {
+        case .anotherMobleeIsOpen: return "The Moblee in Applications would not close. Close it yourself, then open this one again."
+        // (v0.9.4) A repair now refuses a quit as an install does, so this
+        // sentence, which is what the owner is shown when the refusal comes
+        // back, has to be true of a repair too.
+        // (v0.9.5) And of a drop, which refuses a quit for the same reason:
+        // something is being written into the wiki this moment. The four are no
+        // longer named one by one — "making, updating or repairing a wiki" left
+        // a drop out, and naming a fourth would make a sentence nobody reads to
+        // the end. "Busy with your wiki" is true of all four and is what the
+        // owner needs to know.
+        case .otherMobleeIsBusy: return "The Moblee in Applications is busy with your wiki. Let it finish, then open this one again."
+        case .somethingElseThere: return "Something else called Moblee is already in Applications. Moblee will work from here."
+        default: return "Moblee could not move itself. Nothing was changed. Drag it into Applications in Finder."
+        }
+    }
 
     private var sentence: String {
         switch stage {
         case .asking, .moving: return "Moblee should live in Applications, so you can always find it."
-        case .failed:
-            // One sentence per reason: the general advice, given for the wrong
-            // reason, would have told an owner to drag Moblee over some other
-            // app that merely shares its name.
-            switch why {
-            case .anotherMobleeIsOpen: return "Another Moblee is open. Close it, then open this one again."
-            case .somethingElseThere: return "Something else called Moblee is already in Applications. Moblee will work from here."
-            default: return "Moblee could not move itself. Nothing was changed. Drag it into Applications in Finder."
-            }
+        case .askingTheOtherOne: return "Asking the Moblee in Applications to close…"
+        case .failed: return Self.sentence(failed: why)
         case .movedButNotOpened: return "Moblee is now in Applications. Open it from there next time."
         }
     }
 
+    /// The move has not been made or refused yet: the big button still offers it.
+    private var beforeTheMove: Bool { stage == .asking || stage == .moving || stage == .askingTheOtherOne }
+    /// The move is under way, so nothing may be pressed.
+    private var busy: Bool { stage == .moving || stage == .askingTheOtherOne }
+
     var body: some View {
         ScreenFrame(sentence: sentence,
-                    buttonTitle: stage == .asking || stage == .moving ? "Move it there" : "Carry on",
-                    buttonEnabled: stage != .moving, showsBack: false,
+                    buttonTitle: beforeTheMove ? "Move it there" : "Carry on",
+                    buttonEnabled: !busy, showsBack: false,
                     quietTitle: stage == .asking ? "Not now" : nil,
                     quietAction: stage == .asking ? { flow.moveSettled() } : nil,
                     action: {
@@ -303,20 +395,30 @@ struct PlacementScreen: View {
                         AppDelegate.moving = true      // quitting half-way through would leave a half-made copy
                         let plan = Placement.plan()
                         DispatchQueue.global(qos: .userInitiated).async {
-                            let result = Result { try Placement.move(plan) }
+                            let result = Result {
+                                try Placement.move(plan, asking: {
+                                    DispatchQueue.main.async {
+                                        MainActor.assumeIsolated { if stage == .moving { stage = .askingTheOtherOne } }
+                                    }
+                                })
+                            }
                             DispatchQueue.main.async { MainActor.assumeIsolated { finished(result, plan) } }
                         }
                     }) {
-            HStack(spacing: 26) {
+            HStack(spacing: Theme.pt(26)) {
                 Image(systemName: "books.vertical.fill")
-                    .font(.system(size: 76, weight: .medium)).foregroundStyle(Theme.accent)
-                Image(systemName: "arrow.right")
-                    .font(.system(size: 40, weight: .semibold)).foregroundStyle(.secondary)
-                VStack(spacing: 6) {
+                    .font(Theme.font(76, .medium, .default)).foregroundStyle(Theme.accent)
+                // (v0.9.4) The arrow points from Moblee to where it is going,
+                // and the three sit in the order they are read, so both turn
+                // round together when the layout is mirrored. `arrow.right`
+                // went on pointing right there, back the way it came.
+                Image(systemName: Layout.onwardsSymbol)
+                    .font(Theme.font(40, .semibold, .default)).foregroundStyle(.secondary)
+                VStack(spacing: Theme.pt(6)) {
                     Image(systemName: stage == .failed ? "folder.fill.badge.questionmark" : "folder.fill")
-                        .font(.system(size: 96)).foregroundStyle(stage == .failed ? Theme.waiting : Theme.accent)
+                        .font(Theme.font(96, .regular, .default)).foregroundStyle(stage == .failed ? Theme.waiting : Theme.accent)
                     Text("Applications")
-                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                        .font(Theme.font(17, .semibold))
                 }
             }
             .accessibilityHidden(true)

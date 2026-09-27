@@ -43,6 +43,7 @@ FILES = [
     "scripts/lint-v2.py",
     "scripts/vault-gate.py",
     "scripts/log-append.py",
+    "scripts/weekly-card.py",
     "scripts/vault-orient-preflight.sh",
     "scripts/patch-claude-md.py",
     "scripts/moblee-setup.py",
@@ -54,6 +55,10 @@ FILES = [
     "scripts/seed-memory.py",
     "scripts/add-identity.py",
     "scripts/add-habits-page.py",
+    # (v0.9.4) The four reference pages the shortened rules file links to, and
+    # the section engine that may only then take those sections out of it.
+    "scripts/add-reference-pages.py",
+    "scripts/test-patch-claude-md.py",
     "scripts/vault.sh",
     "scripts/hooks/pre-commit",
     "scripts/hooks/post-commit",

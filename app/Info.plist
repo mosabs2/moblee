@@ -14,10 +14,48 @@
 	<string>Moblee</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<!-- (v0.9.5) Moblee will take files dropped on its icon in the Dock, so
+	     that something an owner has saved can reach their wiki's inbox without
+	     them finding the wiki folder in Finder. macOS will not let the Dock
+	     icon accept a drop at all unless the app declares a type here, so this
+	     is the smallest declaration that makes the drop possible:
+
+	       LSItemContentTypes is public.item, which is anything at all. It has
+	       to be, because the whole point is a scan, a PDF, a photo or a voice
+	       memo, and naming a list would silently refuse whatever was left off it.
+
+	       LSHandlerRank is None, which is what keeps that broad type harmless.
+	       "None" says Moblee is not a handler for the type: it never becomes
+	       the application a file opens in, it is never made the default for
+	       anything, and it is not offered as an owner in Open With. It stays
+	       eligible for a drop the owner aimed at it deliberately, and nothing
+	       else. Owner or Alternate here would have put Moblee in front of an
+	       owner double-clicking a PDF, which it cannot open and must never claim to.
+
+	       CFBundleTypeRole is Viewer because the Dock will not highlight for an
+	       app that says it does nothing with the type; nothing in Moblee views
+	       a file, and nothing in it edits or saves one.
+
+	     Nothing else in this file is changed by the drop feature. -->
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Something for your wiki</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>None</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.item</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleShortVersionString</key>
-	<string>0.9.3</string>
+	<string>0.9.6</string>
 	<key>CFBundleVersion</key>
-	<string>8</string>
+	<string>11</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
 	<key>LSMinimumSystemVersion</key>

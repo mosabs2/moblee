@@ -1,0 +1,184 @@
+{
+ "_comment": [
+  "Digests of every section body Moblee has ever shipped in the vault's rules file.",
+  "heading -> list of SHA-256 digests of the normalised body (trailing whitespace",
+  "stripped per line, runs of blank lines collapsed to one, leading and trailing",
+  "blank lines removed; the heading itself is not digested).",
+  "scripts/patch-claude-md.py replaces or drops a section only when its body",
+  "digest is in this list, so an owner's own addition is never overwritten.",
+  "GENERATED FILE. Do not edit by hand. Regenerate from the repo root with:",
+  "    python3 tools/claude-md-corpus/build-corpus.py",
+  "The key '(file preamble)' is the text above the first '## ' heading."
+ ],
+ "headings": {
+  "(file preamble)": [
+   "20621384000efad7dc347c4d85e2be41291253722298fcccab5aee999d45ae18",
+   "9901a6c8130bf17c9b667c3a9ea55fbe8536b81687c0cab4df44fa1d2137b2be",
+   "c7ed98000f50d8ee35005d61381933cd9d1e0963da5b3f6d4656ad3f8c6fcd9b",
+   "f83cfedc16e4d171486c862bdfbbe05b55439711c09088478fd0f1023a3304a8"
+  ],
+  "Added by the Moblee updater (anchor heading not found)": [
+   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "fa6c6ee28dd41102b6b499d88989fe55ba689954de07f783783e3aaf8772d91b"
+  ],
+  "Commit at the end of every piece of work": [
+   "e96e76b54346022b232271896e917a87f77e6dce3f6c244415cb7b4834814525"
+  ],
+  "Compaction discipline": [
+   "29bb551465f5c0d2e2f11a998b628c3cc3dcbaf04f71906d15f744b8a9805e16",
+   "2c33bdf8191297b960ddfd1eb33696467cade5129f435404ce05c55d36c0b7f7",
+   "2fe1b6e078d4656e7b422fb284cba8ab9739f6eabd4c59489193a4338c88e2fa"
+  ],
+  "Connected accounts and live facts": [
+   "3386f27cc8be0beba92c37fb0c49cad98896b8fb5deee9278d8d9fe10054e7bb",
+   "eaa9e6fd18d63439031a13136b1ac4be0a5014d510ee031ec5fa1ecfbec09fc3"
+  ],
+  "Daily Notes (optional layer)": [
+   "143a844523ed65cab08bcc5a225df1abd9d5f1e958fa7f69d10ed0859c76682b",
+   "9a2b7dac2d290d4ff3d3313b424bb0f931efadb84ad1e18d7b149dd4bf80bcbb"
+  ],
+  "Data freshness (volatile figures)": [
+   "f9de58a3b68968db9280bb2cb096dfe8d87f91a84b322cd6d01fdba17bbc11ab"
+  ],
+  "Domain-specific patterns": [
+   "18d508c116e4cd3f6d5ac980f0eda9dcc4e58a9f063c4a3f880ecd87638a2c95",
+   "f0abbf0947a6a405caa186364bf23522e098bcb602fe4c6066b867d2e3c219a6"
+  ],
+  "Git commit workflow": [
+   "1dfc33b3f9783c0d504132293faa7a221364194fdea0f04ea3acc6503b70a1d6",
+   "242d20982dce725e2d363461888b37e8d06df2da0fceb4834606b50a80dfc963",
+   "f94af65e9193f92825cdf28664668ebc5bb73fa914c0b43788a650aecba1bd09"
+  ],
+  "Habits and tools": [
+   "78a93221c57b57acd9328a51aa11b6f488e9c3794ceb9ae2b8c226177ea06887",
+   "8c652b1a621a77b813f1b5e35963e0d0f0851b915796f4a74af063a92294e1d6",
+   "9684d0118ce3152a2eb0e75b7ba2ac41391184b3cef66a09fa80250453c24cbf"
+  ],
+  "Hard rules": [
+   "013996a55a3101064becbb4e86141771e34bf41421dcde9f56802ba094c3da5a",
+   "02e0b9ea456a09dfc9f08dc73bacd53c61b82dc978b0ebcc9a2398197c15fe5d",
+   "0f1db66a2bda3c968e419c318184f7f4ac20780e966c8fb069213615fcffb549",
+   "139d4caa394f51d3f771e47e478cc5c0946c004f5190b3a9ce1aa01b2e3b2938",
+   "15ff32d69166ce5196e62dbabf0897465ed430620fe7d917176fbd98cd4f59cf",
+   "320c9ef873b25d2a095cce1a5d8eac2163957afd4d9f197b0873c631eb680f8c",
+   "6405202724fcb13bdbe86d0522ec45af9fe2dc277c6da609137f68128a0a8849",
+   "68009eb980bc340f0624bec9fe2c8d7940cf1e041942d89fe2a46e7885407e54",
+   "6a0b3f1c220d9761f57046bf800257f985042dc53ca433bdb72cfb0d2cceef11",
+   "75a07a0425b610d27d02cf49dd355788cb7a5031c6207da66ddae7b34c766208",
+   "9053e136791337ef57adc4e14358c59afb6400bf5ff8a495c269b7e4f09d0250",
+   "941b62b78d37e0b8bc3d868b5e4d202824b40c885d4a77c50552903f5d4daa88",
+   "a61ff84cf2e3e10aba43627a5ac3f1e84eda5e9c816f75b3b39d3b68b10602d7",
+   "dc3fa4bfac676d545bdd3b93e589f1e57999f7c06f93b6fdc0b8f8c49eac5825",
+   "e832640e4f63cde3d0edb776421ff4e8e7be3242735cf857e2c3fbab37439283"
+  ],
+  "House style": [
+   "49324eb026ead0ddae335726ff84835bb8c94210e27fac6bf4da113fc8e472f6",
+   "b540074f55cfc1319986937dd20d4508f5b6d6ded9a20cde134eaba297a3aeb6",
+   "fb920a3f889bda91313b4902827de8b48d57e89ea2a975a65fc06486e36ec613",
+   "feef0e4f20e304ffb1d8d3c97946f65de04fc34e9494ab41bddccc7e479010c2"
+  ],
+  "Index philosophy": [
+   "41f3942a20ae459d953314c7f7cf618151d904f1219cbadd17dc44ff03db59df",
+   "5098fd68ba437133fc2e9837768b889e0aae16a66e57594e10cd9b04ceea4bd9"
+  ],
+  "Log timestamps and session-metadata convention": [
+   "bc709a42d75e32fb4cbfbacac24429e115ebed1067ef513312882bc7e3c21e59",
+   "c1deeec3dd45338b878f33b895a9501deb24f2145cf0ad2bc850a25122c57ae0",
+   "ffce9304b6ff7807beba32aa61a40dce04219d533bb526141cb779caf1f2197c"
+  ],
+  "Plain words": [
+   "f4f352d63e75f297144b7f986604ddb25ef1ba6c05d6c8ebcd7224bc7bdd0489"
+  ],
+  "Readwise conventions": [
+   "721bdadbcbf062f244a678038f07ac915917fbf86b4680ba861833f6137d431f",
+   "e442635f68d933c1ca71e68640bcb5fa6113ee26b71f5367c4ee6cede5d9b1b5"
+  ],
+  "Session opener": [
+   "13a4b6bcea0a44e8f9df3041b62b9678fe5806c4df53eae8d912a92b20aeb74c",
+   "33efe14007d51a47421a3e7519964b825194336f04a2560c398bb76c8342cefd",
+   "494664a971913af3ab90171d4d8d5799568fd7e69514fb1d256035eb763e32bb",
+   "85d797b34e42cf50cfd5f5ba849052c698786fed6317d5388d40257c1b3565ad",
+   "8a7b97b48329be380e576bccca3ef2542427456047625e800819742be6ac139d",
+   "b9b014d09d8cbb4ef48cd581f7724ee8e95e2dc3055d96f931f3a33ab25072e7",
+   "bdb779e3502fa6bc518343bf0fcc6e0290c034008761566ec99dffaa9c9cfa8e"
+  ],
+  "Source attribution and file movement": [
+   "ac5d0bea428f295a7cd200a9c049a0820f633d4e773b9406038136ab46c89fe7"
+  ],
+  "Style migration": [
+   "15dd685deec7b4d233f8f34ed6ecc01ca5491b04efb00c3b1e5a70a1894b4dfb",
+   "2150cc3690af971e709aa1bcb08efb025a96f151abf4f536355d28f3abe82c30"
+  ],
+  "The \"orient\" command": [
+   "60326b05c6b9f496ba835fb5b5ec85eaef83e52e311cc172e9652548780706b7",
+   "6c3bdf6a4862d0fdd83fdce581f87b864ff7f18dab4983e25312c20d40060bdb",
+   "d81247afddfe8239ee74241460f16c828ca19de8c447898a84b0f8d5cd56eb1b",
+   "ef8ec00925fe4996e12c8a5df0a1dba5cadd53eab11f3a2b1c67cb656b6171de",
+   "fc65d6a2dc7e2c2780aa3d72ae7f3069774a86d38adc7a136211cb77feb4cff6"
+  ],
+  "The companion": [
+   "207fc3a79061052ad0d111fe00d0b04e26d501a3ff8026020b385203b97f177b",
+   "4183834e054e763e0cfca05de844cecb3d24bfcfc1b9a3e7ff11cbef823ab51e",
+   "9d34e4f17c1fbb27c94bd04be0acc5f292c98c26fbc9a9a03dc731326dca198b",
+   "b1d8015bf7d75f20cbfe2f2c0f96dc69e7251980b267a83d3fbba085a45b6cc2",
+   "cff3007610a7d475ff3bde32cf57d46c8b8116d61e3b77557e9cc75d3ff6dd32",
+   "de1d50cb41a3b921f736ae088c597705e288639d87081f4915431aeae7b78b57"
+  ],
+  "The three core operations": [
+   "162a89e521205ae13108c0c6fbaf65fc4722e7e8a9ff09f4b78dfc757acf8487",
+   "198d34396ee4ec71d803171abcadc5e986e06239678427f56a8a1aec16326dfb",
+   "199f55409907f64b1765e825f7fe87f488ee8e8bb11f26dc42fcb3240190c717",
+   "1e54b861125c942d59c6d76b4680d7d9aceb4700e953404df1c16f6d0d2db662",
+   "25ae8c032494dfcc135465afc45314f0e195d6fa46f0cb85a4ef0fe8ca72cb07",
+   "365e0c42d1fca3119c91059affe00d88f7c5c777cdd1eaba899a4c93d022c2b7",
+   "4b2b3347c60332ccf99d6f33ddf52696412cab324b16048c2042f95bf3e55987",
+   "4f91239e6c22dabf47e65aa86acef305941b61f3089ee71f5fbaa9de348f8616",
+   "523335dc7e733cbe7363f5638bd8ffa6d249bb07dc79c2c05671b64c5bfce45a",
+   "616a9c952c2f63dfbf6afdb8ca6b66ded9ad92b97209295f4081a84ae326d80f",
+   "64ac5b60f85125763b74cdb222ed253ddc8382e501410e8f43aa364794802687",
+   "8479b456c6d48f325948bada2c0f6eafaa213e91a91d4e28bfaff9e87b917a8e",
+   "91b02459bd7702ac1646f8c1f023e3ab5ce7c0fea2aa5cd679c99d9059037d32",
+   "954e50812c70ebf79420c6f5e17e335604e0d0fbb002b7e9c98714d7fcb83c7a",
+   "a15ebac4175d2c6685fc94642ee2e0d38096d64fea7a60c0bce34cb3b0fd7d9b",
+   "a2e3716cfddf4271f880a83bf9d4833565fc34c5d2543402cd875b592fc09233",
+   "ab5ae294f192aaebe53ba0c9ec544cfa95cc396e6dc67bbee5ffdb8ca9f43c4a",
+   "ac0f659149e7cac2fb431bf3e395fdaf2e61b7ff4dc7b192cc99995ff0e1c2f8",
+   "ae652ecdfcb9f5c45660017e9a6fef39a9db151a02a80c54392f10dc9e003c10",
+   "b0d524ee01d1db3e6299c9ffddb41d1ee39c8302d6ab8cfc0434d91751d55615",
+   "b71904d5c432e76fb31236190255ad85ddc24f34778550c27cc83bb63c1f599b",
+   "cc221d90dfd6413af9a058700b5bcfda4c07e34ed8a3c1f09e14d9543c52da3d",
+   "ce28e7d7f7a97b448a2369ccfafad28b65338b920dd7c975eb1999d4d8ce35a7",
+   "d846267e8418e6850a58f4a3bf5c4412c81fdc99b9ac595ab64fe2ddb6da1408",
+   "ecc6ad193ddc94e34f141f12fd2a16c1c9216ca4647615a3d72358ac308ead3b",
+   "f21a6389807bb89f1c495fb66c59fddef3833e9fbe267bbe1854ab494cce6b52",
+   "f921422faede371dd0a38a2bee0ed77fd52ceeaa3c8f0b94623f94ec6a46e086"
+  ],
+  "Three layers": [
+   "e0ea089821e4389772f929eaa6e46d8ed6e03c2ebe2e92ac126c761c1b93a1d2"
+  ],
+  "Three-layer architecture": [
+   "77326ddc1b1401234d62c12f0a0ae35a93bbd1f34bb2b2d548b7f249aab55aaf",
+   "b700936a58c18e59c23e4fe98ba71a7f61c6738d9532fd7e7798eaf6584cc88a"
+  ],
+  "Tools": [
+   "b05a1d1dbd73513f40915cb72dd4d22665cec83867ebb64eaea39d229e5c9ded"
+  ],
+  "Useful tools in this environment": [
+   "2213bbda25bd32f0f3912d2fa488dc283fc9d26607828d6dd87ee95be1931157",
+   "348f612d401b7a98363541fe07cc074b6550f3088e891ebff521c3db74fb4662",
+   "5c5c542bcd97629a266105a5eb55418820d370b8db758d9e099c30891432e6d5",
+   "805ceaa15416b2213b81a27704c102034f269b0b955fd89668fc2cfd57333d99"
+  ],
+  "What this repository is": [
+   "03d57a167649cee0720fb813ae97c33f97ac806337bdb9396444db54ba1df576",
+   "287bbcc313968a22daccb38a709bef6d6ac727c9ea6fac56e9d466b584ab5c78",
+   "4658920f5e3dad296f8d532a49aa358634c721bf8dab1bb1317407dfaaeccc9f",
+   "7ec33cb16d7f0e771a482168268d047a5e2c606a22cd4bda5028bc10fb161165"
+  ],
+  "Wikilinks and structure": [
+   "17906e08b5cfc2894c7c1d361963a57a6cda07374d61ef4c91890a50357892cf",
+   "aaa42f567d3d1a45fd0b19277f4f95d6bbe79fe2b5d312392d66ef9b288f5f16",
+   "b8c03a7382f438e9ecda72e0635d47cc370a5f10ceba2be0e11be1181550a945"
+  ]
+ }
+}

@@ -31,3 +31,7 @@ vault-template/outputs/*
 
 # Swift build output (committed by mistake in b78601a, removed from tracking 23 September 2026)
 .build/
+
+# A Claude Code session working in this repository keeps its own state here;
+# it is never part of the pack (anchored to the top, so a wiki template is untouched)
+/.claude/

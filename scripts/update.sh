@@ -26,7 +26,12 @@
 #      .git/hooks/pre-commit aside so only one gate runs.
 #   4. Replaces the bundled skills in ~/.claude/skills/ (old copies kept).
 #   5. Installs the safety layer: delete guard, hook registration, permission rules.
-#   6. Adds the new rules and sections to CLAUDE.md without replacing the file.
+#   6. Adds the four reference pages the rules file links to, then brings
+#      CLAUDE.md up to date: Moblee's own sections are replaced with the
+#      current wording, or dropped where their content has moved to one of
+#      those pages, and anything the owner has written is left exactly as it
+#      is. The pages go first, because a section may only be dropped once the
+#      page that carries it is there.
 #   7. Adds wiki/Identity.md if the vault has none, the starting memories, and
 #      (v0.7) the Habits and Tools page the companion's first conversation fills in.
 #   8. Offers the weekly health-check schedule (Mac).
@@ -279,7 +284,7 @@ echo ""
 OWNER_DIRTY=()
 OWNER_SUM=()
 if [[ -d "$VAULT/.git" ]]; then
-  for p in wiki/Identity.md "wiki/Wiki Operations/Habits and Tools.md" "wiki/Wiki Operations/Moblee Learning Path.md" "wiki/Wiki Operations/Assistant Memory.md"; do
+  for p in wiki/Identity.md "wiki/Wiki Operations/Habits and Tools.md" "wiki/Wiki Operations/Moblee Learning Path.md" "wiki/Wiki Operations/Assistant Memory.md" "wiki/Wiki Operations/Wiki Conventions.md" "wiki/Wiki Operations/Git and Commits.md" "wiki/Wiki Operations/Tools and Connections.md" "wiki/Wiki Operations/Readwise.md"; do
     if git -C "$VAULT" ls-files --error-unmatch -- "$p" >/dev/null 2>&1; then
       if ! git -C "$VAULT" diff --quiet -- "$p" 2>/dev/null || ! git -C "$VAULT" diff --cached --quiet -- "$p" 2>/dev/null; then
         OWNER_DIRTY+=("$p")
@@ -287,6 +292,34 @@ if [[ -d "$VAULT/.git" ]]; then
       fi
     fi
   done
+fi
+# (v0.9.6) The same care for everything else the closing commit stages. It
+# names whole folders (scripts, dashboard, .claude) and files the update
+# rewrites (the rules file, .gitignore), so an owner's own uncommitted work in
+# any of them was being committed under "moblee: updated from X to Y" (found by
+# the unanchored review of 27 September 2026, by running it). What counts as
+# the owner's: the rules file and .gitignore, and in Moblee's own folders any
+# file the pack does not ship, where either has work that is untracked or not
+# yet staged. Staged-only changes are not counted: they are what an update
+# whose commit was refused leaves behind, and the next run must commit them.
+PRE_DIRTY=()
+owners_own_file() {
+  case "$1" in
+    CLAUDE.md|AGENTS.md|.gitignore) return 0 ;;
+    VERSION|.claude/settings.local.json) return 1 ;;
+  esac
+  [[ -e "$PACKAGE_ROOT/$1" || -e "$PACKAGE_ROOT/vault-template/$1" ]] && return 1
+  return 0
+}
+if [[ -d "$VAULT/.git" ]]; then
+  while IFS= read -r -d '' entry; do
+    xy="${entry:0:2}"
+    q="${entry:3}"
+    case "$xy" in R*|C*) IFS= read -r -d '' _orig || true ;; esac
+    if [[ "$xy" == "??" || "${xy:1:1}" != " " ]] && owners_own_file "$q"; then
+      PRE_DIRTY+=("$q")
+    fi
+  done < <(git -C "$VAULT" status --porcelain -z --untracked-files=all -- scripts dashboard VERSION CLAUDE.md AGENTS.md .gitignore .claude "Daily Notes/_TEMPLATE.md" 2>/dev/null)
 fi
 # owner_dirty_sum <path> : print what the file held before this run, and succeed,
 # if the owner had uncommitted work in it; fail silently if they did not.
@@ -334,7 +367,7 @@ if [[ -f "$SCRIPT_DIR/orient-extras.sh.example" && ! -f "$VAULT/scripts/orient-e
   diary "added scripts/orient-extras.sh, the owner's own orientation checks"
 fi
 
-for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh log-append.py; do
+for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh log-append.py weekly-card.py; do
   if [[ -f "$SCRIPT_DIR/$tool" ]]; then
     if [[ -f "$VAULT/scripts/$tool" ]] && ! cmp -s "$SCRIPT_DIR/$tool" "$VAULT/scripts/$tool"; then
       keep_copy "$VAULT/scripts/$tool"
@@ -603,10 +636,66 @@ if ! python3 "$PACKAGE_ROOT/safety/install-safety.py" --vault "$VAULT" --assista
 fi
 relay_trust
 
+# (v0.9) For ChatGPT the starting-memories step links a page from one line of
+# wiki/Index.md, and (v0.9.4) the reference-pages step adds a line of its own.
+# Whether the Index held uncommitted work of the owner's is looked at BEFORE
+# either runs: a clean Index that a step then changed goes into the updater's
+# own commit, so the wiki is not left with a change nobody committed; an Index
+# the owner was in the middle of changing gets the link too, but is left, whole,
+# for their own next commit. This snapshot used to sit lower down, in the
+# identity step; it moved up here when the reference pages became the first
+# thing in the run that can touch the Index.
+INDEX_CLEAN_BEFORE=0
+INDEX_DIRTY_BEFORE=0
+INDEX_SEEDED=0
+INDEX_SUM_BEFORE=""
+if [[ -f "$VAULT/wiki/Index.md" ]]; then
+  INDEX_SUM_BEFORE="$(cksum < "$VAULT/wiki/Index.md" 2>/dev/null || true)"
+  # an Index git does not know is neither: it is left as it always was
+  if [[ -d "$VAULT/.git" ]] && git -C "$VAULT" ls-files --error-unmatch -- wiki/Index.md >/dev/null 2>&1; then
+    if git -C "$VAULT" diff --quiet -- wiki/Index.md 2>/dev/null \
+       && git -C "$VAULT" diff --cached --quiet -- wiki/Index.md 2>/dev/null; then
+      INDEX_CLEAN_BEFORE=1
+    else
+      INDEX_DIRTY_BEFORE=1
+    fi
+  fi
+fi
+
 # ----- 6. CLAUDE.md (AGENTS.md in a wiki made for ChatGPT alone) --------------
 ustep rules
 echo "5. $INSTR_NAME"
-if ! python3 "$SCRIPT_DIR/patch-claude-md.py" --vault "$VAULT" --assistant "$ASSISTANT" | sed 's/^/   /'; then
+# (v0.9.4) THE ORDER HERE MATTERS AND MUST NOT BE SWAPPED.
+#
+# In v0.9.4 the rules file was cut from about 9,000 tokens to about 3,700,
+# because the assistant reads it at the start of every session. Eleven sections
+# left it, and their content now lives on four pages the assistant reads only
+# when the work calls for them. patch-claude-md.py is what removes those
+# sections. So the pages have to be in the wiki BEFORE it runs: take the
+# sections out while the pages are missing and the content is simply gone.
+#
+# If the pages cannot be put in place, the rules file is not touched at all.
+# Leaving it long is a small cost; losing what is in it is not.
+REFERENCE_PAGES_OK=1
+REFERENCE_PAGES_NEW=()
+for p in "Wiki Conventions" "Git and Commits" "Tools and Connections" "Readwise"; do
+  if [[ ! -e "$VAULT/wiki/Wiki Operations/$p.md" ]]; then REFERENCE_PAGES_NEW+=("wiki/Wiki Operations/$p.md"); fi
+done
+python3 "$SCRIPT_DIR/add-reference-pages.py" --vault "$VAULT" | sed 's/^/   /' || REFERENCE_PAGES_OK=0
+if [[ $REFERENCE_PAGES_OK -eq 0 ]]; then
+  # (v0.9.4) The line above says which page, and why. This one says what that
+  # means for the rules file, which is the part the owner cares about.
+  echo "   not all four reference pages are in place, so $INSTR_NAME was left exactly as it is."
+  echo "   Nothing was lost. Put right what the line above names, then run the updater again;"
+  echo "   it is safe to repeat."
+  ustep_note "the reference pages were not all added, so $INSTR_NAME was left alone"
+  # (v0.9.6) Its sections are left alone, but the rules that only ADD, the
+  # never-delete rule among them, still go in: nothing of the owner's is taken
+  # out by adding a rule, and a clash over a page name is no reason to leave a
+  # wiki without them.
+  python3 "$SCRIPT_DIR/patch-claude-md.py" --vault "$VAULT" --assistant "$ASSISTANT" --blocks-only | sed 's/^/   /' \
+    || ustep_note "the safety rules could not be added to $INSTR_NAME"
+elif ! python3 "$SCRIPT_DIR/patch-claude-md.py" --vault "$VAULT" --assistant "$ASSISTANT" | sed 's/^/   /'; then
   echo ""
   echo "$INSTR_NAME could not be brought up to date, so the updater stopped here."
   echo "The tooling, commit gate, skills and safety layer are already updated."
@@ -628,27 +717,9 @@ python3 "$SCRIPT_DIR/add-identity.py" --vault "$VAULT" --assistant "$ASSISTANT" 
 MEMORY_PAGE_NEW=0
 if [[ ! -e "$VAULT/wiki/Wiki Operations/Assistant Memory.md" ]]; then MEMORY_PAGE_NEW=1; fi
 # (v0.9) For ChatGPT the same step links that page from one line of
-# wiki/Index.md. Whether the Index held uncommitted work of the owner's is
-# looked at before the step runs: a clean Index that the step then changed goes
-# into the updater's own commit, so the wiki is not left with a change nobody
-# committed; an Index the owner was in the middle of changing gets the link too,
-# but is left, whole, for their own next commit.
-INDEX_CLEAN_BEFORE=0
-INDEX_DIRTY_BEFORE=0
-INDEX_SEEDED=0
-INDEX_SUM_BEFORE=""
-if [[ -f "$VAULT/wiki/Index.md" ]]; then
-  INDEX_SUM_BEFORE="$(cksum < "$VAULT/wiki/Index.md" 2>/dev/null || true)"
-  # an Index git does not know is neither: it is left as it always was
-  if [[ -d "$VAULT/.git" ]] && git -C "$VAULT" ls-files --error-unmatch -- wiki/Index.md >/dev/null 2>&1; then
-    if git -C "$VAULT" diff --quiet -- wiki/Index.md 2>/dev/null \
-       && git -C "$VAULT" diff --cached --quiet -- wiki/Index.md 2>/dev/null; then
-      INDEX_CLEAN_BEFORE=1
-    else
-      INDEX_DIRTY_BEFORE=1
-    fi
-  fi
-fi
+# wiki/Index.md. The snapshot that decides whether the updater may commit that
+# line is taken further up, before the reference-pages step, which is now the
+# first thing in the run that can touch the Index.
 python3 "$SCRIPT_DIR/seed-memory.py" --vault "$VAULT" --assistant "$ASSISTANT" | sed 's/^/   /' \
   || { echo "   (starting memories not seeded; harmless)"; ustep_note "the starting memories were not seeded"; }
 python3 "$SCRIPT_DIR/add-habits-page.py" --vault "$VAULT" | sed 's/^/   /' \
@@ -770,6 +841,71 @@ echo "$NEW_VERSION" > "$VAULT/VERSION"
 if [[ ! -f "$VAULT/.gitignore" && -f "$PACKAGE_ROOT/vault-template/.gitignore" ]]; then
   cp "$PACKAGE_ROOT/vault-template/.gitignore" "$VAULT/.gitignore"
   echo "   added .gitignore (keeps reports, editor state and caches out of git)"
+elif [[ -f "$VAULT/.gitignore" ]]; then
+  # (v0.9.4) Every wiki installed before now already has a .gitignore, so the
+  # copy above reached nobody, and two fixes billed as "a wiki with nothing left
+  # unsaved" reached nobody either. The file is the owner's: it is never
+  # replaced, never rewritten and never reordered. Lines are only ever ADDED to
+  # the end of it, in the same spirit as the blocks the rules-file patcher adds,
+  # each one guarded by a line of its own that says it is already there. What
+  # goes in is printed, so the owner is told rather than left to find out.
+  #
+  # is this path ignored in the vault? git decides where there is a repository;
+  # where there is not, the file is read for a line that shuts outputs/ out.
+  vault_ignores() {
+    if [[ -d "$VAULT/.git" ]]; then
+      git -C "$VAULT" check-ignore -q -- "$1" 2>/dev/null
+    else
+      grep -qE '^!?/?outputs/?\*?$' "$VAULT/.gitignore"
+    fi
+  }
+  GITIGNORE_ADDED=()
+  if ! grep -qxF -- '.moblee/requests.json' "$VAULT/.gitignore"; then
+    printf '%s\n' \
+      '' \
+      '# (v0.9.4) What the assistant and the owner agreed to add, waiting for the' \
+      '# Moblee app to add it. It is a queue the app empties, not a page, and' \
+      '# leaving it untracked made every `git status` in the wiki look as though' \
+      '# something were unsaved. The record beside it, .moblee/seed-state.json,' \
+      '# IS kept: it says which starting notes the owner has taken out.' \
+      '.moblee/requests.json' >> "$VAULT/.gitignore"
+    GITIGNORE_ADDED+=(".moblee/requests.json, a queue for the app that was making the wiki look unsaved")
+  fi
+  # The weekly card is the only record that the owner was offered one that week.
+  # Kept out of git it does not survive a restore, and the offer is made again.
+  # The owner's own `outputs/` line is left where it is: these three lines put
+  # the exception in after it, which is the only way to do it without taking a
+  # line of theirs out. outputs/ comes back, everything under it goes again, and
+  # the weekly folder alone is let through.
+  if ! grep -qxF -- '!outputs/weekly/' "$VAULT/.gitignore" \
+     && vault_ignores "outputs/weekly/2026-01-03.md"; then
+    printf '%s\n' \
+      '' \
+      '# (v0.9.4) The weekly card is the exception to the line above. It is the' \
+      '# only record that the owner was offered a card that week, so git has to' \
+      '# hold it: without it a restore loses that memory and the same week is' \
+      '# offered all over again.' \
+      '!outputs/' \
+      'outputs/*' \
+      '!outputs/weekly/' >> "$VAULT/.gitignore"
+    # Checked afterwards rather than assumed, because gitignore's rules about
+    # re-including something under an excluded folder are easy to get wrong and
+    # a silent failure here loses the card. Only git can answer this, so a vault
+    # that is not a repository yet is taken at its word.
+    if [[ -d "$VAULT/.git" ]] && git -C "$VAULT" check-ignore -q -- "outputs/weekly/2026-01-03.md" 2>/dev/null; then
+      echo "   .gitignore: the weekly card could not be brought into git; it is still ignored."
+      ustep_note "the weekly card is still outside git; outputs/weekly/ in .gitignore needs a hand"
+    else
+      GITIGNORE_ADDED+=("outputs/weekly/, so the weekly card is kept in git and a restore cannot lose it")
+    fi
+  fi
+  if [[ ${#GITIGNORE_ADDED[@]} -gt 0 ]]; then
+    echo "   added to your .gitignore (nothing in it was changed or moved):"
+    for g in "${GITIGNORE_ADDED[@]}"; do
+      echo "     - $g"
+      diary "    .gitignore gained: $g"
+    done
+  fi
 fi
 if [[ -d "$VAULT/.git" ]]; then
   (
@@ -797,8 +933,6 @@ if [[ -d "$VAULT/.git" ]]; then
       # a rules file renamed while it held the owner's uncommitted changes is
       # left, under both names, for the owner's own next commit
       if [[ $RULES_DIRTY -eq 1 && ( "$p" == "CLAUDE.md" || "$p" == "AGENTS.md" ) ]]; then continue; fi
-      # the ChatGPT memory page goes in only when this run made it
-      if [[ "$p" == "wiki/Wiki Operations/Assistant Memory.md" && $MEMORY_PAGE_NEW -eq 0 ]]; then continue; fi
       # (v0.9.1) a page the owner had uncommitted work in before this run is
       # theirs, and stays theirs; if the update also wrote to it, say so
       if SUM_BEFORE="$(owner_dirty_sum "$p")"; then
@@ -841,6 +975,31 @@ if [[ -d "$VAULT/.git" ]]; then
       git add -- wiki/Index.md 2>/dev/null || true
       if git ls-files --error-unmatch -- wiki/Index.md >/dev/null 2>&1; then COMMIT_PATHS+=("wiki/Index.md"); fi
     fi
+    # (v0.9.4) the four reference pages, and only the ones THIS run laid down.
+    # Once a page exists it is the owner's and the assistant's to add to, and a
+    # later addition of theirs is never carried into "moblee: updated from X to
+    # Y": the same care the starting-memories page has had since v0.9.
+    # (v0.9.6) All four, not only those this run laid down: a run stopped
+    # before its commit left them untracked, and the next run, finding them
+    # present, never committed them. A page the owner has uncommitted work in
+    # is still left for them.
+    for p in "wiki/Wiki Operations/Wiki Conventions.md" "wiki/Wiki Operations/Git and Commits.md" "wiki/Wiki Operations/Tools and Connections.md" "wiki/Wiki Operations/Readwise.md"; do
+      if owner_dirty_sum "$p" >/dev/null; then continue; fi
+      if [[ -e "$p" ]]; then
+        git add -- "$p" 2>/dev/null || true
+        if git ls-files --error-unmatch -- "$p" >/dev/null 2>&1; then COMMIT_PATHS+=("$p"); fi
+      fi
+    done
+    # (v0.9.4) the record of which starting notes the owner has taken out, which
+    # the seeding step writes into the vault. The updater creates it, so the
+    # updater commits it; left untracked it would sit in the owner's wiki as a
+    # change they never made, which is the fault v0.9.2 fixed for the Index.
+    if [[ -e ".moblee/seed-state.json" ]]; then
+      git add -- ".moblee/seed-state.json" 2>/dev/null || true
+      if git ls-files --error-unmatch -- ".moblee/seed-state.json" >/dev/null 2>&1; then
+        COMMIT_PATHS+=(".moblee/seed-state.json")
+      fi
+    fi
     # the starter pages the updater dated, where the owner had no uncommitted work of their own
     for p in ${STAMP_CLEAN[@]+"${STAMP_CLEAN[@]}"}; do
       if [[ -e "$p" ]]; then
@@ -848,6 +1007,48 @@ if [[ -d "$VAULT/.git" ]]; then
         if git ls-files --error-unmatch -- "$p" >/dev/null 2>&1; then COMMIT_PATHS+=("$p"); fi
       fi
     done
+    # (v0.9.6) Paths the owner had uncommitted work in before this run are
+    # theirs: taken back out of the index and out of the commit's pathspec, the
+    # way scripts/orient-extras.sh always has been. What the update wrote into
+    # them is left with their work for their own next commit, and they are told.
+    for q in ${PRE_DIRTY[@]+"${PRE_DIRTY[@]}"}; do
+      git reset -q -- "$q" >/dev/null 2>&1 || true
+      KEPT=()
+      for c in ${COMMIT_PATHS[@]+"${COMMIT_PATHS[@]}"}; do
+        [[ "$c" == "$q" ]] || KEPT+=("$c")
+      done
+      COMMIT_PATHS=(${KEPT[@]+"${KEPT[@]}"})
+      if [[ ${#COMMIT_PATHS[@]} -gt 0 ]]; then COMMIT_PATHS+=(":(exclude)$q"); fi
+      echo "   $q held changes of yours that were not yet committed, so it is left for your own"
+      echo "   next commit, with anything this update added to it; nothing of yours was committed."
+      diary "    $q held uncommitted work of the owner's; left out of the update's commit"
+    done
+    # (v0.9.6) The app's queue file, where git is already keeping it. The line
+    # added to .gitignore above does nothing for a file git already tracks, and
+    # a wiki whose assistant commits everything has been tracking this one since
+    # it first appeared, so it went on showing as changed every time the app
+    # used it. It stops being tracked in a commit of its own, made from a
+    # scratch copy of the index holding only what HEAD holds, so nothing the
+    # owner has staged goes with it and the file itself is never moved or
+    # touched. A commit that names its paths could not do this: it reads them
+    # from the disk, and would put the file straight back.
+    QUEUE_FILE=".moblee/requests.json"
+    if git rev-parse -q --verify HEAD >/dev/null 2>&1 \
+       && git ls-files --error-unmatch -- "$QUEUE_FILE" >/dev/null 2>&1 \
+       && git check-ignore -q --no-index -- "$QUEUE_FILE" 2>/dev/null; then
+      SCRATCH_INDEX="$(git rev-parse --git-dir)/moblee-untrack-index"
+      OLD_HEAD="$(git rev-parse HEAD)"
+      if GIT_INDEX_FILE="$SCRATCH_INDEX" git read-tree HEAD \
+         && GIT_INDEX_FILE="$SCRATCH_INDEX" git rm --cached -q -- "$QUEUE_FILE" >/dev/null 2>&1 \
+         && NEW_TREE="$(GIT_INDEX_FILE="$SCRATCH_INDEX" git write-tree)" \
+         && NEW_COMMIT="$(git commit-tree "$NEW_TREE" -p "$OLD_HEAD" -m "moblee: the app's queue file is no longer kept in git")" \
+         && git update-ref -m "moblee: queue file untracked" HEAD "$NEW_COMMIT" "$OLD_HEAD"; then
+        git rm --cached -q -- "$QUEUE_FILE" >/dev/null 2>&1 || true
+        echo "   git no longer keeps .moblee/requests.json, the app's own list; the file is where it was"
+        diary "    stopped git keeping .moblee/requests.json; the file itself untouched"
+      fi
+      rm -f -- "$SCRATCH_INDEX"
+    fi
     if [[ ${#COMMIT_PATHS[@]} -eq 0 ]] || git diff --cached --quiet -- "${COMMIT_PATHS[@]}"; then
       if [[ "$OLD_VERSION" == "$NEW_VERSION" ]]; then
         echo "   already at $NEW_VERSION; nothing to change"
