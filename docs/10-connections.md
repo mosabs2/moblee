@@ -54,7 +54,7 @@ installs just the items you name, skipping the list.
 
 ## What Claude does with a connection
 
-The rules below are written into your vault's `CLAUDE.md`, in the section "Connected accounts and live facts", so your Claude follows them in every session. The updater adds the section to vaults installed before v0.6.0.
+The rules below are written into your wiki, so your Claude follows them in every session. What it may do with a connection is in two places: the short form under "Tools" in your vault's `CLAUDE.md`, which Claude reads at the start of every session, and the full version under "Connected accounts" on the page `wiki/Wiki Operations/Tools and Connections.md`, which it reads whenever it actually uses one. Checking facts that change against a live source is a hard rule in `CLAUDE.md` itself, so it is read every session. (Before v0.9.4 all of this sat in one `CLAUDE.md` section called "Connected accounts and live facts". The updater splits it this way and keeps every word.)
 
 Claude reads a connected account only when your request needs it. It does not sweep your inbox or your feeds on its own initiative. It never sends an email; never creates, accepts, changes or deletes a calendar event or a reminder; never moves or bins a file through a connection; and never posts, likes, follows, comments, sends a message or buys anything on any site, unless you say yes to that one action in the same conversation. Drafts are the default: Claude writes the email or the post, and you send it. Anything that spends money or paid credits is asked about first, every time. Nothing read from an account goes into your wiki unless you ask for it to be recorded.
 
@@ -166,7 +166,7 @@ These items install tools rather than connect accounts, so there is nothing to s
 
 ## Looking after the wiki
 
-**Weekly health check (`weekly`).** The wiki checks itself every Saturday morning and tells you what needs attention, including when your habits have moved on and a different extra might suit you. Free, and worth having: Claude suggests it in the "get me started" conversation.
+**Weekly health check (`weekly`).** The wiki checks itself every Saturday morning and tells you what needs attention, including when your habits have moved on and a different extra might suit you. Free, and worth having: Claude suggests it in the "get me started" conversation. Next time you are back after it has run, you are offered one short page on your week: what the wiki learned, what is still open, and three things you could do. A week with nothing in it is one line saying so. The page is offered once, and nothing is counted or scored.
 
 **The learning path (`lessons`).** Thirty-two short lessons, one an evening, with a reminder at 9 pm; say "lesson" in your vault. Free.
 

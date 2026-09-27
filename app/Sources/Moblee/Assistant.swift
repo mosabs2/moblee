@@ -160,6 +160,8 @@ enum ChatGPTApp {
 /// If the chosen assistant's app is not on the Mac, the same screen shows it
 /// with a Get button, as the check-up does, before going on.
 struct AssistantScreen: View {
+    /// Drawn again when the owner presses "Bigger text". (v0.9.4)
+    @ObservedObject private var textSize = TextSize.shared
     enum Purpose { case install, update }
     let purpose: Purpose
 
@@ -181,20 +183,20 @@ struct AssistantScreen: View {
             action: act
         ) {
             if showingNeeds {
-                HStack(spacing: 22) {
+                HStack(spacing: Theme.pt(22)) {
                     ForEach(checkup.needs) { need in
                         NeedTile(need: need, present: checkup.present[need.name],
                                  asked: checkup.asked.contains(need.name), fix: { checkup.fix(need) })
                     }
                 }
-                .padding(.horizontal, 40)
+                .padding(.horizontal, Theme.pt(40))
             } else {
-                HStack(spacing: 22) {
+                HStack(spacing: Theme.pt(22)) {
                     ForEach(Assistant.allCases) { a in
                         AssistantChoice(assistant: a, chosen: choice == a) { choose(a) }
                     }
                 }
-                .padding(.horizontal, 40)
+                .padding(.horizontal, Theme.pt(40))
             }
         }
         .onDisappear { checkup.stop() }
@@ -253,21 +255,23 @@ extension Assistant {
 
 /// One of the three large choices.
 struct AssistantChoice: View {
+    /// Drawn again when the owner presses "Bigger text". (v0.9.4)
+    @ObservedObject private var textSize = TextSize.shared
     let assistant: Assistant
     let chosen: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 14) {
+            VStack(spacing: Theme.pt(14)) {
                 ZStack(alignment: .bottomTrailing) {
                     Image(systemName: assistant.symbol)
-                        .font(.system(size: 46, weight: .medium))
+                        .font(Theme.font(46, .medium, .default))
                         .foregroundStyle(Theme.accent)
-                        .frame(width: 96, height: 96)
+                        .frame(width: Theme.pt(96), height: Theme.pt(96))
                     if chosen {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 30))
+                            .font(Theme.font(30, .regular, .default))
                             .foregroundStyle(.white, Theme.accent)
                             .offset(x: 6, y: 6)
                             .transition(.scale.combined(with: .opacity))
@@ -275,18 +279,48 @@ struct AssistantChoice: View {
                 }
                 .accessibilityHidden(true)
                 Text(assistant.name)
-                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                    .font(Theme.font(20, .semibold))
                     .foregroundStyle(.primary)
             }
-            .frame(width: 170, height: 236)
+            .frame(width: Theme.pt(170), height: Theme.pt(236))
             .background(CardBackground())
-            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
+            .overlay(RoundedRectangle(cornerRadius: Theme.pt(22), style: .continuous)
                 .stroke(Theme.accent, lineWidth: chosen ? 3 : 0))
-            .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: Theme.pt(22), style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(assistant.name)
         .accessibilityAddTraits(chosen ? [.isSelected] : [])
-        .accessibilityIdentifier("assistant-" + assistant.rawValue)
+        // (v0.9.4) The card says where it really is, so the self-drive walk can
+        // tap it: it used to be tapped where the walk worked out it would be
+        // drawn, from the card's size and the height of the sentence above
+        // them, and no such sum holds once the window and the words can be made
+        // bigger.
+        //
+        // And the keyboard can reach it, which until 26 September 2026 it could
+        // not. This screen is the one nobody can get past: Next is greyed out
+        // until one of the three is chosen, and the only way to choose was a
+        // mouse. Without macOS's own Full Keyboard Access switched on, an owner
+        // who cannot use a mouse could not finish the install at all — which is
+        // the very thing being able to work Moblee from the keyboard is for.
+        .keyboardReachable("assistant-" + assistant.rawValue, corner: 22, press: action)
+        // (v0.9.5) The card's own word, read aloud, with whether it is the one
+        // chosen. This is the screen nobody can get past, and the three cards
+        // carry nothing but a symbol and a name: an owner who would rather be
+        // told than read could not hear which was which, nor which they had
+        // picked. The control sits OUTSIDE the card's own button — a button
+        // inside a button's label is not a button — and in an overlay, so the
+        // card is laid out exactly as it was.
+        .overlay(alignment: .topTrailing) {
+            ListenButton(id: Self.listenId(assistant), speech: Self.speech(assistant, chosen: chosen),
+                         what: assistant.name)
+                .padding(Theme.pt(8))
+        }
+    }
+
+    static func listenId(_ assistant: Assistant) -> String { "listen-assistant-" + assistant.rawValue }
+
+    static func speech(_ assistant: Assistant, chosen: Bool) -> Speech {
+        Speech(assistant.name + (chosen ? ". This is the one you have chosen." : ""))
     }
 }

@@ -4,13 +4,15 @@ This folder, `raw/`, is the inbox for source material before it's curated into t
 
 You never edit files in `raw/` after dropping them. The wiki layer (`wiki/`) is where curated, interlinked knowledge lives; `raw/` is the source layer that the wiki is built from.
 
-## Three ways content lands here
+## Four ways content lands here
 
 **Web Clipper.** Articles you read in the browser, clipped via the Obsidian Web Clipper extension, drop into `Clippings/` (not `raw/`). Clippings arrive as clean markdown with YAML frontmatter that preserves the source URL, the author, and the publication date.
 
 **Readwise.** If you have a Readwise account and the Obsidian Readwise plugin installed, your highlights, books, and tweets sync into `Clippings/Readwise/` automatically. The three sub-folders (`Articles/`, `Books/`, `Tweets/`) each have slightly different handling rules; see `CLAUDE.md` (`AGENTS.md` with ChatGPT) at the vault root for the full Readwise conventions.
 
 **Manual drop.** Anything else, PDFs, screenshots, text files, transcripts, voice memos, audio clips, you drop into this folder (`raw/`) directly. Drag it from Finder; quote the filename if it contains spaces or non-ASCII characters when you mention it to your assistant.
+
+**Dropped on Moblee.** From v0.9.5 you can drag a file, a photo or a piece of text onto the Moblee app's window, or onto its icon in the Dock, and it lands in this folder without your having to find it in Finder. Moblee copies it: the file you dropped stays exactly where it was. It tells you on screen what landed and what did not, and it never writes over something already here. This is the easiest route for something that arrived as an attachment in a message, which your assistant cannot reach on its own.
 
 ## What happens when Claude or ChatGPT processes a source
 

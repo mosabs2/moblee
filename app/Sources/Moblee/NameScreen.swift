@@ -3,6 +3,8 @@ import SwiftUI
 /// The only typed question in the whole install. The question is the screen's
 /// sentence, which sits directly above the box it is asking about.
 struct NameScreen: View {
+    /// Drawn again when the owner presses "Bigger text". (v0.9.4)
+    @ObservedObject private var textSize = TextSize.shared
     @EnvironmentObject var flow: Flow
     @FocusState private var focused: Bool
     @Environment(\.stillPicture) private var still
@@ -19,43 +21,81 @@ struct NameScreen: View {
             buttonEnabled: !flow.trimmedName.isEmpty,
             action: flow.next
         ) {
-            VStack(spacing: 22) {
+            VStack(spacing: Theme.pt(22)) {
                 nameField
-                    .font(.system(size: 28, weight: .medium, design: .rounded))
+                    .font(Theme.font(28, .medium))
                     .multilineTextAlignment(.center)
-                    .padding(.vertical, 14)
-                    .frame(width: 380)
+                    .padding(.vertical, Theme.pt(14))
+                    .frame(width: Theme.pt(380))
                     .background(CardBackground(corner: 16))
                     .focused($focused)
                     .accessibilityLabel(question)
-                HStack(alignment: .bottom, spacing: 14) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 36, weight: .medium))
-                        .foregroundStyle(Theme.accent)
-                        .frame(width: 64, height: 64)
-                        .background(Circle().fill(Theme.card)
-                            .overlay(Circle().stroke(Theme.cardEdge, lineWidth: 1))
-                            .shadow(color: .black.opacity(0.12), radius: 8, y: 3))
-                    Text(flow.trimmedName.isEmpty ? "Hi…" : "Hi, \(flow.trimmedName).")
-                        .font(.system(size: 22, weight: .semibold, design: .rounded))
-                        .padding(.horizontal, 20).padding(.vertical, 14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .fill(Theme.accent.opacity(0.14)))
-                        .animation(.easeOut(duration: 0.15), value: flow.trimmedName)
+                HStack(alignment: .bottom, spacing: Theme.pt(10)) {
+                    HStack(alignment: .bottom, spacing: Theme.pt(14)) {
+                        Image(systemName: "sparkles")
+                            .font(Theme.font(36, .medium, .default))
+                            .foregroundStyle(Theme.accent)
+                            .frame(width: Theme.pt(64), height: Theme.pt(64))
+                            .background(Circle().fill(Theme.card)
+                                .overlay(Circle().stroke(Theme.cardEdge, lineWidth: 1))
+                                .shadow(color: .black.opacity(0.12), radius: 8, y: 3))
+                        // (v0.9.4) The name stands on its own inside the greeting, so
+                        // that a name read right to left keeps the full stop after
+                        // it rather than in front of it; see `OwnWords`.
+                        Text(Self.greeting(flow.trimmedName))
+                            .font(Theme.font(22, .semibold))
+                            .padding(.horizontal, Theme.pt(20)).padding(.vertical, Theme.pt(14))
+                            .background(
+                                RoundedRectangle(cornerRadius: Theme.pt(20), style: .continuous)
+                                    .fill(Theme.accent.opacity(0.14)))
+                            .animation(.easeOut(duration: 0.15), value: flow.trimmedName)
+                    }
+                    .accessibilityHidden(true)
+                    // (v0.9.5) The greeting read back, which is the one place in
+                    // the app where an owner can hear their own name said before
+                    // they commit to it — and the plainest case of picking the
+                    // voice by the words: "Hi," is Moblee's and is read in
+                    // Moblee's voice, the name is theirs and is read in a voice
+                    // chosen for the letters it is written in. It sits beside the
+                    // picture rather than inside it, because a control a screen
+                    // reader cannot see is no control, and the picture is hidden
+                    // from one.
+                    ListenButton(id: "listen-greeting", speech: Self.greetingSpeech(flow.trimmedName),
+                                 what: "the greeting")
+                        .padding(.bottom, Theme.pt(16))
                 }
-                .accessibilityHidden(true)
             }
         }
         .onAppear { focused = true }
     }
 
+    /// The greeting as it is drawn, in one place, so that what is shown and what
+    /// is read cannot drift apart. (v0.9.5)
+    static func greeting(_ name: String) -> String {
+        name.isEmpty ? "Hi…" : "Hi, \(OwnWords.standingAlone(name))."
+    }
+
+    /// The greeting read aloud: Moblee's word in Moblee's voice, the owner's name
+    /// in one chosen for the name, and none of the invisible marks that let it
+    /// stand on its own on the screen. (v0.9.5)
+    static func greetingSpeech(_ name: String) -> Speech {
+        name.isEmpty ? Speech("Hi") : Speech.sentence(greeting(name), theirs: name)
+    }
+
     /// A real text field cannot be drawn to a picture file, so the drawn
     /// version shows the same words as plain text. Return is left to the big
     /// button (it is the window's default action), so it is handled once.
+    ///
+    /// (v0.9.4) The box's words are in the middle, and the box is left to
+    /// macOS's own natural direction, which settles itself from what has been
+    /// typed: a name typed in Arabic reads right to left inside the box, and one
+    /// typed in English left to right, whichever way the app around it is laid
+    /// out. The drawn version says the name stands on its own for the same
+    /// reason, so that a name beginning in Arabic is not laid out by the
+    /// sentence around it; there is no sentence around it here.
     @ViewBuilder private var nameField: some View {
         if still {
-            Text(flow.ownerName.isEmpty ? "Your name" : flow.ownerName)
+            Text(flow.ownerName.isEmpty ? "Your name" : OwnWords.standingAlone(flow.ownerName))
                 .foregroundStyle(flow.ownerName.isEmpty ? .tertiary : .primary)
                 .frame(maxWidth: .infinity)
         } else {
@@ -69,6 +109,8 @@ struct NameScreen: View {
 /// Mac, and where. A beginner is being asked to let an app from the internet
 /// change Claude's settings; this is the plain statement that earns it.
 struct PromiseScreen: View {
+    /// Drawn again when the owner presses "Bigger text". (v0.9.4)
+    @ObservedObject private var textSize = TextSize.shared
     @EnvironmentObject var flow: Flow
 
     var body: some View {
@@ -77,15 +119,23 @@ struct PromiseScreen: View {
         ScreenFrame(
             sentence: words.sentence,
             buttonTitle: flow.resumePlace == nil ? "Make it" : "Finish it",
-            spoken: "Here is what Moblee will make. One: a folder for your wiki, called \(place.name). "
-                + "Two: a guard, \(words.guardSpoken). "
-                + "Three: \(words.skillsSpoken). \(words.closingSpoken)",
+            spoken: Self.spoken(place: place.name, words: words),
+            // (v0.9.5) The wiki folder is called after the owner and may be
+            // written in their own script, so the headline is cut at the name and
+            // the name read in a voice chosen for it.
+            speech: Speech.sentence(Self.spoken(place: place.name, words: words), theirs: place.name),
             action: flow.next
         ) {
-            VStack(spacing: 8) {
-                HStack(alignment: .top, spacing: 18) {
+            VStack(spacing: Theme.pt(8)) {
+                HStack(alignment: .top, spacing: Theme.pt(18)) {
+                    // (v0.9.4) The folder is named after the owner, and this is
+                    // the name they will look for in Finder, so it is laid out
+                    // the way Finder will lay it out: no isolate of its own, and
+                    // the direction of the line it is in. See `OwnWords`.
+                    // What is read aloud is left plain.
                     HandoffCard(number: 1, symbol: "folder.fill", title: "Your wiki",
-                                detail: "A folder called “\(place.name)” inside “Wiki”, in your home folder")
+                                detail: "A folder called “\(OwnWords.asFinderShowsIt(place.name))” inside “Wiki”, in your home folder",
+                                ownWords: place.name)
                     HandoffCard(number: 2, symbol: "lock.shield.fill", title: "A guard",
                                 detail: words.guardCard)
                     HandoffCard(number: 3, symbol: "graduationcap.fill", title: words.skillsTitle,
@@ -95,15 +145,31 @@ struct PromiseScreen: View {
                 // says "nothing else" says what it is. It sits under the cards
                 // because the sentence above has room for two lines, not four.
                 if let alsoTouched = words.alsoTouched {
-                    Text(alsoTouched)
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(Color.primary.opacity(0.8))
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: Theme.pt(8)) {
+                        Text(alsoTouched)
+                            .font(Theme.font(13, .medium))
+                            .foregroundStyle(Color.primary.opacity(0.8))
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                        // (v0.9.5) A sentence of its own, under the cards, so it
+                        // has a listen control of its own. It is the one place
+                        // this screen says something is touched besides the three.
+                        ListenButton(id: "listen-also-touched", speech: Speech(alsoTouched),
+                                     what: "the line under the cards", size: 14)
+                    }
                 }
             }
-            .padding(.horizontal, 30)
+            .padding(.horizontal, Theme.pt(30))
         }
+    }
+
+    /// What the headline's listen control reads: the three things, in order, in
+    /// words of their own rather than the cards' clipped ones. Kept here so a
+    /// check can ask for it. (v0.9.5: was written into the screen.)
+    static func spoken(place: String, words: Words) -> String {
+        "Here is what Moblee will make. One: a folder for your wiki, called \(place). "
+            + "Two: a guard, \(words.guardSpoken). "
+            + "Three: \(words.skillsSpoken). \(words.closingSpoken)"
     }
 
     struct Words {

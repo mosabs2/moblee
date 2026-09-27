@@ -61,7 +61,7 @@ def add_index_line(vault: Path) -> None:
     # rather than adding a second one. The check above only looks for this
     # page's own link, so an Index whose Wiki Operations line pointed at some
     # other page — the starting memories add one — got a duplicate line. It
-    # happened to a real owner on 21 September 2026.
+    # happened on a real update.
     for i, l in enumerate(lines):
         if l.lstrip().startswith("- Wiki Operations"):
             bare = l.rstrip("\r\n")

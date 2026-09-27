@@ -15,7 +15,9 @@ conversation with your assistant in the vault, which asks how the owner works
 and gives them a --tick command for the items that fit.
 
 The connections, plugins, optional skills and voice on this list are set up
-for Claude. Moblee does not set them up for ChatGPT yet.
+for Claude. Moblee does not set them up for ChatGPT yet, so an owner who uses
+ChatGPT alone is told that plainly and the run stops there; only --check,
+which changes nothing, carries on.
 
 The installer and the updater offer it; it can be run again at any time to add something that was left out. Nothing it
 does deletes anything. Every settings file it changes is copied to
@@ -134,6 +136,53 @@ def assistant_choice() -> str:
         return "claude"
     word = "".join(text.split("\n", 1)[0].split())
     return word if word in ("claude", "chatgpt", "both") else "claude"
+
+
+def checklist_opening(checking: bool) -> tuple[list, bool]:
+    """What the checklist says about itself before it starts, and whether the
+    run stops there.
+
+    (v0.9.4) An owner who uses ChatGPT alone is told plainly that nothing on
+    this list is set up for them yet, and the run ends. Until now they were
+    told that, and then told on the very next line to go and install Claude
+    Code, which is the one thing they had already said they were not doing.
+    The two messages were written as separate questions and neither knew about
+    the other. An owner who uses both still needs the Claude Code line, because
+    for them the items do work.
+
+    --check changes nothing and the companion runs it whatever the assistant,
+    so that one keeps going, after saying what it is about to report.
+    """
+    assistant = assistant_choice()
+    if assistant == "chatgpt":
+        lines = [
+            "Everything on this list is set up for Claude: the connections, the plugins,",
+            "the optional skills and the voice. You use ChatGPT. Moblee does not set any",
+            "of them up for ChatGPT yet, so there is nothing here for you to add today.",
+            "",
+            "Nothing is wrong, and nothing needs doing. When Moblee can set these up for",
+            "ChatGPT, an update will tell you.",
+        ]
+        if not checking:
+            return lines, True
+        return lines + [
+            "",
+            "The test below still runs, and changes nothing. Every item on it is a Claude",
+            "item, so it will say they are not set up. That is expected.",
+        ], False
+    lines = []
+    if assistant == "both":
+        lines += [
+            "The connections, plugins, optional skills and voice on this list are set up",
+            "for Claude. They work when you use Claude. Moblee does not set them up for",
+            "ChatGPT yet.",
+        ]
+    if not claude_ok():
+        lines += [
+            "Claude Code is not installed yet. Install it first (see docs/01-prerequisites.md),",
+            "then run this again. Items that do not need it can still be added now.",
+        ]
+    return lines, False
 
 
 def open_url(url: str) -> None:
@@ -1338,12 +1387,11 @@ def main() -> int:
         return 0
 
     rule("Moblee setup: connect your wiki to your life")
-    if assistant_choice() != "claude":
-        say("The connections, plugins, optional skills and voice on this list are set up")
-        say("for Claude. Moblee does not set them up for ChatGPT yet.")
-    if not claude_ok():
-        say("Claude Code is not installed yet. Install it first (see docs/01-prerequisites.md),")
-        say("then run this again. Items that do not need it can still be added now.")
+    opening, stop_here = checklist_opening(args.check)
+    for line in opening:
+        say(line)
+    if stop_here:
+        return 0
 
     if args.check:
         results = final_check(items)

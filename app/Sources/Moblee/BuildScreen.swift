@@ -2,6 +2,8 @@ import SwiftUI
 
 /// The build itself: pictures that light up as the engine reports each step.
 struct BuildScreen: View {
+    /// Drawn again when the owner presses "Bigger text". (v0.9.4)
+    @ObservedObject private var textSize = TextSize.shared
     @EnvironmentObject var flow: Flow
     @EnvironmentObject var install: InstallRun
     @Environment(\.stillPicture) private var still
@@ -16,25 +18,61 @@ struct BuildScreen: View {
             quietAction: isFailed ? { install.showDiary() } : nil,
             action: act
         ) {
-            VStack(spacing: 12) {
-                LazyVGrid(columns: Array(repeating: GridItem(.fixed(150), spacing: 16), count: 3),
-                          spacing: install.items.count > 6 ? 8 : 16) {
+            VStack(spacing: Theme.pt(12)) {
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(Theme.pt(150)), spacing: Theme.pt(16)), count: 3),
+                          spacing: Theme.pt(install.items.count > 6 ? 8 : 16)) {
                     ForEach(install.items) { item in
                         BuildTile(item: item, small: install.items.count > 6)
                     }
                 }
                 if install.phase == .running {
                     Text("\(install.items.filter { $0.state == .done }.count) of \(install.items.count)")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .font(Theme.font(14, .semibold))
                         .foregroundStyle(.secondary)
                         .contentTransition(.numericText())
                 }
+            }
+            // (v0.9.5) One listen control for the whole list, not one for each of
+            // the six or nine tiles. A build tile carries two or three words and
+            // is 150 by 76 at the smallest; nine speakers on nine of them would
+            // crowd the tiles they belong to, which is the one thing a small
+            // control on a full screen must not do. Read together the tiles ARE
+            // one block — the list of what is being made, and how far it has got —
+            // and that is what this reads. It sits in the corner of the room the
+            // grid is given, not in the grid, so nothing in the layout moves: this
+            // screen carries the longest sentence in the app and is the tightest
+            // in the window at the biggest text size.
+            //
+            // The strip it is given is as wide as the grid and a little more
+            // (three columns of 150 with 16 between them is 482), so it lands
+            // just outside the grid's top corner and plainly belongs to it,
+            // rather than away at the edge of the window where the picture area
+            // really ends.
+            .overlay(alignment: .top) {
+                ListenButton(id: Self.listenId, speech: Self.listSpeech(install), what: "the list")
+                    .frame(width: Theme.pt(Self.stripWidth), alignment: .trailing)
             }
         }
         .onAppear {
             guard !still, install.phase == .idle else { return }
             begin()
         }
+    }
+
+    static let listenId = "listen-build-list"
+
+    /// Wide enough to hold the grid of tiles and leave the listen control just
+    /// clear of its corner. (v0.9.5)
+    static let stripWidth: CGFloat = 530
+
+    /// Each thing being made, in the words on its own tile, and where it has got
+    /// to — which no owner could hear before, since the tiles were silent and the
+    /// sentence above them says only "Building your wiki…". (v0.9.5)
+    static func listSpeech(_ install: InstallRun) -> Speech {
+        let done = install.items.filter { $0.state == .done }.count
+        var said = "\(done) of \(install.items.count) done."
+        for item in install.items { said += " " + BuildTile.said(item) }
+        return Speech(said)
     }
 
     private var isFailed: Bool {
@@ -111,34 +149,35 @@ struct BuildTile: View {
     let item: InstallRun.Item
     var small = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ObservedObject private var textSize = TextSize.shared
 
     var body: some View {
-        VStack(spacing: small ? 4 : 8) {
+        VStack(spacing: Theme.pt(small ? 4 : 8)) {
             ZStack(alignment: .bottomTrailing) {
                 Image(systemName: item.symbol)
-                    .font(.system(size: small ? 24 : 34, weight: .medium))
+                    .font(Theme.font(small ? 24 : 34, .medium, .default))
                     .foregroundStyle(colour)
-                    .frame(width: small ? 44 : 64, height: small ? 40 : 64)
+                    .frame(width: Theme.pt(small ? 44 : 64), height: Theme.pt(small ? 40 : 64))
                     .symbolEffect(.pulse, options: .repeating, isActive: item.state == .running && !reduceMotion)
                     .symbolEffect(.bounce, value: item.state == .done && !reduceMotion)
                 if item.state == .done {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: small ? 16 : 22))
+                        .font(Theme.font(small ? 16 : 22, .regular, .default))
                         .foregroundStyle(.white, Theme.good)
                         .transition(.scale.combined(with: .opacity))
                 } else if item.state == .failed {
                     Image(systemName: "exclamationmark.circle.fill")
-                        .font(.system(size: small ? 16 : 22))
+                        .font(Theme.font(small ? 16 : 22, .regular, .default))
                         .foregroundStyle(.white, .red)
                         .transition(.scale.combined(with: .opacity))
                 }
             }
             .accessibilityHidden(true)
             Text(item.label)
-                .font(.system(size: small ? 13 : 15, weight: .semibold, design: .rounded))
+                .font(Theme.font(small ? 13 : 15, .semibold))
                 .foregroundStyle(item.state == .waiting ? .secondary : .primary)
         }
-        .frame(width: 150, height: small ? 76 : 118)
+        .frame(width: Theme.pt(150), height: Theme.pt(small ? 76 : 118))
         .background(CardBackground(corner: small ? 16 : 20, dimmed: item.state == .waiting))
         .opacity(item.state == .waiting ? 0.6 : 1)
         .accessibilityElement(children: .ignore)
@@ -146,13 +185,21 @@ struct BuildTile: View {
         .accessibilityValue(stateWord)
     }
 
-    private var stateWord: String {
+    private var stateWord: String { Self.stateWord(item) }
+
+    static func stateWord(_ item: InstallRun.Item) -> String {
         switch item.state {
         case .waiting: return "waiting"
         case .running: return "being made now"
         case .done: return "done"
         case .failed: return "did not work"
         }
+    }
+
+    /// One tile, as it is read aloud: the words on it, then where it has got to.
+    /// (v0.9.5)
+    static func said(_ item: InstallRun.Item) -> String {
+        item.label + ": " + stateWord(item) + "."
     }
 
     private var colour: Color {

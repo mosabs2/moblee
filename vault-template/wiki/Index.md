@@ -12,7 +12,7 @@ Last updated: [Date], initial setup.
 
 (One-line entries describing each subfolder under `wiki/` that holds detail pages, e.g. cluster notes. Add entries here when you create a new subfolder pattern.)
 
-- Wiki Operations: [[Habits and Tools]] (how the owner works, and the extras installed to match)
+- Wiki Operations: [[Habits and Tools]] (how the owner works, and the extras installed to match), plus the reference pages the rules file links to on demand: [[Wiki Conventions]], [[Git and Commits]], [[Tools and Connections]], [[Readwise]]
 
 ## Schema
 

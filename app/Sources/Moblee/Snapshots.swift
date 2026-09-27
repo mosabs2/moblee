@@ -45,13 +45,27 @@ enum Snapshots {
     /// `--dark` draws the screens as they look in dark mode.
     private static let dark = Practice.args.contains("--dark")
 
+    /// (v0.9.4) The made-up name the drawn screens use where a name is needed
+    /// in Arabic. "نور" is the Arabic word for "light", and is an ordinary given
+    /// name; it is nobody's in particular, and there is no surname or anything
+    /// else about a person anywhere in it.
+    static let arabicName = "نور"
+
     private static func draw(_ flow: Flow, _ name: String, to folder: URL) {
         let view = RootView()
             .environmentObject(flow)
             .environmentObject(flow.install)
             .environment(\.stillPicture, true)
             .environment(\.colorScheme, dark ? .dark : .light)
-            .frame(width: 720, height: 520)
+            // (v0.9.4) `--rtl` mirrors the whole run, every screen in it, so
+            // that a later version can put both appearances and both directions
+            // on one page without a list of screens of its own. The mirroring
+            // itself is inside `RootView`, which is the same screens the window
+            // draws, so a picture file and the window can never differ.
+            // The window's smallest size, at whatever size the words are being
+            // drawn: a screen drawn at the biggest size is drawn on the
+            // smallest window that size can be shown in. (v0.9.4)
+            .frame(width: Theme.leastWidth, height: Theme.leastHeight)
         let renderer = ImageRenderer(content: view)
         renderer.scale = 2
         var drawn: NSImage?
@@ -74,7 +88,8 @@ enum Snapshots {
     /// `--icon <file.png>` draws the app's icon at 1024 points, from the same
     /// symbols and colour the screens use, so the icon never needs an artist
     /// or an image file kept by hand. app/scripts/make-icon.sh turns it into
-    /// the .icns the app carries.
+    /// the .icns the app carries. It is a picture and not a screen, so it is
+    /// never mirrored: `--rtl` does not reach it, and must not. (v0.9.4)
     private static func drawIcon(to file: URL) {
         let icon = ZStack {
             RoundedRectangle(cornerRadius: 228, style: .continuous)
@@ -83,6 +98,8 @@ enum Snapshots {
                                      startPoint: .top, endPoint: .bottom))
                 .frame(width: 824, height: 824)
                 .shadow(color: .black.opacity(0.30), radius: 24, y: 12)
+            // The icon is a fixed 1024 points and has nothing to do with the
+            // size the owner reads at, so these two are not asked of Theme.
             Image(systemName: "books.vertical.fill")
                 .font(.system(size: 400, weight: .medium))
                 .foregroundStyle(.white)
@@ -115,6 +132,19 @@ enum Snapshots {
         Checkup.knownBeforeDrawing = Checkup.developerToolsInstalled()
 
         draw(scene(.welcome) { $0.offerMove = true }, "00a-move-to-applications", to: folder)
+        // (v0.9.4) The rest of the move screen. None of these had ever been
+        // drawn: they are only reached by really moving the app on a real Mac,
+        // so the only way to look at their words was to break a move on purpose.
+        draw(scene(.welcome) { $0.offerMove = true; $0.moveStart = .askingTheOtherOne },
+             "00b-move-asking-the-other-one", to: folder)
+        let moveFailures: [(Placement.Failure, String)] = [
+            (.copyIncomplete, "00c-move-failed-copy"), (.somethingElseThere, "00d-move-failed-something-else"),
+            (.anotherMobleeIsOpen, "00e-move-failed-another-open"), (.otherMobleeIsBusy, "00f-move-failed-other-busy"),
+            (.markNotCleared, "00g-move-failed-mark"),
+        ]
+        for (why, name) in moveFailures {
+            draw(scene(.welcome) { $0.offerMove = true; $0.moveStart = .failed; $0.moveWhy = why }, name, to: folder)
+        }
         draw(scene(.welcome), "00-welcome", to: folder)
         draw(scene(.checkup), "01-checkup", to: folder)
         // a ChatGPT app that is an older one, with no agent inside it
@@ -123,6 +153,16 @@ enum Snapshots {
         Checkup.pretendOlderChatGPT = false
         draw(scene(.name), "02-name-empty", to: folder)
         draw(scene(.name) { $0.ownerName = "Sam" }, "03-name-typed", to: folder)
+        // (v0.9.4) A name the owner typed in Arabic, on the three screens that
+        // show it: the box itself, the folder it will be called after, and the
+        // hand-off that sends the owner to find that folder. An owner's Mac may
+        // be in English while their own name is not, and a name read right to
+        // left inside a sentence read left to right is where the quotes and the
+        // full stop beside it go to the wrong side. Drawn in both directions,
+        // because both happen: an Arabic name on an English Mac, and the same
+        // name on a Mac that is itself in Arabic.
+        draw(scene(.name) { $0.ownerName = Self.arabicName }, "02b-name-arabic", to: folder)
+        draw(scene(.promise) { $0.ownerName = Self.arabicName }, "03g-promise-arabic-name", to: folder)
         draw(scene(.promise) { $0.ownerName = "Sam" }, "03b-promise", to: folder)
         draw(scene(.assistant) { $0.ownerName = "Sam" }, "03c-assistant-unanswered", to: folder)
         draw(scene(.assistant) { $0.ownerName = "Sam"; $0.assistant = .chatgpt }, "03d-assistant-answered", to: folder)
@@ -155,6 +195,10 @@ enum Snapshots {
             f.ownerName = "Sam"; f.assistant = .both
             f.install.vaultPath = "/Users/sam/Wiki/Sam Wiki"
         }, "07c-handoff-both", to: folder)
+        draw(scene(.handoff) { f in
+            f.ownerName = Self.arabicName
+            f.install.vaultPath = "/Users/sam/Wiki/\(Self.arabicName) Wiki"
+        }, "07d-handoff-arabic-name", to: folder)
 
         // the Trust screen and the proof, in each of their states
         let trustStages: [(TrustScreen.Stage, String)] = [
@@ -219,6 +263,9 @@ enum Snapshots {
             f.homeModel.wikiVersion = "0.7.0"; f.homeModel.newerRelease = "0.9.3"
         }, "11b-home-update-newer-release-hidden", to: folder)
         draw(homeScene { $0.homeModel.needsRepair = true }, "12-home-repair", to: folder)
+        // (v0.9.4) A skill wearing a Moblee name that no Moblee left here: named,
+        // with what to do, in place of a Repair that could never succeed.
+        draw(homeScene { $0.homeModel.foreignSkills = ["companion"] }, "12c-home-skill-not-moblees", to: folder)
         draw(homeScene { $0.homeModel.tiles = sample; $0.homeModel.explaining = sample[1] }, "13-explain-terminal", to: folder)
         draw(homeScene { $0.homeModel.tiles = sample; $0.homeModel.explaining = sample[2] }, "14-explain-clicks", to: folder)
         draw(homeScene { $0.homeModel.tiles = [google]; $0.homeModel.explaining = google }, "14b-explain-google", to: folder)
@@ -242,6 +289,213 @@ enum Snapshots {
             for i in 0..<4 { f.install.items[i].state = .done }
             f.install.items[4].state = .running
         }, "15-update-running", to: folder)
+        // (v0.9.4) How an update ENDS. Only the running state was ever drawn,
+        // so four sentences an owner meets at the end of an update had never
+        // been looked at once — the refused-commit one is three lines long.
+        func updateScene(_ configure: @escaping (Flow) -> Void) -> Flow {
+            homeScene { f in
+                f.mode = .update
+                f.install.items = InstallRun.updateItems()
+                for i in f.install.items.indices { f.install.items[i].state = .done }
+                configure(f)
+            }
+        }
+        draw(updateScene { $0.install.phase = .finished }, "15b-update-finished", to: folder)
+        draw(updateScene { f in f.install.phase = .finished; f.install.partial = true },
+             "15c-update-finished-partial", to: folder)
+        draw(updateScene { f in f.install.needsCommit = true; f.install.phase = .needsCommit },
+             "15d-update-refused", to: folder)
+        draw(updateScene { f in
+            f.install.items[4].state = .failed
+            f.install.phase = .failed(why: "skills")
+        }, "15e-update-failed", to: folder)
+
+        // (v0.9.4) The Terminal explanation, one picture at a time. All three
+        // are drawn, because an owner who does not read much meets them one
+        // after another and each has to stand on its own.
+        draw(homeScene { f in
+            f.homeModel.tiles = sample; f.homeModel.explaining = sample[1]
+            f.homeModel.explainTerminalStep = 1
+        }, "13b-explain-terminal-two", to: folder)
+        draw(homeScene { f in
+            f.homeModel.tiles = sample; f.homeModel.explaining = sample[1]
+            f.homeModel.explainTerminalStep = 2
+        }, "13c-explain-terminal-three", to: folder)
+
+        // (v0.9.5) The ring on two of the new listen controls: the one on a
+        // tile, which is the smallest control on the busiest screen, and the one
+        // at the end of a Trust step, which is the smallest of all. A ring round
+        // a 16-point symbol has to be seen in light and in dark, and it has to
+        // clear the card's own edge and the words beside it, and no picture file
+        // could show either until now.
+        FocusedControl.drawnRing = RequestTile.listenId(sample[1])
+        draw(homeScene { $0.homeModel.tiles = sample }, "22a-keyboard-ring-listen-tile", to: folder)
+        FocusedControl.drawnRing = TrustSteps.listenId(step: 3)
+        draw(scene(.trust) { f in
+            f.assistant = .chatgpt; f.trustStart = .steps
+            f.install.vaultPath = "/Users/sam/Wiki/Sam Wiki"
+        }, "22b-keyboard-ring-listen-step", to: folder)
+
+        // (v0.9.4) The ring that says which control the keyboard is on, on the
+        // kinds of control that could not be reached by the keyboard at
+        // all until now: a tile's own button, the quiet "Not now", and one of
+        // the three cards on the question of which assistant. Drawn
+        // in light and in dark, because a ring nobody can see is no ring.
+        FocusedControl.drawnRing = RequestTile.buttonId(sample[1])
+        draw(homeScene { $0.homeModel.tiles = sample }, "20a-keyboard-ring-tile", to: folder)
+        FocusedControl.drawnRing = "quiet"
+        draw(homeScene { f in
+            f.homeModel.tiles = sample; f.homeModel.explaining = sample[1]
+        }, "20b-keyboard-ring-not-now", to: folder)
+        // The screen nobody can skip: Next is greyed out until one of the three
+        // is chosen, so a card the keyboard cannot reach shut an owner who
+        // cannot use a mouse out of the install altogether. The ring goes round
+        // a whole card, which is a much larger thing than the other two, and is
+        // drawn here so it can be looked at.
+        FocusedControl.drawnRing = "assistant-claude"
+        draw(scene(.assistant) { $0.ownerName = "Sam" }, "20c-keyboard-ring-assistant", to: folder)
+        FocusedControl.drawnRing = nil
+
+        // (v0.9.5) Something dropped on Moblee: the receipt, and the two
+        // refusals that matter most. The states are only reachable by really
+        // dropping a file on a real window, so, like the move screen's, the only
+        // way to read their words was to set them here. The made-up names are
+        // nobody's: a gym plan and a scan, the same sort of thing the sample
+        // tiles above are about.
+        func dropScene(_ landing: Inbox.Landing) -> Flow {
+            let f = Flow(); f.mode = .home; f.homeModel.loaded = true
+            Dropped.shared.showing = landing
+            return f
+        }
+        draw(dropScene(Inbox.Landing(landed: ["Gym plan.pdf"])), "21a-drop-receipt-one", to: folder)
+        // Five landed and one turned away, which puts every part of the receipt
+        // on one picture: the count in the sentence, the clause about the one
+        // that did not go, four names, the line that says how many more there
+        // were, and a refused line with its reason.
+        draw(dropScene(Inbox.Landing(
+            landed: ["Gym plan.pdf", "Scan 1.pdf", "Scan 2.pdf", "Notes.txt", "Recipe.md"],
+            turnedAway: [.init(name: "Holiday film.mov", why: .tooBig)])),
+             "21b-drop-receipt-several", to: folder)
+        draw(dropScene(Inbox.Landing(wholeDrop: .noWikiYet)), "21c-drop-no-wiki", to: folder)
+        draw(dropScene(Inbox.Landing(wholeDrop: .isAFolder)), "21d-drop-folder", to: folder)
+        Dropped.shared.showing = nil
+
+        // (v0.9.6) The example wiki, being read. Four screens, because those are
+        // the four states an owner meets: the page it opens on (`Welcome.md`, not
+        // `Index.md`), a content page with links in the middle of its sentences
+        // and the row of buttons under it that the keyboard follows them by, the
+        // list of every page for a reader who has lost the thread, and a link
+        // that leads nowhere — which the shipped example never contains, so the
+        // only way to look at its quiet line is to follow one here.
+        //
+        // The page chosen is `Bread.md`: it is the page the example is really
+        // about, and it is the one that carries every piece of markdown at once —
+        // two heading levels, a bullet list, bold, italic, inline code and four
+        // links. Each is drawn in light and in dark and mirrored, from the same
+        // switches as every other screen.
+        func exampleScene(_ configure: (ExampleReader) -> Void = { _ in }) -> Flow {
+            let flow = Flow()
+            flow.mode = .home
+            flow.homeModel.loaded = true
+            flow.openExample()
+            if let reader = flow.example { configure(reader) }
+            return flow
+        }
+        draw(exampleScene(), "23a-example-welcome", to: folder)
+        draw(exampleScene { $0.follow("Bread") }, "23b-example-page", to: folder)
+        draw(exampleScene { $0.openPages() }, "23c-example-pages", to: folder)
+        // A page name the example has none of. The words say "That page is not in
+        // the example." and the owner is left exactly where they were.
+        draw(exampleScene { $0.follow("Porridge") }, "23d-example-link-missing", to: folder)
+
+        // (v0.9.6) The check-up an owner runs themselves. Its states are only
+        // reachable by really running the pack's check-up against a real wiki, so
+        // they are set here to be looked at: while it runs, a wiki that looks
+        // healthy, a wiki with things to look at, and the two refusals that matter
+        // most — no wiki on the Mac at all, and a Moblee that cannot find its own
+        // check-up. The findings on the cards are made up and are of the setup
+        // only; nothing on them is anybody's.
+        func clinicScene(_ state: Clinic.State) -> Flow {
+            let f = Flow()
+            f.mode = .clinic
+            f.homeModel.loaded = true
+            f.homeModel.wikiVersion = "0.9.6"; f.homeModel.packVersion = "0.9.6"
+            f.clinic.state = state
+            return f
+        }
+        let healthyCard = Clinic.Card(
+            lines: ["Moblee health card, 26 September 2026"],
+            state: "healthy",
+            headline: "This wiki looks healthy. Nothing was found to be wrong.",
+            actions: ["Nothing to do. Run the check-up again next month."])
+        let poorlyCard = Clinic.Card(
+            lines: ["Moblee health card, 26 September 2026"],
+            state: "unwell",
+            headline: "This wiki needs attention: 4 things to look at. 1 more could not be checked.",
+            wrong: [.init(code: "F13", line: "The wiki is in the Desktop folder, which iCloud copies."),
+                    .init(code: "F29", line: "macOS stops jobs that run on their own from reading that folder."),
+                    .init(code: "F02", line: "The delete guard is an older copy than this Moblee's.")],
+            wrongTotal: 4,
+            unchecked: [.init(code: "F36", line: "Whether the guard is trusted cannot be seen from here.")],
+            uncheckedTotal: 1,
+            actions: ["Open the Moblee app: it offers Repair, or the update, when it can help."])
+        draw(clinicScene(.running), "24a-clinic-running", to: folder)
+        draw(clinicScene(.finished(.init(card: healthyCard,
+                                         savedAs: "clinic-report-sam-checkup-2026-09-24.md"))),
+             "24b-clinic-healthy", to: folder)
+        draw(clinicScene(.finished(.init(card: poorlyCard,
+                                         savedAs: "clinic-report-sam-checkup-2026-09-24.md"))),
+             "24c-clinic-problems", to: folder)
+        draw(clinicScene(.noWiki), "24d-clinic-no-wiki", to: folder)
+        draw(clinicScene(.couldNotCheck(.noCheckup, savedAs: "clinic-report-sam-checkup-2026-09-24.md")),
+             "24e-clinic-no-checkup", to: folder)
+        // And the home screen with a dropped file still copying, where "Check my
+        // wiki" is greyed: the one state of that button an owner can actually
+        // meet and the only one worth looking at, since a repair takes the whole
+        // corner away instead.
+        AppDelegate.dropsInFlight += 1
+        draw(homeScene { $0.homeModel.tiles = sample }, "24f-home-check-my-wiki-while-busy", to: folder)
+        AppDelegate.dropsInFlight -= 1
+
+        // (v0.9.4) And the same screens at the biggest size an owner can set,
+        // on the smallest window that size can be shown in. The three hardest
+        // are drawn: three cards side by side, one card alone, and the longest
+        // sentence in the app. Nothing here touches what the owner has set.
+        let started = TextSize.shared.step
+        TextSize.shared.drawAt(.biggest)
+        draw(homeScene { $0.homeModel.tiles = sample }, "19a-biggest-home-waiting", to: folder)
+        draw(homeScene { $0.homeModel.tiles = sample; $0.homeModel.explaining = sample[1] },
+             "19b-biggest-explain-terminal", to: folder)
+        draw(updateScene { f in f.install.needsCommit = true; f.install.phase = .needsCommit },
+             "19c-biggest-update-refused", to: folder)
+        // (v0.9.5) And the four screens that carry the most listen controls, at
+        // the biggest size an owner can set, because that is where a screen full
+        // of small controls comes apart if it is going to. The Trust steps have
+        // one at the end of each of five lines on one card; the hand-off has one
+        // on each of three cards and one under them; the check-up has one on each
+        // of three cards; and the drop receipt has one on a card of names beside
+        // a card that is as tall as its own list.
+        draw(scene(.trust) { f in
+            f.assistant = .chatgpt; f.trustStart = .steps
+            f.install.vaultPath = "/Users/sam/Wiki/Sam Wiki"
+        }, "19d-biggest-trust-steps", to: folder)
+        draw(scene(.handoff) { f in
+            f.ownerName = Self.arabicName
+            f.install.vaultPath = "/Users/sam/Wiki/\(Self.arabicName) Wiki"
+        }, "19e-biggest-handoff", to: folder)
+        draw(scene(.checkup), "19f-biggest-checkup", to: folder)
+        Dropped.shared.showing = Inbox.Landing(
+            landed: ["Gym plan.pdf", "Scan 1.pdf", "Scan 2.pdf", "Notes.txt", "Recipe.md"],
+            turnedAway: [.init(name: "Holiday film.mov", why: .tooBig)])
+        draw(homeScene { _ in }, "19g-biggest-drop-receipt", to: folder)
+        Dropped.shared.showing = nil
+        // (v0.9.6) And the example wiki at the biggest size, which is where a
+        // screen made of a page of words comes apart if it is going to: the page
+        // and the row of link buttons under it, and the list of nine pages, which
+        // is the tallest thing the example draws.
+        draw(exampleScene { $0.follow("Bread") }, "19h-biggest-example-page", to: folder)
+        draw(exampleScene { $0.openPages() }, "19i-biggest-example-pages", to: folder)
+        TextSize.shared.drawAt(started)
     }
 
     private static func rehearse(to folder: URL) {

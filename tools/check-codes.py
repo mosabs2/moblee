@@ -13,10 +13,25 @@ import pathlib
 import re
 import sys
 
+# (v0.9.4) Where the Moblee folder is. The folder above this file is the answer
+# almost always, because this tool ships inside that folder. The fallback used
+# to be one particular Mac's path, written out in full, account name and wiki
+# name and all, in a public repository; that broke the product's first rule and
+# only ever worked on that one Mac. The record the installer writes is the
+# neutral way to ask the same question, and if neither answers, the tool says so
+# rather than pointing at somebody's folder.
 PKG = pathlib.Path(__file__).resolve().parent.parent
 if not (PKG / "scripts" / "moblee-doctor.py").exists():
-    PKG = pathlib.Path("/Users/mosabs/Wiki/Mo Sabs Wiki/outputs/moblee")
+    record = pathlib.Path.home() / ".config" / "moblee" / "package-path"
+    try:
+        PKG = pathlib.Path(record.read_text().strip()).expanduser()
+    except OSError:
+        PKG = pathlib.Path.cwd()
 DOC = PKG / "scripts" / "moblee-doctor.py"
+if not DOC.is_file():
+    print("FAIL  the Moblee folder could not be found from here.")
+    print(f"      Run this from inside it: cd <moblee folder> && python3 {pathlib.Path(__file__).name}")
+    sys.exit(1)
 GUIDE = PKG / "skills" / "companion" / "field-guide.md"
 
 src = DOC.read_text()

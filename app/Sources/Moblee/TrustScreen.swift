@@ -252,6 +252,8 @@ enum GuardProof {
 /// repair changed the guard; and, starting at the offer, when the owner presses
 /// "Prove the guard" at home.
 struct TrustScreen: View {
+    /// Drawn again when the owner presses "Bigger text". (v0.9.4)
+    @ObservedObject private var textSize = TextSize.shared
     enum Stage { case openFolder, steps, offer, proving, proved, notRunning, cannotTell }
 
     let vault: String?
@@ -284,47 +286,66 @@ struct TrustScreen: View {
         ) {
             switch stage {
             case .openFolder:
-                VStack(spacing: 16) {
+                VStack(spacing: Theme.pt(16)) {
                     OpenFolderFirst()
                     openChatGPT
                 }
             case .steps, .notRunning:
-                VStack(spacing: 8) {
+                VStack(spacing: Theme.pt(8)) {
                     if stage == .notRunning {
-                        Text(Trust.folderThenSteps)
-                            .font(.system(size: 16, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.primary)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(width: 520)
+                        // (v0.9.5) The line that says what to do about a guard
+                        // seen not running: a sentence of its own, above the
+                        // steps, so it has a listen control of its own.
+                        HStack(spacing: Theme.pt(8)) {
+                            Text(Trust.folderThenSteps)
+                                .font(Theme.font(16, .semibold))
+                                .foregroundStyle(.primary)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                            ListenButton(id: "listen-folder-then-steps", speech: Speech(Trust.folderThenSteps),
+                                         what: "what to do", size: 15)
+                        }
+                        .frame(width: Theme.pt(520))
                     }
                     TrustSteps()
-                    Text(Trust.afterwards)
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: Theme.pt(6)) {
+                        Text(Trust.afterwards)
+                            .font(Theme.font(13, .medium))
+                            .foregroundStyle(.secondary)
+                        ListenButton(id: "listen-afterwards", speech: Speech(Trust.afterwards),
+                                     what: "the line below the steps", size: 13)
+                    }
                     openChatGPT
                 }
             case .offer:
-                VStack(spacing: 16) {
+                VStack(spacing: Theme.pt(16)) {
                     shield("lock.shield.fill", Theme.accent)
-                    Text(Self.allowance)
-                        .font(.system(size: 15, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: Theme.pt(6)) {
+                        Text(Self.allowance)
+                            .font(Theme.font(15, .medium))
+                            .foregroundStyle(.secondary)
+                        ListenButton(id: "listen-allowance", speech: Speech(Self.allowance),
+                                     what: "the line about your allowance", size: 14)
+                    }
                 }
             case .proving:
-                VStack(spacing: 16) {
+                VStack(spacing: Theme.pt(16)) {
                     Image(systemName: "lock.shield.fill")
-                        .font(.system(size: 96)).foregroundStyle(Theme.accent)
+                        .font(Theme.font(96, .regular, .default)).foregroundStyle(Theme.accent)
                         .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
                         .accessibilityHidden(true)
-                    Text("Your wiki is not touched.")
-                        .font(.system(size: 15, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: Theme.pt(6)) {
+                        Text(Self.notTouched)
+                            .font(Theme.font(15, .medium))
+                            .foregroundStyle(.secondary)
+                        ListenButton(id: "listen-not-touched", speech: Speech(Self.notTouched),
+                                     what: "the line under the picture", size: 14)
+                    }
                 }
             case .proved:
                 shield("checkmark.shield.fill", Theme.good)
             case .cannotTell:
-                VStack(spacing: 18) {
+                VStack(spacing: Theme.pt(18)) {
                     shield("questionmark.circle.fill", Theme.waiting)
                     openChatGPT
                 }
@@ -337,7 +358,7 @@ struct TrustScreen: View {
 
     private func shield(_ symbol: String, _ colour: Color) -> some View {
         Image(systemName: symbol)
-            .font(.system(size: 96)).foregroundStyle(colour)
+            .font(Theme.font(96, .regular, .default)).foregroundStyle(colour)
             .accessibilityHidden(true)
     }
 
@@ -346,8 +367,12 @@ struct TrustScreen: View {
     private var openChatGPT: some View {
         Button("Open ChatGPT") { ChatGPTApp.open(folder: vault, practice: flow.isTestMode) }
             .buttonStyle(.bordered).controlSize(.large)
-            .font(.system(size: 15, weight: .semibold, design: .rounded))
-            .accessibilityIdentifier("open-chatgpt")
+            .font(Theme.font(15, .semibold))
+            // (v0.9.4) An ordinary button is in the keyboard's way only where
+            // Full Keyboard Access has been switched on, so this one takes the
+            // keyboard the way the rest of the app does.
+            .keyboardReachable("open-chatgpt", corner: 8,
+                               press: { ChatGPTApp.open(folder: vault, practice: flow.isTestMode) })
     }
 
     private var sentence: String {
@@ -369,6 +394,9 @@ struct TrustScreen: View {
     static let provedSentence = "Proved. Asked to remove a folder and delete a page in a practice folder, ChatGPT was refused."
     static let cannotTellSentence = "Moblee could not tell. Check that ChatGPT is signed in, then try again."
     static let allowance = "It uses a little of your ChatGPT allowance."
+    /// (v0.9.5) Named, rather than typed into the screen, so that the listen
+    /// control beside it and the words beside it cannot drift apart.
+    static let notTouched = "Your wiki is not touched."
 
     private var spoken: String? {
         switch stage {
@@ -449,54 +477,79 @@ struct TrustScreen: View {
 /// What comes before the five steps, on a card of its own: the instruction,
 /// large, and quieter beneath it the reason it cannot be skipped.
 struct OpenFolderFirst: View {
+    /// Drawn again when the owner presses "Bigger text". (v0.9.4)
+    @ObservedObject private var textSize = TextSize.shared
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Theme.pt(12)) {
             Image(systemName: "folder.fill")
-                .font(.system(size: 56, weight: .medium))
+                .font(Theme.font(56, .medium, .default))
                 .foregroundStyle(Theme.accent)
                 .accessibilityHidden(true)
             Text(Trust.openFirst)
-                .font(.system(size: 19, weight: .semibold, design: .rounded))
+                .font(Theme.font(19, .semibold))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             Text(Trust.emptyUntilOpened)
-                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .font(Theme.font(14, .medium))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, 26).padding(.vertical, 22)
-        .frame(width: 520)
-        .background(CardBackground(corner: 20))
+        .padding(.horizontal, Theme.pt(26)).padding(.vertical, Theme.pt(22))
+        .frame(width: Theme.pt(520))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Trust.openFirst + " " + Trust.emptyUntilOpened)
+        .background(CardBackground(corner: 20))
+        // (v0.9.5) The instruction and the reason for it, read aloud from the
+        // card they are on, in the corner neither of them reaches.
+        .overlay(alignment: .topTrailing) {
+            ListenButton(id: "listen-open-folder-first", speech: Self.speech, what: "this card")
+                .padding(Theme.pt(8))
+        }
     }
+
+    static let speech = Speech(Trust.openFirst + " " + Trust.emptyUntilOpened)
 }
 
 /// The five steps as a short numbered list, on a card.
 struct TrustSteps: View {
+    /// Drawn again when the owner presses "Bigger text". (v0.9.4)
+    @ObservedObject private var textSize = TextSize.shared
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: Theme.pt(9)) {
             ForEach(Array(Trust.steps.enumerated()), id: \.offset) { i, step in
-                HStack(alignment: .center, spacing: 12) {
-                    Text("\(i + 1)")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .frame(width: 26, height: 26)
-                        .background(Circle().fill(Theme.accent))
-                        .accessibilityHidden(true)
-                    Text(step)
-                        .font(.system(size: 16, weight: .medium, design: .rounded))
-                        .foregroundStyle(.primary)
-                        .fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .center, spacing: Theme.pt(10)) {
+                    HStack(alignment: .center, spacing: Theme.pt(12)) {
+                        Text("\(i + 1)")
+                            .font(Theme.font(14, .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: Theme.pt(26), height: Theme.pt(26))
+                            .background(Circle().fill(Theme.accent))
+                            .accessibilityHidden(true)
+                        Text(step)
+                            .font(Theme.font(16, .medium))
+                            .foregroundStyle(.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Step \(i + 1). \(step)")
+                    // (v0.9.5) One listen control for each of the five, at the
+                    // end of its own line, where there is room for it on a card
+                    // 520 points wide holding a line of about forty letters.
+                    // Five steps an owner has to carry out in another app, one
+                    // at a time, is exactly the list that has to be hearable
+                    // step by step rather than as one lump.
+                    Spacer(minLength: Theme.pt(8))
+                    ListenButton(id: Self.listenId(step: i + 1), speech: Speech(step),
+                                 what: "step \(i + 1)", size: 15)
                 }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Step \(i + 1). \(step)")
             }
         }
-        .padding(.horizontal, 22).padding(.vertical, 16)
-        .frame(width: 520, alignment: .leading)
+        .padding(.horizontal, Theme.pt(22)).padding(.vertical, Theme.pt(16))
+        .frame(width: Theme.pt(520), alignment: .leading)
         .background(CardBackground(corner: 20))
     }
+
+    static func listenId(step: Int) -> String { "listen-trust-step-\(step)" }
 }

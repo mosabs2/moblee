@@ -10,6 +10,19 @@ struct Need: Identifiable {
     let fixTitle: String
     let optional: Bool
     var id: String { name }
+
+    /// (v0.9.4) What this need's Get button is called: the name the keyboard
+    /// ring is recorded under, and the name the self-drive walk finds it by.
+    /// Written out rather than made from the name, because the name is words an
+    /// owner reads and may be changed.
+    var getId: String {
+        switch kind {
+        case .developerTools: return "get-apple-tools"
+        case .claude: return "get-claude"
+        case .chatgpt: return "get-chatgpt"
+        case .obsidian: return "get-obsidian"
+        }
+    }
 }
 
 @MainActor
@@ -209,6 +222,8 @@ final class Checkup: ObservableObject {
 }
 
 struct CheckupScreen: View {
+    /// Drawn again when the owner presses "Bigger text". (v0.9.4)
+    @ObservedObject private var textSize = TextSize.shared
     @EnvironmentObject var flow: Flow
     @StateObject private var checkup = Checkup()
 
@@ -225,7 +240,7 @@ struct CheckupScreen: View {
             quietAction: quietTitle == nil ? nil : switchAssistant,
             action: flow.next
         ) {
-            HStack(spacing: 22) {
+            HStack(spacing: Theme.pt(22)) {
                 ForEach(checkup.needs) { need in
                     NeedTile(need: need,
                              present: checkup.present[need.name],
@@ -233,7 +248,7 @@ struct CheckupScreen: View {
                              fix: { checkup.fix(need) })
                 }
             }
-            .padding(.horizontal, 40)
+            .padding(.horizontal, Theme.pt(40))
         }
         .onAppear {
             if flow.assistant == .chatgpt { checkup.kinds = [.developerTools, .chatgpt, .obsidian] }
@@ -267,6 +282,8 @@ struct CheckupScreen: View {
 }
 
 struct NeedTile: View {
+    /// Drawn again when the owner presses "Bigger text". (v0.9.4)
+    @ObservedObject private var textSize = TextSize.shared
     let need: Need
     let present: Bool?
     let asked: Bool
@@ -275,18 +292,18 @@ struct NeedTile: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Theme.pt(12)) {
             ZStack(alignment: .bottomTrailing) {
                 Image(systemName: need.symbol)
-                    .font(.system(size: 46, weight: .medium))
+                    .font(Theme.font(46, .medium, .default))
                     .foregroundStyle(present == true ? Theme.good : Theme.accent)
-                    .frame(width: 96, height: 96)
+                    .frame(width: Theme.pt(96), height: Theme.pt(96))
                 badge
                     .offset(x: 6, y: 6)
             }
             .accessibilityHidden(true)
             Text(need.name)
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .font(Theme.font(17, .semibold))
             Group {
                 if present == true {
                     Text("Here").foregroundStyle(Theme.goodText)
@@ -297,35 +314,62 @@ struct NeedTile: View {
                         .buttonStyle(.borderedProminent)
                         .tint(Theme.accent)
                         .controlSize(.large)
+                        // (v0.9.4) macOS only puts an ordinary button like this
+                        // in the keyboard's way when Full Keyboard Access has
+                        // been switched on, which no owner of Moblee's will
+                        // have done. So it takes the keyboard the same way
+                        // every other control in the app does.
+                        .keyboardReachable(need.getId, corner: 8, press: fix)
                 }
             }
-            .font(.system(size: 15, weight: .semibold, design: .rounded))
-            .frame(height: 32)
+            .font(Theme.font(15, .semibold))
+            .frame(height: Theme.pt(32))
             Text(need.optional ? "Can wait" : " ")
-                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .font(Theme.font(13, .medium))
                 .foregroundStyle(.secondary)
         }
-        .frame(width: 170, height: 236)
+        .frame(width: Theme.pt(170), height: Theme.pt(236))
         .background(CardBackground())
         .accessibilityElement(children: .contain)
         .accessibilityLabel(need.name + (need.optional ? ", can wait" : ""))
         .accessibilityValue(present == true ? "here" : (asked ? "downloading" : "missing"))
+        // (v0.9.5) The check-up's own findings, read aloud one card at a time.
+        // This screen is where an owner is stopped until their Mac has three
+        // things on it, and the only words saying WHICH of the three is missing
+        // are on the cards. In the top corner, as an overlay, so the card is
+        // laid out exactly as it was at every text size.
+        .overlay(alignment: .topTrailing) {
+            ListenButton(id: Self.listenId(need), speech: Self.speech(need, present: present, asked: asked),
+                         what: need.name)
+                .padding(Theme.pt(8))
+        }
+    }
+
+    /// The name the keyboard ring is recorded under and the walk finds it by,
+    /// beside the Get button's own name. (v0.9.5)
+    static func listenId(_ need: Need) -> String { "listen-" + need.getId }
+
+    /// What the card says: what it is, whether it can wait, and where it has got
+    /// to. Static, so a check can ask it of a real need. (v0.9.5)
+    static func speech(_ need: Need, present: Bool?, asked: Bool) -> Speech {
+        let state = present == true ? "Here." : (asked ? "Downloading." : "Not on this Mac yet. Press Get.")
+        return Speech(need.name + ". " + (need.optional ? "Can wait. " : "") + state)
     }
 
     @ViewBuilder private var badge: some View {
         if present == true {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 30))
+                .font(Theme.font(30, .regular, .default))
                 .foregroundStyle(.white, Theme.good)
                 .transition(.scale.combined(with: .opacity))
         } else if asked {
             Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
-                .font(.system(size: 30))
+                .font(Theme.font(30, .regular, .default))
                 .foregroundStyle(.white, Theme.waiting)
                 .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
         } else if present == false {
             Image(systemName: "arrow.down.circle.fill")
-                .font(.system(size: 30))
+                .font(Theme.font(30, .regular, .default))
                 .foregroundStyle(.white, Theme.accent)
         }
     }

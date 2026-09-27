@@ -1,0 +1,22 @@
+[
+  {
+    "level": "OK",
+    "text": "This wiki is set up to be used with ChatGPT.",
+    "guide": null
+  },
+  {
+    "level": "OK",
+    "text": "The delete guard is installed for ChatGPT, entered in its hooks file, and is this Moblee's own copy.",
+    "guide": null
+  },
+  {
+    "level": "CANNOT TELL",
+    "text": "ChatGPT did not finish within three minutes, so the guard could not be proved this time. Nothing was deleted. To check, and to put it right if need be: First open your wiki folder in ChatGPT (File menu, Open Folder). Until a folder has been opened in ChatGPT, its Hooks page is empty and does not say why. 1. Open the ChatGPT menu and choose Settings. 2. Choose Hooks, under the heading Coding. 3. Open \"User config\". 4. Press Trust beside the hook that ends bash-guard.py. 5. Turn its switch on. If ChatGPT was open during this, quit it and open it again so that it reads the whole rules file. ChatGPT keeps its trust while Moblee's entry in its hooks list stays the same, so an ordinary Moblee update does not need these steps again. If an update ever does need them, Moblee says so at the end of the update and ChatGPT will not remind you. After any update, prove the guard again. The scratch wiki used for the test is left at ~/.config/moblee/prove-guard/20260920-231502; nothing in it matters.",
+    "guide": null
+  },
+  {
+    "level": "OK",
+    "text": "The last install ran to the end.",
+    "guide": null
+  }
+]

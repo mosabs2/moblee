@@ -1,9 +1,19 @@
 # Moblee vault: what git does not need to keep.
 # Reports and renders are regenerated from the markdown; editor state and caches are noise.
-outputs/
+outputs/*
+# The weekly card is the exception. (v0.9.4) It is the only record that the
+# owner was offered one that week, so if git does not hold it, a restore loses
+# that memory and the owner is offered the same week's card again.
+!outputs/weekly/
 .obsidian/workspace.json
 .obsidian/workspace-mobile.json
 .obsidian/cache
 __pycache__/
 *.pyc
 .DS_Store
+# What the assistant and the owner agreed to add, waiting for the Moblee app to
+# add it. It is a queue the app empties, not a page, and leaving it untracked
+# made every `git status` in the wiki look as though something were unsaved.
+# The record beside it, .moblee/seed-state.json, IS kept: it says which starting
+# notes the owner has taken out, so an update never puts one back.
+.moblee/requests.json

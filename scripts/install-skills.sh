@@ -147,6 +147,30 @@ record_here() {
     echo "$1" >> "$rec" 2>/dev/null || true
   fi
 }
+# (v0.9.4) A copy an EARLIER Moblee put there, from before the record above
+# existed. The record is the only proof this script had, and an owner who
+# installed with ChatGPT before v0.9.2 has Moblee's own skills in
+# ~/.agents/skills and no record naming them: the app said a skill was missing,
+# this script would not replace it, and the repair it offered could never
+# succeed (a live failure, 24 September 2026).
+#
+# So there is a second proof, and it is content, not paperwork. The app copies
+# each pack it carries to ~/Library/Application Support/Moblee/pack-<version>
+# and never removes an older one, so those folders are the record of exactly
+# what every Moblee that ever ran here shipped. A skill whose folder matches one
+# of them, file for file, is Moblee's own, whichever Moblee left it. A skill
+# that matches none of them is the owner's, or another tool's, and is still left
+# exactly where it is.
+ours_by_content() {   # ours_by_content <name> <dst>
+  local name="$1" dst="$2" copy
+  for copy in "$HOME/Library/Application Support/Moblee"/pack-*/skills/"$name"; do
+    [[ -d "$copy" ]] || continue
+    if diff -rq -x .DS_Store "$copy" "$dst" >/dev/null 2>&1; then
+      return 0
+    fi
+  done
+  return 1
+}
 seed_record_once() {
   # An owner who installed before v0.9.2 has Moblee's skills in place and no
   # record of them. Refusing to update all eight would be a worse fault than the
@@ -234,6 +258,7 @@ install_into() {
     # true, and not a reason for Claude's folder to be treated as Moblee's to
     # overwrite.
     if [[ -d "$dst" && $FORCE -eq 1 ]] && ! ours_here "$name" \
+       && ! ours_by_content "$name" "$dst" \
        && ! diff -rq -x .DS_Store "$entry" "$dst" >/dev/null 2>&1; then
       SKIPPED+=("$name (a different skill of this name is already installed; it was left alone)")
       DIFFERENT+=("$name")
