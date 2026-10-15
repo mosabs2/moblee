@@ -35,6 +35,29 @@ The groups:
             mixture of finding levels there is — that it cannot contradict the
             findings it was built from.
   app       Which copy of the Moblee app was found, and its version.
+  guardver  Which delete guard is on the Mac, in the guard's own words, said
+            beside the hash comparison rather than instead of it, for Claude
+            and for ChatGPT, and degrading to CANNOT TELL for a guard that
+            does not say which it is.
+  saving    Whether the wiki saves itself at the end of every reply: the script
+            in the wiki, the Stop hook that runs it for each assistant, what
+            the last run did, and the one line the card and the app's check-up
+            screen carry about it. The hard one, as in the privacy sweep: a
+            record names the files the commit gate stopped, and a file name in
+            a wiki is a page title, so not one of them may reach the screen.
+  prove     The proof that the save really fires, run with a stand-in for the
+            assistant that makes the edit and then runs the pack's own
+            end-of-reply script exactly as the hook runs it, so the commit and
+            the record the proof reads are real ones.
+  mods      Claude's own additions: the band above the prompt, which Moblee
+            keeps in the wiki at scripts/claude-mods/ and registers with Claude
+            from there. Which Claude is chosen and from where (the PATH first,
+            then the Claude app's own engine, newest version first), the line
+            below which a Claude is too old to take a mod at all, and the
+            finding in each of its states — installed and switched on, not
+            installed, switched off, read from some other folder, and no Claude
+            new enough yet, which is said in one plain sentence word for word.
+            Every engine is a stub, so nothing is installed anywhere.
   leftovers The old pack folders, backup folders and scratch wikis that Moblee
             keeps for ever, counted and sized, with the live pack left out, and
             a count that was cut short told apart from one that finished.
@@ -57,6 +80,7 @@ import json
 import os
 import plistlib
 import re
+import shlex
 import stat
 import sys
 import tempfile
@@ -475,9 +499,9 @@ def test_leftovers(doctor, work):
     said = next((r["text"] for r in f.rows if "keeps what it replaces" in r["text"]), "")
     check("leftovers", "all three families are counted and named", bool(said), said[:70])
     check("leftovers", "the pack in use is left out of the count, because removing it would break the install",
-          "2 old pack folder(s)" in said, said[:120])
-    check("leftovers", "the backup folders are counted", "3 backup folder(s)" in said)
-    check("leftovers", "the scratch wikis from guard proofs are counted", "1 scratch wiki folder(s)" in said)
+          "2 old pack folders" in said, said[:120])
+    check("leftovers", "the backup folders are counted", "3 backup folders" in said)
+    check("leftovers", "the scratch wikis from guard proofs are counted", "1 scratch wiki folder left by a guard proof" in said)
     check("leftovers", "how much room they take is given, for each family and in all",
           said.count("about ") >= 4 and re.search(r"about \d+ (KB|MB|GB) in all", said) is not None)
     check("leftovers", "it says Moblee never removes them and the owner may, by hand",
@@ -499,7 +523,7 @@ def test_leftovers(doctor, work):
         doctor.HOME, doctor.CONFIG = was_home, was_config
     unsure = next((r["text"] for r in f.rows if "keeps what it replaces" in r["text"]), "")
     check("leftovers", "with no record of the copy in use, all three pack folders are counted and no promise is made",
-          "3 old pack folder(s)" in unsure and "is not among them" not in unsure
+          "3 old pack folders" in unsure and "is not among them" not in unsure
           and "leave the newest of them alone" in unsure, unsure[:80])
 
     # (v0.9.4) The walk gives up after LEFTOVER_MAX_FILES files so that a
@@ -520,9 +544,9 @@ def test_leftovers(doctor, work):
         doctor.LEFTOVER_MAX_FILES = was_max
     cut = next((r["text"] for r in f.rows if "keeps what it replaces" in r["text"]), "")
     check("leftovers", "a count that was cut short says \"at least\", not a figure it cannot stand behind",
-          re.search(r"backup folder\(s\)[^;]*at least \d+ (KB|MB|GB)", cut) is not None, cut[:160])
+          re.search(r"backup folders[^;]*at least \d+ (KB|MB|GB)", cut) is not None, cut[:160])
     check("leftovers", "a family that was counted in full still says \"about\", so the two are told apart",
-          re.search(r"old pack folder\(s\)[^;]*about \d+ (KB|MB|GB)", cut) is not None, cut[:160])
+          re.search(r"old pack folders[^;]*about \d+ (KB|MB|GB)", cut) is not None, cut[:160])
     check("leftovers", "and the total says \"at least\" as well, and says why",
           "That is at least" in cut and "the count was stopped there" in cut,
           cut[cut.find("That is"):][:120])
@@ -539,6 +563,27 @@ def test_leftovers(doctor, work):
     finally:
         doctor.HOME, doctor.CONFIG = was_home, was_config
     check("leftovers", "a Mac with nothing left over is told nothing", f.rows == [])
+
+    # (v0.10.0) The end-of-reply save's proof leaves a scratch wiki every time
+    # it runs, as the guard's proof does. A folder nothing counts is a folder
+    # nobody clears out, so it is counted here and named apart from the other.
+    f = doctor.Findings()
+    saved = work / "home-saving-left"
+    config2 = saved / ".config" / "moblee"
+    for stamp in ("20261013-101010", "20261014-101010"):
+        (config2 / "prove-saving" / stamp / "practice-wiki" / "wiki").mkdir(parents=True)
+        (config2 / "prove-saving" / stamp / "practice-wiki" / "wiki" / "page.md").write_text("z" * 100)
+    (config2 / "prove-guard" / "20261012-101010").mkdir(parents=True)
+    try:
+        doctor.HOME, doctor.CONFIG = saved, config2
+        doctor.check_leftovers(f, None)
+    finally:
+        doctor.HOME, doctor.CONFIG = was_home, was_config
+    both = next((r["text"] for r in f.rows if "keeps what it replaces" in r["text"]), "")
+    check("leftovers", "the scratch wikis the end-of-reply proof leaves are counted too",
+          "2 scratch wiki folders left by end-of-reply save proofs" in both, both[:160])
+    check("leftovers", "and are named apart from the ones the guard proof leaves",
+          "1 scratch wiki folder left by a guard proof" in both, both[:160])
 
 
 # ------------------------------------------------------------------ the timeout
@@ -596,6 +641,953 @@ def read_pids(piddir):
         except (OSError, ValueError):
             pass
     return out
+
+
+# ------------------------------------------------- which guard is on this Mac
+# (v0.10.0) The check-up compared the installed guard with the pack's copy by
+# hash and said whether they matched, which answers "has it been swapped" and
+# not "which guard have I got". An owner on the telephone to whoever is helping
+# them could not say. These lock the second answer, and lock its degrading to
+# CANNOT TELL for a guard that does not say, rather than guessing.
+REGISTERED = {"hooks": {"PreToolUse": [
+    {"matcher": "Bash", "hooks": [{"command": 'python3 "$HOME/.claude/hooks/bash-guard.py"'}]}]}}
+
+
+def installed_guard(work, name, text):
+    """A practice home folder with a guard of our choosing installed in it."""
+    home = work / name
+    (home / ".claude" / "hooks").mkdir(parents=True, exist_ok=True)
+    guard = home / ".claude" / "hooks" / "bash-guard.py"
+    guard.write_text(text)
+    return guard
+
+
+def guard_rows(doctor, guard, pack):
+    """The findings check_guard makes about a guard installed at `guard`."""
+    f = doctor.Findings()
+    was = doctor.GUARD
+    try:
+        doctor.GUARD = guard
+        doctor.check_guard(f, REGISTERED, pack)
+    finally:
+        doctor.GUARD = was
+    return f.rows
+
+
+def test_guard_version(doctor, work):
+    ours = PACK / "safety" / "bash-guard.py"
+    said = doctor.guard_version(ours)
+
+    # 1. The pack's own guard says which it is, in the shape the check-up prints.
+    check("guardver", "the pack's own guard says which version it is",
+          bool(said) and re.fullmatch(r"v\d+(\.\d+)*", said or "") is not None, str(said))
+    # Bump this with the guard: it is the one place that says, in a test, which
+    # guard this release ships.
+    check("guardver", "and this release ships v5.1", said == "v5.1", str(said))
+
+    # 2. A guard that is the pack's own copy: the version said once, beside the
+    #    comparison and not instead of it.
+    same = installed_guard(work, "guard-same", ours.read_text())
+    rows = guard_rows(doctor, same, PACK)
+    texts = [r["text"] for r in rows]
+    check("guardver", "an installed copy of the pack's guard is still called the pack's own copy",
+          any("is this Moblee's own copy" in t for t in texts), "; ".join(t[:40] for t in texts))
+    version_rows = [r for r in rows if "says it is" in r["text"]]
+    check("guardver", "and one line beside it says which version Claude runs",
+          len(version_rows) == 1 and version_rows[0]["level"] == doctor.OK
+          and f"The delete guard Claude runs says it is {said}" in version_rows[0]["text"],
+          str([r["text"][:60] for r in version_rows]))
+    check("guardver", "and says it is the same version as the pack's, so nothing is left to work out",
+          bool(version_rows) and "the same version as this Moblee's own copy" in version_rows[0]["text"])
+    check("guardver", "the version line carries no field-guide code, having nothing of its own to fix",
+          bool(version_rows) and version_rows[0]["guide"] is None)
+    check("guardver", "and names no account folder, as every printed line must not",
+          all("/Users/" not in r["text"] for r in rows), "; ".join(t[:40] for t in texts))
+
+    # 3. An older guard: the fault is said once, by the comparison, and the
+    #    version line says both versions rather than reading as reassurance.
+    older = installed_guard(work, "guard-older", 'VERSION = "v4"\nprint("an older guard")\n')
+    rows = guard_rows(doctor, older, PACK)
+    compare = [r for r in rows if "not the same copy" in r["text"]]
+    version_rows = [r for r in rows if "says it is" in r["text"]]
+    check("guardver", "an older guard is still caught by the comparison, at LOOK with its code",
+          len(compare) == 1 and compare[0]["level"] == doctor.LOOK and compare[0]["guide"] == "F02",
+          str([(r["level"], r["guide"]) for r in compare]))
+    check("guardver", "and the version line names both versions, so which one is on the Mac is plain",
+          len(version_rows) == 1 and "says it is v4" in version_rows[0]["text"]
+          and f"this Moblee's own copy says {said}" in version_rows[0]["text"],
+          str([r["text"][:80] for r in version_rows]))
+    check("guardver", "and points at the line that carries the fix instead of giving a second one",
+          bool(version_rows) and "the line above" in version_rows[0]["text"].lower()
+          and version_rows[0]["guide"] is None)
+
+    # 4. A guard with no version line at all: CANNOT TELL, and nothing guessed.
+    quiet = installed_guard(work, "guard-quiet", "# a guard that never says which it is\nprint(1)\n")
+    rows = guard_rows(doctor, quiet, PACK)
+    unsure = [r for r in rows if r["level"] == doctor.UNSURE]
+    check("guardver", "a guard that does not say its version is a CANNOT TELL, not a guess",
+          len(unsure) == 1 and "cannot be told" in unsure[0]["text"],
+          str([(r["level"], r["text"][:40]) for r in rows]))
+    check("guardver", "and that line says nothing is wrong with it beyond not saying",
+          bool(unsure) and "says it is v" not in " ".join(r["text"] for r in rows))
+    check("guardver", "and says which line to rely on instead, as CANNOT TELL lines must",
+          bool(unsure) and "the line above" in unsure[0]["text"]
+          and "Repair" in unsure[0]["text"])
+
+    # 5. Nothing to compare against: the version is still said, as the guard's
+    #    own word for itself.
+    rows = guard_rows(doctor, same, None)
+    version_rows = [r for r in rows if "says it is" in r["text"]]
+    check("guardver", "with no Moblee folder found, the version is still said",
+          len(version_rows) == 1 and f"says it is {said}" in version_rows[0]["text"],
+          str([r["text"][:60] for r in version_rows]))
+    check("guardver", "and is called the guard's own word for itself, not a comparison",
+          bool(version_rows) and "own word for itself" in version_rows[0]["text"])
+
+    # 6. A file that cannot be read at all, which must not raise.
+    check("guardver", "a guard path that cannot be read gives no version rather than an error",
+          doctor.guard_version(work) is None
+          and doctor.guard_version(work / "no-guard-here.py") is None)
+
+    # 7. ChatGPT's copy is reported in the same words, named for ChatGPT.
+    codex_home = work / "guard-codex"
+    (codex_home / ".codex" / "hooks").mkdir(parents=True, exist_ok=True)
+    codex_guard = codex_home / ".codex" / "hooks" / "bash-guard.py"
+    codex_guard.write_text(ours.read_text())
+    hooks = codex_home / ".codex" / "hooks.json"
+    hooks.write_text(json.dumps({"hooks": {"PreToolUse": [
+        {"matcher": doctor.CODEX_MATCHER,
+         "hooks": [{"command": 'python3 "$HOME/.codex/hooks/bash-guard.py"'}]}]}}))
+    f = doctor.Findings()
+    was_guard, was_hooks = doctor.CODEX_GUARD, doctor.CODEX_HOOKS
+    try:
+        doctor.CODEX_GUARD, doctor.CODEX_HOOKS = codex_guard, hooks
+        doctor.check_codex_guard(f, PACK)
+    finally:
+        doctor.CODEX_GUARD, doctor.CODEX_HOOKS = was_guard, was_hooks
+    version_rows = [r for r in f.rows if "says it is" in r["text"]]
+    check("guardver", "ChatGPT's own copy of the guard has its version said too, named for ChatGPT",
+          len(version_rows) == 1
+          and f"The delete guard ChatGPT runs says it is {said}" in version_rows[0]["text"],
+          str([r["text"][:60] for r in version_rows]))
+    check("guardver", "and the comparison for ChatGPT is still made alongside it",
+          any("is this Moblee's own copy" in r["text"] for r in f.rows))
+
+
+# ------------------------------ the wiki saving itself at the end of a reply
+# (v0.10.0) The end-of-reply save: the script in the wiki, the Stop hook that
+# runs it, what the last run did, and the one line the card and the app's
+# check-up screen carry about all of it. The hard one here is the same as the
+# privacy sweep's: a record names the files the commit gate stopped, and a file
+# name in a wiki is a page title, so not one of them may reach the screen.
+#
+# (v0.10.0) The hook's command carries the WHOLE PATH of the wiki's own copy of
+# the script. A settings file naming some other folder's copy is not this wiki
+# saving itself, and the fixtures below keep the two apart on purpose.
+def saving_settings(vault):
+    """A settings file registering the end-of-reply save for THIS wiki."""
+    return {"hooks": {"Stop": [{"hooks": [
+        {"type": "command",
+         "command": "python3 %s" % shlex.quote(str(Path(vault) / "scripts" / "turn-end-commit.py"))}
+    ]}]}}
+
+
+# A hook naming a wiki that is not the one being checked: a wiki that has been
+# moved or renamed since the hook was entered, or a second wiki on the same Mac.
+SAVING_ELSEWHERE = {"hooks": {"Stop": [{"hooks": [
+    {"type": "command", "command": "python3 '/somewhere/another wiki/scripts/turn-end-commit.py'"}]}]}}
+
+
+def saving_home(work, name, settings=None, records=None):
+    """A practice home folder: a settings file that may register the save, and
+    a record file that may hold what the last run did."""
+    home = work / name
+    (home / ".claude").mkdir(parents=True, exist_ok=True)
+    (home / ".config" / "moblee" / "state").mkdir(parents=True, exist_ok=True)
+    settings_path = home / ".claude" / "settings.json"
+    if settings is not None:
+        settings_path.write_text(json.dumps(settings, indent=1))
+    state = home / ".config" / "moblee" / "state" / "turn-end-commit.json"
+    if records is not None:
+        state.write_text(records if isinstance(records, str)
+                         else json.dumps(records, indent=1))
+    return home, settings_path, state
+
+
+def saving_rows(doctor, vault, assistant="claude", settings=None, state=None, codex=None,
+                proving=False):
+    """The findings check_saving makes, with the files it reads pointed at
+    practice copies rather than at this Mac's own."""
+    f = doctor.Findings()
+    was = (doctor.SETTINGS, doctor.CODEX_HOOKS, doctor.TURN_END_STATE)
+    try:
+        if settings is not None:
+            doctor.SETTINGS = settings
+        if codex is not None:
+            doctor.CODEX_HOOKS = codex
+        if state is not None:
+            doctor.TURN_END_STATE = state
+        doctor.check_saving(f, vault, assistant, proving=proving)
+    finally:
+        doctor.SETTINGS, doctor.CODEX_HOOKS, doctor.TURN_END_STATE = was
+    return f.rows
+
+
+def saving_wiki(root, with_script=True):
+    """A wiki that does, or does not, have the end-of-reply save in it."""
+    plain_wiki(root)
+    if with_script:
+        (root / "scripts").mkdir(exist_ok=True)
+        (root / "scripts" / "turn-end-commit.py").write_text("# a stand-in for the real one\n")
+    return root
+
+
+# A record with page titles in it, which is what must never be printed. Both
+# names are invented for this test.
+SAVING_BLOCKED = {"a-conversation": {
+    "session": "a-conversation", "title": "A conversation of the owner's",
+    "at": "2026-10-13T09:00:00+01:00", "state": "blocked", "commits": ["abc1234"],
+    "own_left": ["wiki/My Private Diagnosis.md"],
+    "other_left": ["wiki/The Divorce Settlement.md"],
+    "reason": "[GATE] wiki/My Private Diagnosis.md links to a page that does not exist"}}
+SAVING_SECRET_NAMES = ("My Private Diagnosis", "The Divorce Settlement",
+                       "links to a page that does not exist")
+
+
+def test_saving(doctor, work):
+    wiki = saving_wiki(work / "saving-wiki")
+    nowt = saving_wiki(work / "saving-wiki-bare", with_script=False)
+
+    # 1. Is the save registered? Four answers, and the one that cannot be told
+    #    apart from a no is told apart from a no.
+    home, settings, state = saving_home(work, "saving-yes", saving_settings(wiki))
+    check("saving", "a settings file with the Stop hook in it reads as registered",
+          doctor.saving_registered(settings, wiki) == (True, ""))
+    _, plain, _ = saving_home(work, "saving-no", {"hooks": {"PreToolUse": [
+        {"matcher": "Bash", "hooks": [{"command": "python3 bash-guard.py"}]}]}})
+    there, said = doctor.saving_registered(plain, wiki)
+    check("saving", "a settings file with other hooks but not this one reads as not registered",
+          there is False and said == "", said)
+    missing = work / "saving-none" / "settings.json"
+    there, said = doctor.saving_registered(missing, wiki)
+    check("saving", "no settings file at all is a plain no, and says there is no such file",
+          there is False and "there is no" in said, said)
+    broken = work / "saving-broken.json"
+    broken.write_text("{not json at all")
+    there, said = doctor.saving_registered(broken, wiki)
+    check("saving", "a settings file that does not load is neither yes nor no",
+          there is None and "could not be read" in said, said)
+
+    # 1b. (v0.10.0) A hook naming SOME OTHER folder's copy of the script. The
+    #     command carries the path as it stood when the hook was entered, so a
+    #     wiki moved or renamed since, and a second wiki on the same Mac, both
+    #     leave one. It saves that other folder and not this wiki, and until
+    #     v0.10.0 the name alone was matched, so both read as registered and
+    #     the card said "The wiki saves itself after every reply".
+    _, away, _ = saving_home(work, "saving-elsewhere", SAVING_ELSEWHERE)
+    there, said = doctor.saving_registered(away, wiki)
+    check("saving", "a hook naming another folder's copy of the script is NOT this wiki registered",
+          there is False, "%r / %s" % (there, said[:50]))
+    check("saving", "and it says so in plain words: another folder is the one being saved",
+          "different folder" in said and "second wiki" in said, said[:80])
+    rows = saving_rows(doctor, wiki, settings=away, state=state)
+    check("saving", "so it is a PROBLEM carrying F44, and the card says the wiki does NOT save itself",
+          rows[0]["level"] == doctor.PROBLEM and rows[0]["guide"] == "F44"
+          and doctor.card_saving(rows) == doctor.SAVING_NO, rows[0]["text"][:80])
+    moved = saving_wiki(work / "saving-wiki-moved")
+    check("saving", "a second wiki beside the first is told apart from it, each by its own path",
+          doctor.saving_registered(settings, moved)[0] is False
+          and doctor.saving_registered(saving_home(work, "saving-yes-2",
+                                                   saving_settings(moved))[1], moved)[0] is True)
+    # The same command spelled with ~ for the home folder, and with the quoting
+    # a path holding a space needs: both are the installer's own spellings.
+    under_home = work / "saving-under-home"
+    tilde = saving_wiki(under_home / "a wiki of one's own")
+    _, spelled, _ = saving_home(work, "saving-tilde", {"hooks": {"Stop": [{"hooks": [
+        {"command": "python3 %s" % shlex.quote(str(tilde / "scripts" / "turn-end-commit.py"))}]}]}})
+    check("saving", "a path holding a space and a quote mark is read back whole",
+          doctor.saving_registered(spelled, tilde)[0] is True)
+
+    # 2. The script itself. Without it in the wiki there is nothing to register.
+    rows = saving_rows(doctor, nowt, settings=settings, state=state)
+    check("saving", "a wiki without the end-of-reply save in it is a PROBLEM, with its code",
+          len(rows) == 1 and rows[0]["level"] == doctor.PROBLEM and rows[0]["guide"] == "F44",
+          str([(r["level"], r["guide"]) for r in rows]))
+    check("saving", "and that row is the one the card reads, so the card says it too",
+          rows[0].get("tag") == doctor.SAVING_TAG
+          and doctor.card_saving(rows) == doctor.SAVING_NO)
+    check("saving", "no wiki at all makes no finding here: F37 has already said so",
+          saving_rows(doctor, None, settings=settings, state=state) == [])
+
+    # 3. Registered, and not, for Claude.
+    rows = saving_rows(doctor, wiki, settings=settings, state=state)
+    first = rows[0]
+    check("saving", "with the hook registered, Claude's line is an OK and names Claude",
+          first["level"] == doctor.OK and "Claude saves the wiki" in first["text"]
+          and first["guide"] is None, first["text"][:70])
+    check("saving", "and the card's one line says the wiki saves itself",
+          doctor.card_saving(rows) == doctor.SAVING_YES
+          and doctor.SAVING_YES == "The wiki saves itself after every reply.")
+    rows = saving_rows(doctor, wiki, settings=plain, state=state)
+    check("saving", "with it not registered, Claude's line is a PROBLEM carrying F44",
+          rows[0]["level"] == doctor.PROBLEM and rows[0]["guide"] == "F44"
+          and "does not save the wiki" in rows[0]["text"], rows[0]["text"][:70])
+    rows = saving_rows(doctor, wiki, settings=broken, state=state)
+    check("saving", "with a settings file that does not load, it is a CANNOT TELL and not a fault",
+          rows[0]["level"] == doctor.UNSURE and doctor.card_saving(rows) == doctor.SAVING_UNSURE,
+          rows[0]["text"][:70])
+
+    # 4. Both assistants: one line each, and ChatGPT's says that an entered
+    #    hook is not a hook that fires, because only the owner's trust makes it
+    #    one and no file on the Mac shows that.
+    _, codex_yes, _ = saving_home(work, "saving-codex", None)
+    codex_yes = work / "saving-codex" / "hooks.json"
+    codex_yes.write_text(json.dumps({"hooks": {"Stop": [
+        {"matcher": "*", "hooks": [{"command": "python3 %s" % shlex.quote(
+            str(wiki / "scripts" / "turn-end-commit.py"))}]}]}}))
+    rows = saving_rows(doctor, wiki, "both", settings=settings, state=state, codex=codex_yes)
+    tagged = [r for r in rows if r.get("tag") == doctor.SAVING_TAG]
+    check("saving", "a wiki used with both assistants gets one line for each of them",
+          len(tagged) == 2 and "Claude saves" in tagged[0]["text"]
+          and "ChatGPT saves the wiki" in tagged[1]["text"],
+          str([r["text"][:30] for r in tagged]))
+    check("saving", "and ChatGPT's line says an entered hook is not yet a hook that fires",
+          "trusted" in tagged[1]["text"] and "--prove-saving" in tagged[1]["text"])
+    # (v0.10.0) ChatGPT's row is CANNOT TELL and not OK. The hook is entered,
+    # and whether the owner has pressed Trust is not written down anywhere on
+    # the Mac, so it cannot be known that anything is saving. At OK, an
+    # all-OK set of rows made the card say "The wiki saves itself after every
+    # reply" — to a wiki in the commonest state a fresh ChatGPT wiki is in,
+    # entered and not yet trusted, where nothing whatever was saving.
+    check("saving", "ChatGPT's entered-but-unproved hook is a CANNOT TELL, not an OK",
+          tagged[1]["level"] == doctor.UNSURE, tagged[1]["level"])
+    check("saving", "so for ChatGPT alone the card says it cannot be told, not that it saves",
+          doctor.card_saving(saving_rows(doctor, wiki, "chatgpt", settings=settings,
+                                         state=state, codex=codex_yes))
+          == doctor.SAVING_UNSURE)
+    check("saving", "and with Claude saving too the answer is still neither yes nor no",
+          doctor.card_saving(rows) == doctor.SAVING_UNSURE, doctor.card_saving(rows))
+    # (v0.10.0) And the steps the owner is given name BOTH of Moblee's hooks.
+    # This release enters two of them and step 4 named only the delete guard,
+    # so an owner who did as they were told trusted one and left the other,
+    # and nothing said which was which.
+    check("saving", "the Trust steps name both hooks, not only the delete guard",
+          "each hook Moblee has entered" in doctor.TRUST_STEPS
+          and "turn-end-commit.py, which saves your wiki" in doctor.TRUST_STEPS
+          and "bash-guard.py, which is the delete guard" in doctor.TRUST_STEPS,
+          doctor.TRUST_STEPS[-220:])
+    check("saving", "with one assistant saving and the other not, the card says it does not",
+          doctor.card_saving(saving_rows(doctor, wiki, "both", settings=settings, state=state,
+                                         codex=plain)) == doctor.SAVING_NO)
+
+    # 5. What the last run did, state by state.
+    def record_row(records):
+        _, _, st = saving_home(work, "saving-rec-%d" % abs(hash(str(records)) % 10 ** 8), None, records)
+        rows = saving_rows(doctor, wiki, settings=settings, state=st)
+        return [r for r in rows if "end-of-reply save" in r["text"]
+                and not r.get("tag") and "recorded at" not in r["text"]][0]
+
+    def one(state, **extra):
+        return {"c": dict({"session": "c", "title": "t", "at": "2026-10-12T08:00:00+01:00",
+                           "state": state, "commits": ["abc1234"], "own_left": [],
+                           "other_left": [], "yours_left": [], "staged_left": [],
+                           "reason": ""}, **extra)}
+
+    row = record_row(one("committed"))
+    check("saving", "a last save that went through is an OK that says the day and the count",
+          row["level"] == doctor.OK and "2026-10-12" in row["text"] and "1 commit" in row["text"],
+          row["text"][:80])
+    check("saving", "a last save with nothing to do is an OK and not a fault",
+          record_row(one("clean"))["level"] == doctor.OK)
+    check("saving", "a save that stood aside for another one is an OK too",
+          record_row(one("busy"))["level"] == doctor.OK)
+
+    # (v0.10.0) The three states the end-of-reply save learned to tell apart,
+    # and the old wording that was wrong about all of them. "busy" used to
+    # cover every one, and the check-up filed it as OK saying "something else
+    # was already saving the wiki. The next reply's save takes whatever it
+    # missed" — which for a leftover lock file was false twice over.
+    row = record_row(one("locked"))
+    check("saving", "a leftover git lock file is a PROBLEM carrying F49, not an OK",
+          row["level"] == doctor.PROBLEM and row["guide"] == "F49", row["text"][:80])
+    check("saving", "and it says plainly that the next save will not take it either",
+          "nor will the next one" in row["text"] and "index.lock" in row["text"],
+          row["text"][:110])
+    check("saving", "nothing says something else was saving the wiki, because nothing was",
+          "already saving" not in row["text"])
+    row = record_row(one("detached"))
+    check("saving", "a save refused because the history was not on a branch is a LOOK with F49",
+          row["level"] == doctor.LOOK and row["guide"] == "F49"
+          and "not on a branch" in row["text"], row["text"][:80])
+    check("saving", "and it says nothing is lost and that saves start again by themselves",
+          "Nothing is lost" in row["text"] and "start again by themselves" in row["text"])
+    row = record_row(one("paused"))
+    check("saving", "a save that stood aside for a change git was making is an OK, nothing lost",
+          row["level"] == doctor.OK and "middle of a change" in row["text"]
+          and "Nothing was lost" in row["text"], row["text"][:80])
+    row = record_row(one("yours"))
+    check("saving", "a save whose only leftovers were the owner's own is an OK that says so",
+          row["level"] == doctor.OK and "never commits" in row["text"], row["text"][:90])
+
+    # A record with no time in it. Every one of these sentences used to be
+    # built round a bare ", on ," with a hole where the date should be.
+    for said in ("committed", "clean", "busy", "paused", "locked", "detached",
+                 "blocked", "error", "something new", "yours"):
+        row = record_row(one(said, at=""))
+        check("saving", "a record with no date in it still reads as a whole sentence (%s)" % said,
+              ", on ," not in row["text"] and ", on ." not in row["text"]
+              and "save ," not in row["text"], row["text"][:70])
+
+    # What the save left for the owner, said whatever else it did. A row that
+    # is not there at all reads as a missing sentence rather than stopping the
+    # whole suite, which is how the case before the fix shows itself.
+    def saying(rows, phrase):
+        found = [r for r in rows if phrase in r["text"]]
+        return found[0] if found else {"level": "", "text": "", "guide": None}
+
+    row = saying(saving_rows(
+        doctor, wiki, settings=settings,
+        state=saving_home(work, "saving-yours", None,
+                          one("committed", yours_left=["CLAUDE.md"],
+                              staged_left=["wiki/A Private Page.md"]))[2]),
+        "work of your own")
+    check("saving", "the files left for the owner's own commit are counted on their own line",
+          row["level"] == doctor.OK and "2 files" in row["text"]
+          and "Nothing of yours was committed" in row["text"], row["text"][:100])
+    check("saving", "and not one of their names is printed, because a file name is a page title",
+          "CLAUDE.md" not in row["text"] and "A Private Page" not in row["text"])
+
+    row = record_row(SAVING_BLOCKED)
+    check("saving", "a save the commit gate stopped is a LOOK carrying F45, with the count",
+          row["level"] == doctor.LOOK and row["guide"] == "F45" and "2 files" in row["text"],
+          row["text"][:90])
+    row = record_row(one("error"))
+    check("saving", "a save that ended in an error is a LOOK carrying F45, pointing at the log",
+          row["level"] == doctor.LOOK and row["guide"] == "F45"
+          and "turn-end-commit.log" in row["text"], row["text"][:90])
+    row = record_row(one("something new"))
+    check("saving", "a record this check-up cannot read is a CANNOT TELL, not a guess",
+          row["level"] == doctor.UNSURE and "cannot be told" in row["text"], row["text"][:80])
+
+    # 6. The hard one: a record names pages, and no page name may be printed.
+    _, _, blocked_state = saving_home(work, "saving-blocked", None, SAVING_BLOCKED)
+    rows = saving_rows(doctor, wiki, "both", settings=settings, state=blocked_state, codex=codex_yes)
+    printed = " ".join(r["text"] + " " + str(r.get("sendable", "")) for r in rows)
+    card, text = card_of(doctor, rows, wiki)
+    leaked = [n for n in SAVING_SECRET_NAMES if n in printed or n in text]
+    check("saving", "not one page name out of the record reaches the screen or the card",
+          not leaked, "; ".join(leaked))
+    check("saving", "and the account folder is written as ~ wherever a path is given",
+          "/Users/" not in printed and str(Path.home()) not in printed)
+
+    # 7. Where the record is kept, which is a fact and not a fault.
+    rows = saving_rows(doctor, wiki, settings=settings, state=state)
+    where = [r for r in rows if "recorded at" in r["text"]]
+    check("saving", "one line says where the record and the log are kept, at OK with no code",
+          len(where) == 1 and where[0]["level"] == doctor.OK and where[0]["guide"] is None
+          and "turn-end-commit.json" in where[0]["text"]
+          and "turn-end-commit.log" in where[0]["text"], where[0]["text"][:90] if where else "")
+    check("saving", "and it says the thirty days the records are kept for",
+          bool(where) and "thirty days" in where[0]["text"])
+
+    # 8. No record at all: a CANNOT TELL, because a hook can be registered and
+    #    never fire, and nothing on screen would say which.
+    _, _, empty = saving_home(work, "saving-fresh", None, {})
+    rows = saving_rows(doctor, wiki, settings=settings, state=empty)
+    fresh = [r for r in rows if r["guide"] == "F46"]
+    check("saving", "no record yet is a CANNOT TELL carrying F46, and offers the proof",
+          len(fresh) == 1 and fresh[0]["level"] == doctor.UNSURE and fresh[0]["guide"] == "F46"
+          and "--prove-saving" in fresh[0]["text"], str(fresh)[:90])
+    # (v0.10.0) Not a LOOK. Nothing is wrong: this is what every Mac looks like
+    # for the first few minutes after an update, and a LOOK made the card say
+    # "This wiki needs attention: 1 thing to look at" about a wiki with nothing
+    # whatever the matter with it.
+    check("saving", "and it does not make the card call the wiki unwell",
+          card_of(doctor, rows, wiki)[0]["headline"]
+          == doctor.CARD_HEADLINES["unchecked"].format(unseen=doctor.things(1)),
+          card_of(doctor, rows, wiki)[0]["headline"])
+    # And with --prove-saving in the same run, the line goes: the proof a few
+    # lines below is the answer, and telling the owner to run the very thing
+    # they are running is worse than saying nothing.
+    told = saving_rows(doctor, wiki, settings=settings, state=empty, proving=True)
+    check("saving", "with --prove-saving in the same run it is not said at all",
+          not [r for r in told if r["guide"] == "F46"],
+          str([r["text"][:40] for r in told]))
+    check("saving", "and a record file that cannot be read is a CANNOT TELL instead",
+          any(r["level"] == doctor.UNSURE and "could not be read" in r["text"]
+              for r in saving_rows(doctor, wiki, settings=settings, state=broken)))
+
+    # 8b. (v0.10.0) A leftover git lock file in the wiki itself, read as it
+    #     stands now. While it is there nothing in the wiki saves at all.
+    def locked_wiki(name, age_seconds):
+        """A wiki with a git lock file in it, of a given age, and a settings
+        file registering the end-of-reply save for that wiki."""
+        root = saving_wiki(work / name)
+        (root / ".git").mkdir(exist_ok=True)
+        lock = root / ".git" / "index.lock"
+        lock.write_text("a lock file of the kind git leaves while it works\n")
+        when = time.time() - age_seconds
+        os.utime(lock, (when, when))
+        return root, saving_home(work, name + "-home", saving_settings(root))[1]
+
+    stale, stale_settings = locked_wiki("saving-locked", 3 * 3600)
+    rows = saving_rows(doctor, stale, settings=stale_settings, state=state)
+    stuck = saying(rows, "lock file left behind")
+    check("saving", "a git lock file hours old in the wiki is a PROBLEM carrying F49",
+          stuck["level"] == doctor.PROBLEM and stuck["guide"] == "F49",
+          str([(r["level"], r["guide"]) for r in rows]))
+    check("saving", "and it says how long, and that nothing in the wiki is changed by it",
+          "180 minutes" in stuck["text"]
+          and "nothing in the wiki is changed" in stuck["text"], stuck["text"][:130])
+    live, live_settings = locked_wiki("saving-lock-fresh", 1)
+    check("saving", "a lock file a moment old is a live git command and is not reported",
+          doctor.stale_index_lock(live) is None
+          and not [r for r in saving_rows(doctor, live, settings=live_settings, state=state)
+                   if "lock file left behind" in r["text"]])
+
+    # 9. The card's one line, in every state, and the card still one screen.
+    check("saving", "with nothing tagged the card says nothing about saving, rather than guessing",
+          doctor.card_saving(made_rows(doctor, [(doctor.OK, None)])) == ""
+          and "saves itself" not in card_of(doctor, made_rows(doctor, [(doctor.OK, None)]))[1])
+    rows = saving_rows(doctor, wiki, settings=settings, state=state)
+    card, text = card_of(doctor, rows, wiki)
+    # Under the headline, which may run to more than one line, and above the
+    # blank line that starts the lists.
+    head_lines = card["lines"].index("") if "" in card["lines"] else len(card["lines"])
+    check("saving", "the line is on the card, under the headline, and in what a program reads",
+          card["saving"] == doctor.SAVING_YES
+          and card["lines"][head_lines - 1] == doctor.SAVING_YES,
+          "; ".join(card["lines"][:head_lines]))
+    big = saving_rows(doctor, wiki, "both", settings=plain, state=blocked_state, codex=plain) \
+        + made_rows(doctor, [(doctor.PROBLEM, "F41")] * 6 + [(doctor.UNSEEN, "F31")] * 4)
+    card, text = card_of(doctor, big, wiki)
+    check("saving", "and it is still one screen with the line on it, however much else is wrong",
+          len(card["lines"]) <= doctor.CARD_LINES
+          and max(len(l) for l in card["lines"]) <= doctor.CARD_WIDTH
+          and doctor.SAVING_NO in card["lines"],
+          "%d lines, longest %d" % (len(card["lines"]), max(len(l) for l in card["lines"])))
+
+
+# ---------------------------------- the proof that the save really does fire
+# A stand-in for the assistant's own command-line program. It does what the
+# real one is asked to do — one line added to one page — and then runs the
+# pack's own end-of-reply save exactly as the Stop hook runs it, on the wiki and
+# the record file the proof pointed it at. So the record and the commit the
+# proof reads are real ones, written by the real script.
+SAVE_STUB = """#!/usr/bin/env python3
+import json, os, pathlib, subprocess, sys
+vault = pathlib.Path(os.environ["MOBLEE_VAULT"])
+page = vault / "wiki" / "page.md"
+if "QUIETLY_DO_NOTHING" not in os.environ:
+    with page.open("a") as fh:
+        fh.write(PROMPT_LINE + "\\n")
+if "QUIETLY_SKIP_THE_HOOK" not in os.environ:
+    payload = json.dumps({"session_id": "a-practice-conversation",
+                          "transcript_path": None, "hook_event_name": "Stop"})
+    subprocess.run([sys.executable, SCRIPT, "--now"], input=payload, text=True,
+                   capture_output=True)
+print("done")
+"""
+
+
+def put_save_stub_on_path(work, doctor):
+    bindir = work / "save-stub-bin"
+    bindir.mkdir(parents=True, exist_ok=True)
+    body = (SAVE_STUB.replace("PROMPT_LINE", json.dumps(doctor.PROVE_SAVING_LINE))
+            .replace("SCRIPT", json.dumps(str(PACK / "scripts" / "turn-end-commit.py"))))
+    for name in ("claude", "codex"):
+        stub = bindir / name
+        stub.write_text(body)
+        stub.chmod(stub.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    os.environ["PATH"] = str(bindir) + os.pathsep + os.environ.get("PATH", "")
+    return bindir / "claude"
+
+
+def prove_saving_rows(doctor, work, name, settings, vault=None, env=None):
+    """prove_saving run against a practice CONFIG folder, so the scratch wiki
+    it makes and leaves is under the test's own working folder."""
+    f = doctor.Findings()
+    was_config, was_settings = doctor.CONFIG, doctor.SETTINGS
+    added = dict(env or {})
+    for key, value in added.items():
+        os.environ[key] = value
+    try:
+        doctor.CONFIG = work / name
+        doctor.SETTINGS = settings
+        doctor.prove_saving(f, PACK, vault, "claude", announce=False, timeout=60)
+    finally:
+        doctor.CONFIG, doctor.SETTINGS = was_config, was_settings
+        for key in added:
+            os.environ.pop(key, None)
+    return f.rows
+
+
+def test_prove_saving(doctor, work):
+    # The owner's own wiki, which is the one the hook has to be registered for.
+    # The proof works in a scratch wiki, but it will not run at all until the
+    # hook names THIS one, which is what the registration check is about.
+    owners = saving_wiki(work / "prove-wiki")
+    _, settings, _ = saving_home(work, "prove-yes", saving_settings(owners))
+    _, plain, _ = saving_home(work, "prove-no", {"hooks": {}})
+    _, away, _ = saving_home(work, "prove-elsewhere", SAVING_ELSEWHERE)
+
+    # 1. Nothing to prove until the hook is registered, and the proof says so
+    #    rather than asking the assistant and spending the owner's allowance.
+    put_save_stub_on_path(work, doctor)
+    rows = prove_saving_rows(doctor, work, "prove-unregistered", plain, owners)
+    check("prove", "with the save not registered the proof is not run, and says that comes first",
+          len(rows) == 1 and rows[0]["level"] == doctor.UNSURE
+          and "that comes first" in rows[0]["text"], str(rows)[:120])
+    # (v0.10.0) A hook naming some other folder is not this wiki registered,
+    # so the proof must not run on the strength of it either.
+    rows = prove_saving_rows(doctor, work, "prove-elsewhere-run", away, owners)
+    check("prove", "a hook naming another folder does not count as registered for the proof",
+          len(rows) == 1 and rows[0]["level"] == doctor.UNSURE
+          and "that comes first" in rows[0]["text"], str(rows)[:120])
+
+    # 2. The real thing: the stub makes the edit, the pack's own script saves it
+    #    as the Stop hook would, and the proof reads the commit and the record.
+    rows = prove_saving_rows(doctor, work, "prove-real", settings, owners)
+    proved = [r for r in rows if r["text"].startswith("Proved:")]
+    check("prove", "a save that really ran is proved, in the pack's own word for it",
+          len(proved) == 1 and proved[0]["level"] == doctor.OK, str([r["text"][:70] for r in rows]))
+    check("prove", "and the proved line says where the scratch wiki was left, as the guard's does",
+          bool(proved) and "is left at" in proved[0]["text"])
+    scratch = sorted((work / "prove-real" / "prove-saving").iterdir())
+    check("prove", "the scratch wiki is left where it is, under the pack's own folder",
+          len(scratch) == 1 and (scratch[0] / "practice-wiki" / ".git").is_dir(),
+          str(scratch))
+    if scratch:
+        made = scratch[0] / "practice-wiki"
+        code, out = doctor.run(["git", "-C", str(made), "log", "--format=%s"])
+        check("prove", "the commit in the scratch wiki was made by the end-of-reply save itself",
+              "saved automatically" in out, out.splitlines()[:1])
+        check("prove", "the gate was wired into it, so the save went through the gate as on any commit",
+              (made / "scripts" / "hooks" / "pre-commit").is_file()
+              and (made / "scripts" / "vault-gate.py").is_file())
+        record = json.loads((scratch[0] / "record.json").read_text())
+        check("prove", "and the record was written beside it, not into the owner's own",
+              any(v.get("state") == "committed" for v in record.values()), str(record)[:80])
+        check("prove", "the owner's wiki is nowhere in it: the practice one is what was saved",
+              (made / "wiki" / "page.md").read_text().count(doctor.PROVE_SAVING_LINE) == 1)
+
+    # 3. The assistant made the edit and nothing saved it: that is the fault the
+    #    proof exists to find.
+    rows = prove_saving_rows(doctor, work, "prove-silent", settings, owners,
+                             env={"QUIETLY_SKIP_THE_HOOK": "1"})
+    check("prove", "an edit that nothing saved is a PROBLEM carrying F44",
+          len(rows) == 1 and rows[0]["level"] == doctor.PROBLEM and rows[0]["guide"] == "F44"
+          and "not running" in rows[0]["text"], str(rows)[:140])
+
+    # 4. The assistant did nothing at all: neither proved nor disproved, which
+    #    is not the same as proving the save broken.
+    rows = prove_saving_rows(doctor, work, "prove-nothing", settings, owners,
+                             env={"QUIETLY_DO_NOTHING": "1", "QUIETLY_SKIP_THE_HOOK": "1"})
+    check("prove", "an assistant that made no edit leaves it neither proved nor disproved",
+          len(rows) == 1 and rows[0]["level"] == doctor.UNSURE
+          and "neither proved nor disproved" in rows[0]["text"], str(rows)[:140])
+
+    # 5. No assistant program on this Mac: a CANNOT TELL, and no fault laid at
+    #    the wiki's door.
+    f = doctor.Findings()
+    was = doctor.CLAUDE_ELSEWHERE
+    path_was = os.environ.get("PATH", "")
+    try:
+        doctor.CLAUDE_ELSEWHERE = ()
+        os.environ["PATH"] = str(work / "nothing-here")
+        doctor.prove_saving(f, PACK, owners, "claude", announce=False, timeout=5)
+    finally:
+        doctor.CLAUDE_ELSEWHERE = was
+        os.environ["PATH"] = path_was
+    check("prove", "with no assistant program found, the proof is a CANNOT TELL and blames nothing",
+          len(f.rows) == 1 and f.rows[0]["level"] == doctor.UNSURE
+          and "was not found on this Mac" in f.rows[0]["text"], str(f.rows)[:140])
+    check("prove", "the proof names its own timeout in words, as the guard's proof does",
+          doctor.prove_limit_words(doctor.PROVE_SAVING_TIMEOUT) == "three minutes",
+          doctor.prove_limit_words(doctor.PROVE_SAVING_TIMEOUT))
+
+
+# ------------------------------------------------- Claude's own additions (mods)
+# The band above the prompt is a Claude mod. Moblee keeps it in the wiki, at
+# scripts/claude-mods/, and registers it with Claude from there. Mods arrived in
+# Claude 2.1.287, so Moblee has to find a Claude new enough before it runs any
+# of the plugin commands at all, and an owner whose Claude is older must be told
+# in plain words rather than shown a failure.
+#
+# Every engine here is a stub: a little script that prints a version, records
+# every call it was given, and answers `plugin list` with whatever the case
+# wants. That is enough to assert which engine was chosen and which commands
+# would be run, and nothing is installed anywhere.
+def engine_stub(path, version, calls=None, listing="", json_listing=None, list_code=0):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = ["#!/bin/sh"]
+    if calls is not None:
+        body.append('printf "%%s\\n" "$*" >> %s' % shlex.quote(str(calls)))
+    body.append('if [ "$1" = "--version" ]; then printf "%%s (Claude Code)\\n" %s; exit 0; fi'
+                % shlex.quote(version))
+    if json_listing is None:
+        # an engine too old to answer in JSON
+        body.append('if [ "$*" = "plugin list --json" ]; then printf "unknown option\\n" >&2; exit 2; fi')
+    else:
+        body.append('if [ "$*" = "plugin list --json" ]; then printf "%%s\\n" %s; exit %d; fi'
+                    % (shlex.quote(json_listing), list_code))
+    body.append('if [ "$*" = "plugin list" ]; then printf "%%s\\n" %s; exit %d; fi'
+                % (shlex.quote(listing), list_code))
+    body.append("exit 0")
+    path.write_text("\n".join(body) + "\n")
+    path.chmod(0o755)
+    return path
+
+
+def app_engine_stub(root, version, build="9d6405864fdc", **kw):
+    """An engine where the Claude app keeps its own: one folder per version,
+    with a build folder inside it."""
+    return engine_stub(root / version / build / "claude.app" / "Contents" / "MacOS" / "claude",
+                       version, **kw)
+
+
+def mods_wiki(root, with_mods=True):
+    """A wiki that does, or does not, hold Claude's own additions."""
+    plain_wiki(root)
+    if with_mods:
+        folder = root / "scripts" / "claude-mods"
+        (folder / ".claude-plugin").mkdir(parents=True, exist_ok=True)
+        (folder / ".claude-plugin" / "marketplace.json").write_text(
+            json.dumps({"name": "moblee-mods", "plugins": []}))
+        (folder / "cold-cache-warning").mkdir(exist_ok=True)
+    return root
+
+
+def mods_listing(vault, enabled=True, read_from=None):
+    """What `plugin list --json` says when the band is installed."""
+    folder = read_from or str(Path(vault) / "scripts" / "claude-mods" / "cold-cache-warning")
+    return json.dumps([{"id": "cold-cache-warning@moblee-mods", "version": "1.0.0",
+                        "scope": "user", "enabled": enabled, "readFromFolder": folder}])
+
+
+def with_engines(doctor, path_dir, app_root, fn, elsewhere=()):
+    """Run something with the three places Moblee looks for a Claude pointed at
+    practice copies: the PATH, the places a Claude really sits on a Mac, and the
+    folder the Claude app keeps its own in.
+
+    The third is overridden even where a case does not use it, so that a real
+    Claude in ~/.local/bin or under Homebrew on whichever Mac this runs on can
+    never change the answer."""
+    was = (os.environ.get("PATH", ""), doctor.CLAUDE_APP_ENGINES, doctor.CLAUDE_ELSEWHERE)
+    try:
+        os.environ["PATH"] = str(path_dir)
+        doctor.CLAUDE_APP_ENGINES = Path(app_root)
+        doctor.CLAUDE_ELSEWHERE = tuple(Path(p) for p in elsewhere)
+        return fn()
+    finally:
+        os.environ["PATH"], doctor.CLAUDE_APP_ENGINES, doctor.CLAUDE_ELSEWHERE = was
+
+
+def mods_rows(doctor, vault, path_dir, app_root, assistant="claude", elsewhere=()):
+    f = doctor.Findings()
+    with_engines(doctor, path_dir, app_root, lambda: doctor.check_mods(f, vault, assistant),
+                 elsewhere)
+    return f.rows
+
+
+def test_mods(doctor, work):
+    root = work / "mods"
+    wiki = mods_wiki(root / "wiki")
+    bare = mods_wiki(root / "wiki-without", with_mods=False)
+    empty = root / "no-engine-anywhere"
+    empty.mkdir(parents=True, exist_ok=True)
+
+    # 1. Which Claude is chosen, and from where. This Mac is the real case the
+    #    two branches were written for: a `claude` on the PATH that is too old,
+    #    and the Claude app's own engine, which is not.
+    on_path = root / "path-new"
+    engine_stub(on_path / "claude", "2.1.295", calls=root / "path-new-calls.txt")
+    found = with_engines(doctor, on_path, empty, doctor.find_mods_engine)
+    check("mods", "a Claude new enough on the PATH is the one chosen",
+          found[0] == str(on_path / "claude") and found[1] == (2, 1, 295), str(found))
+
+    old_path = root / "path-old"
+    engine_stub(old_path / "claude", "2.1.277", calls=root / "path-old-calls.txt")
+    app_new = root / "app-new"
+    app_engine_stub(app_new, "2.1.295")
+    app_engine_stub(app_new, "2.1.9", build="aaaaaaaaaaaa")
+    found = with_engines(doctor, old_path, app_new, doctor.find_mods_engine)
+    check("mods", "a Claude on the PATH that is too old is rejected, and the app's own engine taken",
+          found[0] is not None and "claude.app" in found[0] and found[1] == (2, 1, 295), str(found))
+    check("mods", "and the newest of the app's engines is the one taken, by number and not by name",
+          "2.1.295" in str(found[0]) and "2.1.9" not in str(found[0]), str(found[0]))
+
+    app_old = root / "app-old"
+    app_engine_stub(app_old, "2.1.200", build="bbbbbbbbbbbb")
+    found = with_engines(doctor, old_path, app_old, doctor.find_mods_engine)
+    check("mods", "with nothing new enough in either place, no engine is chosen",
+          found[0] is None and found[1] is None, str(found))
+    check("mods", "and the newest version seen at all is still handed back, so the finding can say it",
+          found[2] == (2, 1, 277), str(found[2]))
+
+    found = with_engines(doctor, empty, empty, doctor.find_mods_engine)
+    check("mods", "with no Claude on the Mac at all, nothing is chosen and nothing is claimed",
+          found == (None, None, None), str(found))
+
+    # 1b. (v0.10.0) The places a Claude really sits on a Mac, which `which`
+    #     cannot see from inside the Moblee app: the app runs the check-up from
+    #     a window and hands over a PATH of the four system folders and nothing
+    #     else. An owner with Claude Code but no Claude app was therefore told,
+    #     on every press of Check my wiki, that their Claude was too old —
+    #     about a Claude the check-up had never found.
+    tucked = root / "tucked-away"
+    engine_stub(tucked / "claude", "2.1.295")
+    found = with_engines(doctor, empty, empty, doctor.find_mods_engine,
+                         elsewhere=[tucked / "claude"])
+    check("mods", "a Claude off the PATH, where one really sits on a Mac, is still found",
+          found[0] == str(tucked / "claude") and found[1] == (2, 1, 295), str(found))
+    rows = mods_rows(doctor, wiki, empty, empty, elsewhere=[tucked / "claude"])
+    check("mods", "so the check-up does not call that Mac's Claude too old",
+          not any("older than the band" in r["text"] for r in rows),
+          str([r["text"][:50] for r in rows]))
+
+    # 2. The line itself. 2.1.287 is where mods arrived, so it is in and the
+    #    version before it is out.
+    edge_in, edge_out = root / "edge-in", root / "edge-out"
+    engine_stub(edge_in / "claude", "2.1.287")
+    engine_stub(edge_out / "claude", "2.1.286")
+    check("mods", "2.1.287, the version mods arrived in, is new enough",
+          with_engines(doctor, edge_in, empty, doctor.find_mods_engine)[1] == (2, 1, 287))
+    check("mods", "and 2.1.286, the version before it, is not",
+          with_engines(doctor, edge_out, empty, doctor.find_mods_engine)[0] is None)
+
+    # 3. A wiki used with ChatGPT alone: one sentence, and no fault reported.
+    rows = mods_rows(doctor, wiki, on_path, empty, assistant="chatgpt")
+    check("mods", "for ChatGPT alone the whole thing is skipped in one sentence, as an OK",
+          len(rows) == 1 and rows[0]["level"] == doctor.OK
+          and rows[0]["text"] == doctor.MODS_CHATGPT and rows[0]["guide"] is None,
+          rows[0]["text"] if rows else "no rows")
+    check("mods", "and that sentence says it is one of Claude's own additions, not that anything is missing",
+          "nothing to install for a wiki used with ChatGPT alone" in doctor.MODS_CHATGPT
+          and "ChatGPT" in doctor.MODS_CHATGPT)
+    check("mods", "no wiki at all makes no finding here: F37 has already said so",
+          mods_rows(doctor, None, on_path, empty) == [])
+
+    # 4. No Claude new enough: the one plain sentence, word for word, with the
+    #    versions said after it and not inside it.
+    rows = mods_rows(doctor, wiki, old_path, app_old)
+    # (v0.10.0) An OK and not a LOOK. The sentence's own words are that the
+    # band appears by itself once Claude has updated and that nothing else is
+    # affected; at LOOK it made the health card say "This wiki needs attention"
+    # about a wiki with nothing the matter with it, and the reassuring half of
+    # the sentence was cut off the card for room.
+    check("mods", "with a Claude too old, the finding is an OK and does not call the wiki unwell",
+          len(rows) == 1 and rows[0]["level"] == doctor.OK and rows[0]["guide"] == "F48",
+          str([(r["level"], r["guide"]) for r in rows]))
+    check("mods", "and the card says the wiki looks healthy rather than needing attention",
+          card_of(doctor, rows, wiki)[0]["headline"] == doctor.CARD_HEADLINES["healthy"],
+          card_of(doctor, rows, wiki)[0]["headline"])
+    check("mods", "and it opens with the one plain sentence, word for word",
+          rows[0]["text"].startswith(doctor.MODS_NO_ENGINE), rows[0]["text"][:90])
+    check("mods", "the sentence says the band comes on its own and that nothing else is affected",
+          "once Claude has updated itself" in doctor.MODS_NO_ENGINE
+          and "nothing else is affected" in doctor.MODS_NO_ENGINE)
+    check("mods", "and the finding says which version is needed and what was found",
+          "2.1.287" in rows[0]["text"] and "2.1.277" in rows[0]["text"], rows[0]["text"][-80:])
+    rows = mods_rows(doctor, wiki, empty, empty)
+    check("mods", "with no Claude at all it says so rather than naming a version it never saw",
+          rows[0]["guide"] == "F48" and "no Claude could be found" in rows[0]["text"],
+          rows[0]["text"][-70:])
+    # (v0.10.0) And it is a sentence of its own, at CANNOT TELL. Glued onto the
+    # too-old sentence it read "The Claude on this Mac is older than the band
+    # needs … (no Claude could be found on this Mac to ask)" — a sentence
+    # asserting a Claude exists, with a bracket saying none does.
+    check("mods", "with no Claude at all the answer is CANNOT TELL, not a verdict on a version",
+          len(rows) == 1 and rows[0]["level"] == doctor.UNSURE, str([r["level"] for r in rows]))
+    check("mods", "and it does not also say the Claude on this Mac is too old, there being none",
+          doctor.MODS_NO_ENGINE not in rows[0]["text"]
+          and "older than the band" not in rows[0]["text"], rows[0]["text"][:90])
+    check("mods", "it says instead that nothing in the wiki depends on the band",
+          "nothing in the wiki depends on it" in rows[0]["text"], rows[0]["text"][-70:])
+
+    # 5. The wiki without the mods in it: nothing to install from.
+    rows = mods_rows(doctor, bare, on_path, empty)
+    check("mods", "a wiki that does not hold Claude's own additions is a LOOK carrying F47",
+          len(rows) == 1 and rows[0]["level"] == doctor.LOOK and rows[0]["guide"] == "F47"
+          and "scripts/claude-mods" in rows[0]["text"],
+          str([(r["level"], r["guide"]) for r in rows]))
+    check("mods", "and it is said before any Claude is asked anything, since there is nothing to ask about",
+          not (root / "path-new-calls.txt").exists()
+          or "plugin" not in (root / "path-new-calls.txt").read_text())
+
+    # 6. Installed and switched on, read from the wiki's own copy: an OK.
+    ok_engine = root / "engine-ok"
+    engine_stub(ok_engine / "claude", "2.1.295", calls=root / "ok-calls.txt",
+                json_listing=mods_listing(wiki))
+    rows = mods_rows(doctor, wiki, ok_engine, empty)
+    check("mods", "installed and switched on, read from the wiki, is an OK with no code",
+          len(rows) == 1 and rows[0]["level"] == doctor.OK and rows[0]["guide"] is None
+          and "installed and switched on" in rows[0]["text"], str(rows))
+    check("mods", "and it names the wiki's own folder and the Claude that answered",
+          "scripts/claude-mods" in rows[0]["text"] and "2.1.295" in rows[0]["text"],
+          rows[0]["text"])
+    check("mods", "Claude was asked for its list rather than its files being read behind its back",
+          "plugin list --json" in (root / "ok-calls.txt").read_text(),
+          (root / "ok-calls.txt").read_text().replace("\n", " | "))
+
+    # 7. Not installed, switched off, and read from somewhere else: three
+    #    different things to tell an owner, all under F47.
+    none_engine = root / "engine-none"
+    engine_stub(none_engine / "claude", "2.1.295", json_listing="[]")
+    rows = mods_rows(doctor, wiki, none_engine, empty)
+    check("mods", "a Claude that has it not installed is a LOOK carrying F47",
+          rows[0]["level"] == doctor.LOOK and rows[0]["guide"] == "F47"
+          and "not installed" in rows[0]["text"], rows[0]["text"][:80])
+
+    off_engine = root / "engine-off"
+    engine_stub(off_engine / "claude", "2.1.295", json_listing=mods_listing(wiki, enabled=False))
+    rows = mods_rows(doctor, wiki, off_engine, empty)
+    check("mods", "installed but switched off is told apart from not installed, under the same code",
+          rows[0]["level"] == doctor.LOOK and rows[0]["guide"] == "F47"
+          and "switched off" in rows[0]["text"], rows[0]["text"][:80])
+
+    moved_engine = root / "engine-moved"
+    engine_stub(moved_engine / "claude", "2.1.295",
+                json_listing=mods_listing(wiki, read_from=str(root / "an-older-wiki" / "scripts"
+                                                              / "claude-mods" / "cold-cache-warning")))
+    rows = mods_rows(doctor, wiki, moved_engine, empty)
+    check("mods", "a band Claude reads from another folder is a LOOK: an update to the wiki never reaches it",
+          rows[0]["level"] == doctor.LOOK and rows[0]["guide"] == "F47"
+          and "not from this wiki" in rows[0]["text"], rows[0]["text"][:100])
+    # (v0.10.0) The fault goes first in the sentence. Shortened for the health
+    # card, the old wording came out as "Claude's band above the prompt is
+    # installed and switched..." — reassurance, for the finding that says the
+    # opposite, and the card is the one screen a helper is handed.
+    line = doctor.card_line(rows[0], str)
+    check("mods", "and shortened for the card it cannot be read as all being well",
+          "is installed and switched" not in line
+          and line.startswith("Claude reads the band above the prompt from another folder"), line)
+
+    # 8. An engine that cannot answer, and one too old to answer in JSON. The
+    #    first is a CANNOT TELL and not a fault; the second is installed, and
+    #    whether it is switched on is left unclaimed.
+    mute_engine = root / "engine-mute"
+    engine_stub(mute_engine / "claude", "2.1.295", json_listing="not json at all", list_code=1)
+    rows = mods_rows(doctor, wiki, mute_engine, empty)
+    check("mods", "a Claude that will not say what it has installed is a CANNOT TELL, not a fault",
+          rows[0]["level"] == doctor.UNSURE and rows[0]["guide"] is None, str(rows))
+
+    plain_engine = root / "engine-plain"
+    engine_stub(plain_engine / "claude", "2.1.295",
+                listing="Installed plugins:\n  cold-cache-warning@moblee-mods\n")
+    rows = mods_rows(doctor, wiki, plain_engine, empty)
+    check("mods", "a Claude with no JSON listing still shows the band as installed, from the plain one",
+          rows[0]["level"] == doctor.OK and "is installed" in rows[0]["text"], rows[0]["text"][:80])
+    check("mods", "and that line does not claim it is switched on, which the plain listing never said",
+          "does not say" in rows[0]["text"], rows[0]["text"])
+
+    # 9. Nothing printed here carries a page title, as nothing printed by the
+    #    check-up may. The band's own folder is Moblee's and holds no pages.
+    for name, rowset in (("installed", mods_rows(doctor, wiki, ok_engine, empty)),
+                         ("not installed", mods_rows(doctor, wiki, none_engine, empty)),
+                         ("no engine", mods_rows(doctor, wiki, old_path, app_old))):
+        text = " ".join(r["text"] for r in rowset)
+        check("mods", f"the {name} finding names no page in the wiki", ".md" not in text, text[:60])
 
 
 def test_timeout(doctor, work):
@@ -832,7 +1824,7 @@ def test_rules(doctor, work):
     check("rules", "a file with sections of the owner's own is not called Moblee's wording throughout",
           "is Moblee's own wording throughout" not in said, said[:90])
     check("rules", "it says how many sections are the owner's, and names them",
-          "2 section(s) of your own" in said and '"Ways I like to work"' in said
+          "2 sections of your own" in said and '"Ways I like to work"' in said
           and '"People and places"' in said, said[:150])
     check("rules", "and says how long they are, which is the question this check exists to answer",
           "tokens of it" in said and "why the file is the length it is" in said)
@@ -844,7 +1836,7 @@ def test_rules(doctor, work):
     doctor.check_rules_sections(f, plain, PACK)
     said = " ".join(r["text"] for r in f.rows)
     check("rules", "a file that really is Moblee's throughout is still told so, in one short line",
-          "is Moblee's own wording throughout" in said and "section(s) of your own" not in said)
+          "is Moblee's own wording throughout" in said and "sections of your own" not in said)
 
     # 3. A half-copied pack: scripts/ there, vault-template/CLAUDE.md not. The
     #    engine says it could not compare; the owner used to be told instead
@@ -1023,6 +2015,42 @@ def test_card(doctor, work):
           [w["level"] for w in card["wrong"]] == [doctor.PROBLEM] * doctor.CARD_PROBLEMS,
           str([w["level"] for w in card["wrong"]]))
 
+    # ---- (v0.10.0) a shortened line still reads as a statement
+    # All three of these came off real cards, and all three read as a line that
+    # broke off in the middle of a thought. The possessive and the unclosed
+    # bracket are the two the shortening had no rule for.
+    def shortened(text, room=doctor.CARD_ROOM):
+        f = doctor.Findings()
+        f.add(doctor.PROBLEM, text, "F44")
+        return doctor.card_line(f.rows[0], str, room)
+
+    # The wording as it really stood, which gave "…as its Stop hook: Moblee's".
+    line = shortened("Claude does not save the wiki at the end of every reply: Moblee's "
+                     "end-of-reply save is not registered as its Stop hook. What a reply leaves "
+                     "unsaved stays unsaved until somebody asks for it.")
+    check("card", "a shortened line never ends on a possessive left hanging",
+          not line.rstrip(".").endswith(("'s", "’s")), line)
+    check("card", "and what is left of it is still the finding",
+          line.startswith("Claude does not save the wiki") and line.endswith("..."), line)
+    # And as it really stood here, which gave an open bracket and no close.
+    line = shortened("The wiki has no end-of-reply save (scripts/turn-end-commit.py is not in "
+                     "it), so what a reply leaves unsaved stays unsaved until somebody asks "
+                     "for it.")
+    check("card", "and never leaves a bracket open, which reads as a line cut in half",
+          line.count("(") == line.count(")"), line)
+    check("card", "what is left of that one is a whole statement too",
+          line.startswith("The wiki has no end-of-reply save"), line)
+    # (The third real example, a reassuring head on a fault that is the
+    # opposite, was not the shortening's fault but the finding's; it is put
+    # right in the finding and proved in the "mods" group.)
+    # And the words the old list already held, kept under the new rule.
+    check("card", "the linking words are still dropped, as they were before",
+          not shortened("The delete guard is not switched on for Claude, so nothing stops a "
+                        "command that would remove a page of yours for good.").rstrip(".")
+          .endswith(("so", "and", "which")),
+          shortened("The delete guard is not switched on for Claude, so nothing stops a command "
+                    "that would remove a page of yours for good."))
+
     # ---- one screen, in both directions
     widest, tallest = 0, 0
     for spec in ([(doctor.OK, None)],
@@ -1108,6 +2136,13 @@ def test_card(doctor, work):
           "Wallet" not in out["card"] and "Sign in" not in out["card"])
     check("card", "the home folder is written as ~, so the card carries no account name",
           str(doctor.HOME) not in out["card"] and str(doctor.HOME) not in out["card-json"])
+    # (v0.10.0) `4 thing(s)` is a programmer's shortcut for not choosing, and it
+    # asks a reader who does not read much to do the choosing instead. The pack
+    # tells every assistant to use plain words; a whole check-up an owner reads
+    # had better. things() is the helper, and this is the rule.
+    shortcut = [l.strip() for l in (out["plain"] + out["card"]).splitlines() if "(s)" in l]
+    check("card", "nothing an owner reads on an ordinary run says \"thing(s)\"",
+          not shortcut, "; ".join(shortcut[:2])[:140])
     card = json.loads(out["card-json"])
     check("card", "--card --json is one object a program can read, with the verdict in it as a plain yes or no",
           isinstance(card, dict) and card["healthy"] is False and card["state"] == "unwell"
@@ -1183,6 +2218,10 @@ def main():
     test_card(doctor, work)
     test_app(doctor, work)
     test_leftovers(doctor, work)
+    test_guard_version(doctor, work)
+    test_saving(doctor, work)
+    test_prove_saving(doctor, work)
+    test_mods(doctor, work)
     test_timeout(doctor, work)
 
     width = max(len(r[2]) for r in ROWS)

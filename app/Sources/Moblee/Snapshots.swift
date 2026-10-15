@@ -423,15 +423,22 @@ enum Snapshots {
             f.clinic.state = state
             return f
         }
+        // (v0.10.0) Both cards carry the end-of-reply save's line, because a
+        // line that no fixture sets is drawn in none of the gallery's screens
+        // and so is never looked at in any text size, mode or direction. The
+        // healthy card takes the longest of the three wordings, which is the
+        // one that would be cut off first.
         let healthyCard = Clinic.Card(
             lines: ["Moblee health card, 26 September 2026"],
             state: "healthy",
             headline: "This wiki looks healthy. Nothing was found to be wrong.",
+            saving: "Whether the wiki saves itself after every reply cannot be told from here.",
             actions: ["Nothing to do. Run the check-up again next month."])
         let poorlyCard = Clinic.Card(
             lines: ["Moblee health card, 26 September 2026"],
             state: "unwell",
             headline: "This wiki needs attention: 4 things to look at. 1 more could not be checked.",
+            saving: "The wiki does not save itself after every reply.",
             wrong: [.init(code: "F13", line: "The wiki is in the Desktop folder, which iCloud copies."),
                     .init(code: "F29", line: "macOS stops jobs that run on their own from reading that folder."),
                     .init(code: "F02", line: "The delete guard is an older copy than this Moblee's.")],

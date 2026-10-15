@@ -121,7 +121,7 @@ case_happy() {
   has   "$HOME_DIR/last-subject.txt" "moblee: updated" "the update committed itself"
   same  "$(cd "$SBX" && git status --porcelain | wc -l | tr -d ' ')" "0" "nothing is left staged"
   has   "$SBX/wiki/log.md" "the owner wrote this" "the owner's own content is untouched"
-  has   "$SBX/wiki/Golf.md" "A page of the owner's own" "and so are his own pages"
+  has   "$SBX/wiki/Golf.md" "A page of the owner's own" "and so are their own pages"
   # (v0.9.4) This fixture's rules file is nothing the v0.9.4 engine recognises,
   # so the engine rewrites none of it and removes none of it. The rules that
   # stop harm must still reach it: they only ever ADD, and a file Moblee cannot
@@ -167,24 +167,24 @@ case_extras() {
   # the start and does not sit untracked in every `git status` the owner runs.
   ( cd "$SBX" && git ls-files -- scripts/orient-extras.sh ) > "$HOME_DIR/tracked.txt" 2>/dev/null
   has "$HOME_DIR/tracked.txt" "scripts/orient-extras.sh" "and the run that laid it down put it in git"
-  # From here it is the owner's. What he writes in it must never be carried into
+  # From here it is the owner's. What they write in it must never be carried into
   # a commit that says "moblee: updated from X to Y", which is what the closing
   # commit's `git add -A -- scripts` used to do.
   cp "$FIXTURES/owners-own-check.sh" "$SBX/scripts/orient-extras.sh"
   cp "$FIXTURES/old-wiki/VERSION" "$SBX/VERSION"
   # the VERSION is committed and the owner's check is NOT: the second update has
-  # real work to do, and his edit is uncommitted when it runs, which is the case
+  # real work to do, and their edit is uncommitted when it runs, which is the case
   # the sweep used to take
   ( cd "$SBX" && git add -- VERSION && git commit -qm "back to the old version" ) >/dev/null 2>&1
   run_update "$HOME_DIR" "$SBX"
   has "$SBX/scripts/orient-extras.sh" "the owner wrote this check himself" \
-      "and a second update leaves it exactly as he left it"
+      "and a second update leaves it exactly as they left it"
   ( cd "$SBX" && git log -1 --format=%s ) > "$HOME_DIR/last-subject.txt" 2>/dev/null
   has  "$HOME_DIR/last-subject.txt" "moblee: updated" "the second update did make a commit of its own"
   ( cd "$SBX" && git log -1 --name-only --format= ) > "$HOME_DIR/committed-files.txt" 2>/dev/null
-  hasnt "$HOME_DIR/committed-files.txt" "scripts/orient-extras.sh" "and his check is not in it"
-  ( cd "$SBX" && git status --porcelain -- scripts/orient-extras.sh ) > "$HOME_DIR/his-to-commit.txt" 2>/dev/null
-  has "$HOME_DIR/his-to-commit.txt" "scripts/orient-extras.sh" "which is still his to commit"
+  hasnt "$HOME_DIR/committed-files.txt" "scripts/orient-extras.sh" "and their check is not in it"
+  ( cd "$SBX" && git status --porcelain -- scripts/orient-extras.sh ) > "$HOME_DIR/theirs-to-commit.txt" 2>/dev/null
+  has "$HOME_DIR/theirs-to-commit.txt" "scripts/orient-extras.sh" "which is still theirs to commit"
 }
 
 # --------------------------------------------------------------------------
@@ -466,7 +466,7 @@ case_gitignore() {
 case_name_clash() {
   start name_clash
   make_wiki "$HOME_DIR" "$SBX" old-wiki-0.9.3
-  printf '# Readwise\n\nThe owner keeps his own notes about the Readwise app here.\n' \
+  printf '# Readwise\n\nThe owner keeps their own notes about the Readwise app here.\n' \
     > "$SBX/wiki/Readwise.md"
   ( cd "$SBX" && git add -A && git commit -qm "the owner's own Readwise page" ) >/dev/null 2>&1
   run_update "$HOME_DIR" "$SBX"
@@ -474,7 +474,7 @@ case_name_clash() {
   has "$HOME_DIR/update-output.txt" "wiki/Readwise.md" "and says exactly where the other page is"
   has "$HOME_DIR/update-output.txt" "Rename one of the two" "and what to do about it"
   hasnt "$HOME_DIR/update-output.txt" "the four pages were added" "and claims nothing it did not do"
-  has "$SBX/wiki/Readwise.md" "his own notes about the Readwise app" "the owner's page is untouched"
+  has "$SBX/wiki/Readwise.md" "their own notes about the Readwise app" "the owner's page is untouched"
   hasnt "$SBX/wiki/Index.md" "[[Readwise]]" "the Index is not pointed at it"
   # the rules file keeps everything, because a section may only be dropped once
   # the page carrying it is really there
@@ -483,9 +483,9 @@ case_name_clash() {
   has "$HOME_DIR/update-output.txt" "was left exactly as it is" "and the run says the rules file was left alone"
   # and the clash is fixable: rename the owner's page and run it again
   ( cd "$SBX" && git mv wiki/Readwise.md "wiki/My Readwise Notes.md" ) >/dev/null 2>&1
-  printf '# My Readwise Notes\n\nThe owner keeps his own notes about the Readwise app here.\n' \
+  printf '# My Readwise Notes\n\nThe owner keeps their own notes about the Readwise app here.\n' \
     > "$SBX/wiki/My Readwise Notes.md"
-  ( cd "$SBX" && git add -A && git commit -qm "the owner renames his page" ) >/dev/null 2>&1
+  ( cd "$SBX" && git add -A && git commit -qm "the owner renames their page" ) >/dev/null 2>&1
   cp "$FIXTURES/old-wiki/VERSION" "$SBX/VERSION"
   ( cd "$SBX" && git add -- VERSION && git commit -qm "back to the old version" ) >/dev/null 2>&1
   run_update "$HOME_DIR" "$SBX"
@@ -516,7 +516,10 @@ case_owners_uncommitted() {
   ( cd "$SBX" && git show --name-only --format= HEAD ) > "$HOME_DIR/committed.txt"
   hasnt "$HOME_DIR/committed.txt" "scripts/mine.py" "the owner's own script is not in Moblee's commit"
   hasnt "$HOME_DIR/committed.txt" "CLAUDE.md" "nor their half-finished rules file"
-  hasnt "$HOME_DIR/committed.txt" ".gitignore" "nor their unsaved .gitignore"
+  # (v0.10.0) By its whole name: the band ships an ignore file of its own inside
+  # scripts/claude-mods/, which the update rightly commits, and a substring test
+  # read that as the owner's.
+  same "$(grep -c -x '.gitignore' "$HOME_DIR/committed.txt" || true)" "0" "nor their unsaved .gitignore"
   has "$SBX/CLAUDE.md" "My own rule, not yet saved." "their words are still in the rules file"
   has "$SBX/.gitignore" "my-unsaved-line" "and their line in .gitignore"
   ( cd "$SBX" && git status --porcelain --untracked-files=all ) > "$HOME_DIR/status.txt"
@@ -593,7 +596,110 @@ case_chatgpt_memory() {
   same "$(wc -c < "$HOME_DIR/mem-status.txt" | tr -d ' ')" "0" "nothing the update wrote to the memory page is left uncommitted"
   has "$SBX/wiki/Wiki Operations/Assistant Memory.md" "What the assistant has learnt so far." "and what was there is kept"
 }
-for c in happy refused extras owners_pages partly backups index protected twice shrink owners_words gitignore name_clash owners_uncommitted staged_leftovers clash_keeps_safety second_mac chatgpt_memory; do
+# --------------------------------------------------------------------------
+# (v0.10.0) The end-of-reply save. A 0.9.6 wiki, with the delete guard already
+# entered as an earlier Moblee left it and a hook of the owner's own beside it,
+# must come out of this update with the save in the wiki and registered as the
+# Stop hook — and with the guard's entry exactly as it was, because ChatGPT
+# keeps its trust by that entry and a guard whose entry moves is switched off
+# until it is trusted again. The owner's own unsaved work must stay theirs, as
+# it must through any update (case_owners_uncommitted).
+case_saving() {
+  start saving
+  make_wiki "$HOME_DIR" "$SBX"
+  # A wiki as 0.9.6 left it: that version had no end-of-reply save at all, so
+  # this is the update every existing owner will run.
+  printf '0.9.6\n' > "$SBX/VERSION"
+  ( cd "$SBX" && git add -- VERSION && git commit -qm "the wiki as 0.9.6 left it" ) >/dev/null 2>&1
+  # Claude's settings as an earlier Moblee left them, with a hook of the
+  # owner's own after the guard.
+  mkdir -p "$HOME_DIR/.claude"
+  printf '%s\n' \
+    '{' \
+    '  "hooks": {' \
+    '    "PreToolUse": [' \
+    '      { "matcher": "Bash", "hooks": [ { "type": "command", "command": "python3 \"$HOME/.claude/hooks/bash-guard.py\"" } ] }' \
+    '    ],' \
+    '    "PostToolUse": [' \
+    '      { "matcher": "Write", "hooks": [ { "type": "command", "command": "echo a hook of the owner own" } ] }' \
+    '    ]' \
+    '  }' \
+    '}' > "$HOME_DIR/.claude/settings.json"
+  local settings="$HOME_DIR/.claude/settings.json"
+  local guard_before owner_before
+  guard_before=$(python3 "$FIXTURES/read-hooks.py" "$settings" PreToolUse)
+  owner_before=$(python3 "$FIXTURES/read-hooks.py" "$settings" PostToolUse)
+  # the owner's own unsaved work, in a page and in a script of their own
+  printf '\nThe owner was in the middle of writing this.\n' >> "$SBX/wiki/Golf.md"
+  mkdir -p "$SBX/scripts"
+  printf 'print("mine")\n' > "$SBX/scripts/mine.py"
+  run_update "$HOME_DIR" "$SBX"; local rc=$RC
+  same "$rc" "0" "the updater exits cleanly"
+
+  # 1. the save is in the wiki, beside the commit gate
+  isfile "$SBX/scripts/turn-end-commit.py" "the end-of-reply save is copied into the wiki"
+  has "$SBX/scripts/turn-end-commit.py" "save the wiki at the end of every reply" \
+      "and it is the pack's own copy of it"
+  has "$HOME_DIR/update-output.txt" "scripts/turn-end-commit.py" "and the run says it added it"
+
+  # 2. it is registered as Claude's Stop hook, with its full path
+  has "$settings" "turn-end-commit.py" "it is registered in Claude's settings"
+  same "$(python3 "$FIXTURES/read-hooks.py" "$settings" Stop | grep -o 'turn-end-commit.py' | wc -l | tr -d ' ')" "1" \
+       "as a Stop hook, once and not twice"
+  # (v0.10.0) As the Mac resolves it: the hook names the path with every link
+  # followed (/var is /private/var on macOS), so a wiki reached through a link
+  # still saves itself, and the test reads the path the same way.
+  has "$settings" "$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$SBX/scripts/turn-end-commit.py")" "named by its full path, so it can be found"
+
+  # 3. the guard's entry is exactly as it was, and so is the owner's own hook
+  same "$(python3 "$FIXTURES/read-hooks.py" "$settings" PreToolUse)" "$guard_before" \
+       "the delete guard's entry is left exactly as it was"
+  same "$(python3 "$FIXTURES/read-hooks.py" "$settings" PostToolUse)" "$owner_before" \
+       "and so is the hook of the owner's own"
+
+  # 4. nothing of the owner's is swept into Moblee's commit
+  ( cd "$SBX" && git log -1 --format=%s ) > "$HOME_DIR/last-subject.txt" 2>/dev/null
+  has "$HOME_DIR/last-subject.txt" "moblee: updated" "the update committed its own work"
+  ( cd "$SBX" && git show --name-only --format= HEAD ) > "$HOME_DIR/committed.txt" 2>/dev/null
+  has   "$HOME_DIR/committed.txt" "scripts/turn-end-commit.py" "with the end-of-reply save in it"
+  hasnt "$HOME_DIR/committed.txt" "wiki/Golf.md" "and the page the owner was half-way through is not"
+  hasnt "$HOME_DIR/committed.txt" "scripts/mine.py" "nor their own script"
+  has "$SBX/wiki/Golf.md" "The owner was in the middle of writing this" "their words are still in the page"
+  ( cd "$SBX" && git status --porcelain --untracked-files=all ) > "$HOME_DIR/status.txt" 2>/dev/null
+  has "$HOME_DIR/status.txt" "wiki/Golf.md" "which is still theirs to commit"
+  has "$HOME_DIR/status.txt" "scripts/mine.py" "and so is their script"
+
+  # 5. the same wiki for ChatGPT as well. Its hooks file is the one where the
+  #    order matters: ChatGPT keeps its trust by the entry and its place in the
+  #    list, so Moblee's guard entry must come out of this untouched and the new
+  #    one must be added after it — and the owner must be told to trust it.
+  mkdir -p "$HOME_DIR/.codex/hooks"
+  printf '%s\n' \
+    '{' \
+    '  "hooks": {' \
+    '    "PreToolUse": [' \
+    "      { \"matcher\": \"Bash|apply_patch\", \"hooks\": [ { \"type\": \"command\", \"command\": \"/usr/bin/python3 $HOME_DIR/.codex/hooks/bash-guard.py\", \"timeout\": 10 } ] }" \
+    '    ]' \
+    '  }' \
+    '}' > "$HOME_DIR/.codex/hooks.json"
+  cp "$PACKAGE_ROOT/safety/bash-guard.py" "$HOME_DIR/.codex/hooks/bash-guard.py"
+  local codex="$HOME_DIR/.codex/hooks.json"
+  local codex_guard_before; codex_guard_before=$(python3 "$FIXTURES/read-hooks.py" "$codex" PreToolUse)
+  cp "$FIXTURES/old-wiki/VERSION" "$SBX/VERSION"
+  ( cd "$SBX" && git add -- VERSION && git commit -qm "back to the old version" ) >/dev/null 2>&1
+  run_update "$HOME_DIR" "$SBX" --assistant both
+  has "$codex" "turn-end-commit.py" "the save is entered in ChatGPT's hooks file too"
+  same "$(python3 "$FIXTURES/read-hooks.py" "$codex" Stop | grep -o 'turn-end-commit.py' | wc -l | tr -d ' ')" "1" \
+       "as a Stop hook there, once and not twice"
+  same "$(python3 "$FIXTURES/read-hooks.py" "$codex" PreToolUse)" "$codex_guard_before" \
+       "and ChatGPT's guard entry is left exactly as it was, so its trust holds"
+  has "$HOME_DIR/update-output.txt" "turn-end-commit.py" \
+      "the run tells the owner about the second hook to trust"
+  has "$HOME_DIR/update-output.txt" "Press Trust beside each hook Moblee has entered" \
+      "and gives the five steps again, because an entry was added"
+}
+
+for c in happy refused extras owners_pages partly backups index protected twice shrink owners_words gitignore name_clash owners_uncommitted staged_leftovers clash_keeps_safety second_mac chatgpt_memory saving; do
   wanted "$c" && "case_$c"
 done
 

@@ -72,7 +72,7 @@ First open your wiki folder in ChatGPT (File menu, Open Folder). Until a folder 
 1. Open the ChatGPT menu and choose Settings.
 2. Choose Hooks, under the heading Coding.
 3. Open "User config".
-4. Press Trust beside the hook that ends `bash-guard.py`.
+4. Press Trust beside each hook Moblee has entered: one ends `bash-guard.py`, which is the delete guard, and one ends `turn-end-commit.py`, which saves your wiki.
 5. Turn its switch on.
 
 If ChatGPT is open, quit it and open it again afterwards, so that it reads the whole rules file. ChatGPT keeps its trust while Moblee's entry in its hooks list stays the same, so an ordinary Moblee update does not need the five steps again. If an update ever does need them, Moblee says so at the end of the update and ChatGPT will not remind you. After any update, prove the guard again; `docs/09-safety.md` says how.
@@ -128,7 +128,7 @@ A quick checklist to confirm everything is in place:
 - `~/.claude/skills/` (for ChatGPT, `~/.agents/skills/`) contains the eight core skills: `brain/`, `compact/`, `companion/`, `galaxy/`, `wiki-capture/`, `wiki-interview/`, `wiki-to-pdf/`, `design-your-brand/` (plus any extras you ticked).
 - With Claude: `~/.claude/hooks/bash-guard.py` exists, and the vault's `.claude/settings.local.json` lists the permission rules (the installer printed the counts).
 - With ChatGPT: `~/.codex/hooks/bash-guard.py` exists, `~/.codex/hooks.json` holds its entry, you have done the Trust step, and `python3 scripts/moblee-doctor.py --prove-guard`, run from the Moblee folder, reports the guard as proved. In the Moblee app, press Prove the guard on the home screen. The proof uses a little of your ChatGPT allowance.
-- The vault's `VERSION` file reads `0.9.6` for this release.
+- The vault's `VERSION` file reads `0.10.0` for this release.
 - `python3 scripts/moblee-doctor.py`, run from the Moblee folder, changes nothing and marks each finding `OK`, `LOOK`, `PROBLEM`, `CANNOT SEE` or `CANNOT TELL`.
 - `python3 scripts/moblee-setup.py --check`, run from the Moblee folder, shows `WORKING` for each item you ticked.
 - If you added the `vault` shortcut: typing `vault` in a new Terminal window takes you into the vault and prints the ready signal.

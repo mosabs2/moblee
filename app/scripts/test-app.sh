@@ -739,7 +739,7 @@ done
 osascript -e 'tell application "Moblee" to quit' >/dev/null 2>&1
 sleep 2; pkill -f "$APP/Contents/MacOS/Moblee" >/dev/null 2>&1
 [[ -f "$V2/raw/Cold 1.pdf" && -f "$V2/raw/Cold 2.pdf" && -f "$V2/raw/Cold 3.pdf" ]] && ok "  three files let go over the Dock icon of a Moblee that was not even open all land" || bad "  three files let go over the Dock icon of a Moblee that was not open"
-sed -n "$((DIARY_WAS + 1)),\$p" "$DIARY" | grep -q "drop: 3 thing(s) copied into the wiki's inbox" && ok "    and the diary says three, in one drop, rather than one drop of one" || bad "    the cold drop's diary line must say three"
+sed -n "$((DIARY_WAS + 1)),\$p" "$DIARY" | grep -q "drop: 3 things copied into the wiki's inbox" && ok "    and the diary says three, in one drop, rather than one drop of one" || bad "    the cold drop's diary line must say three"
 cmp -s "$V2/raw/Cold 2.pdf" "$COLD/Cold 2.pdf" && [[ -f "$COLD/Cold 1.pdf" && -f "$COLD/Cold 2.pdf" && -f "$COLD/Cold 3.pdf" ]] && ok "    and every one of the three is the same bytes as the original, which is still where it was" || bad "    the cold drop's copies and originals"
 "$BIN" --self-drive > "$WORK/refuse2.txt" 2>&1 &
 PID=$!; sleep 3

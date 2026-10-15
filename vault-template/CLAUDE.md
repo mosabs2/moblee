@@ -57,6 +57,8 @@ If `outputs/lint/` holds a weekly report newer than the last one read, carry any
 
 The two commands are `git add .` then `git commit -m "<message>"`. Run them without being asked and without asking permission. If a commit is refused, say so plainly, in one sentence, and say what is now uncommitted; never let the owner believe work was saved when it was not.
 
+**The wiki also saves itself at the end of every reply.** That is a backstop, not a reason to skip the commit above. It never commits the owner's own uncommitted work and never overwrites a snapshot somebody has staged; what it left is written down at `~/.config/moblee/state/turn-end-commit.json`. Nothing puts that record into a reply, so read it when the owner asks what is unsaved, or when a session opens on a wiki with changes from earlier work, and say plainly what is in it. See [[Git and Commits]].
+
 If a session opens and `git status` shows changes from earlier work, commit those first, with a descriptive message, before starting anything new.
 
 Message form: `ingest: <Title>, <Publication>`; `housekeeping: <descriptor>`; `tooling:` or `schema: <descriptor>`; `lint: <date> health check`; `correction: <descriptor>`. The rest, including how this works in Cowork and what ChatGPT asks for, is in [[Git and Commits]].

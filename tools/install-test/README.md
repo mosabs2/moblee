@@ -1,8 +1,10 @@
 # install-test
 
 Runs the real `scripts/install.sh` from start to finish against throwaway wikis
-and checks what it actually did. Sibling of `tools/update-test/`, which does the
-same for the updater; the two work the same way and share their lessons.
+and checks what it actually did, and runs the commit gate the installer wires
+into a wiki (`scripts/vault-gate.py`) against the commits a wiki really
+receives. Sibling of `tools/update-test/`, which does the same for the updater;
+the two work the same way and share their lessons.
 
 ## Running it
 
@@ -26,6 +28,9 @@ path is the last line.
 |---|---|
 | `happy` | An ordinary install finishes, commits its own settings, records a finish in the diary, tells the app the run finished, and claims nothing outstanding on screen. |
 | `refused` | When git refuses the closing commit, the diary, the screen and the run-level state the app reads all say so, the closing step is not marked done, and the work is staged rather than lost. |
+| `gate_names` | The commit gate reads every file name: a page named in Arabic and a page with a space and a quote mark in its name are both read by their real names, neither comes back as git's octal escapes or backslash-escaped, and both commit cleanly once what they link to exists. |
+| `gate_csv` | G7: a row added to a CSV under `wiki/` whose unquoted comma makes it four columns against a three-column header is refused and named, and the same row passes once the value is quoted. |
+| `gate_frontmatter` | G8: a page whose `---` block holds an unquoted `: ` is refused and named, passes once the value is quoted, and is caught the same way on a Mac with no PyYAML installed. |
 
 ## Why it exists
 
@@ -76,8 +81,17 @@ half-finished wiki) makes it itself and says why.
 ## A note for whoever runs this with an assistant
 
 Unlike `tools/update-test/`, this rig ran under a delete guard that scans script
-files (verified 23 September 2026 on the author's MacBook Pro). The updater trips
+files (verified 23 September 2026 on a Mac it was developed on). The updater trips
 such a guard because it legitimately writes a `VERSION` file into a wiki; the
 installer, which only ever writes into a folder it made itself, does not. If a
 guard does refuse it, run it yourself in Terminal rather than asking the
 assistant to.
+
+That is now the usual outcome rather than the unusual one. On 14 October 2026,
+under a guard holding no record of this pack's own scripts, `bash
+tools/install-test/run.sh` was refused before it started: the guard read
+`scripts/install.sh` for itself, misread one of its `2>&1` redirects as a file
+written and then run, and stopped the command. **Run this rig in Terminal
+yourself.** For the same reason the cases here write their pages through
+`fixtures/make-gate-wiki.py` rather than with shell redirects, which such a
+guard refuses when the path looks like a page in a wiki.

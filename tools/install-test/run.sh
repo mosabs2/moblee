@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # run.sh — run the real installer end to end against throwaway wikis and check
-# what it actually did.
+# what it actually did, and run the commit gate it wires in against the commits
+# a wiki really receives.
 #
-#   bash tools/install-test/run.sh            # every case
-#   bash tools/install-test/run.sh refused    # one case by name
+#   bash tools/install-test/run.sh                # every case
+#   bash tools/install-test/run.sh refused        # one case by name
+#   bash tools/install-test/run.sh engine_path    # (v0.10.0) one of the three
+#   bash tools/install-test/run.sh engine_app     #   branches by which the
+#   bash tools/install-test/run.sh engine_none    #   installer finds a Claude
 #
 # Why this exists. On 23 September 2026 a code review found that the installer
 # carried, untouched, the fault that had just been fixed in the updater: when
@@ -188,7 +192,7 @@ case_skills() {
   ( cd "$PACKAGE_ROOT" && HOME="$B" bash scripts/install-skills.sh --update ) >"$B/out2.txt" 2>&1
   has "$B/.claude/skills/galaxy/SKILL.md" "The owner wrote this one himself" \
       "a skill of the owner's own wearing a Moblee name is left exactly as it is"
-  has "$B/out2.txt" "left alone" "and he is told so rather than finding out later"
+  has "$B/out2.txt" "left alone" "and they are told so rather than finding out later"
 }
 
 # --------------------------------------------------------------------------
@@ -208,13 +212,298 @@ case_skills_failed() {
   has   "$out" "get me started" "and still gives the owner their next step"
   has   "$out" "install-skills.sh" "with the command that puts the skills in"
   has   "$HOME_DIR/.claude/skills/brain/SKILL.md" "The owner wrote this one himself" \
-        "and his own skill was left exactly as it is"
+        "and their own skill was left exactly as it is"
   has   "$HOME_DIR/.config/moblee/install-diary.txt" "skills: FAILED" "the diary records the step as failed"
 }
 
 # --------------------------------------------------------------------------
+# Claude's own additions (v0.10.0): mods/ goes into the wiki at
+# scripts/claude-mods/ and the band above the prompt is registered with Claude
+# from there. Mods are a Claude Code feature and arrived in 2.1.287, so the
+# installer has to find a Claude new enough before it runs a single plugin
+# command, and it looks in two places: the `claude` on the owner's own PATH,
+# and the engine inside the Claude app. Three branches, one case each.
+#
+# Every Claude here is a stub inside the case's own sandboxed HOME: a little
+# script that prints a version and writes down every call it was given. That is
+# what makes it possible to assert that the right commands were run, in the
+# right order, by the right engine, without installing anything for real or
+# touching this Mac's own Claude. The real 2.1.295 engine on the author's Mac
+# was used separately, by hand, to prove the commands themselves work.
+#
+# engine_stub <path> <version> <calls file>
+engine_stub() {
+  local path="$1" version="$2" calls="$3"
+  mkdir -p "$(dirname "$path")"
+  cat > "$path" <<STUB
+#!/bin/sh
+printf '%s\n' "\$*" >> "$calls"
+if [ "\$1" = "--version" ]; then printf '%s (Claude Code)\n' "$version"; exit 0; fi
+case "\$*" in
+  "plugin list --json")       printf '[]\n'; exit 0 ;;
+  "plugin list")              printf 'No plugins installed\n'; exit 0 ;;
+  "plugin marketplace list")  printf 'Configured marketplaces:\n'; exit 0 ;;
+esac
+exit 0
+STUB
+  chmod +x "$path"
+}
+
+# app_engine_stub <home> <version> <build> <calls file> — where the Claude app
+# keeps its own engine: one folder per version, with a build folder inside it.
+app_engine_stub() {
+  engine_stub "$1/Library/Application Support/Claude/claude-code/$2/$3/claude.app/Contents/MacOS/claude" \
+              "$2" "$4"
+}
+
+# The sentences are read from the product rather than typed again here, so that
+# a case cannot pass against wording the installer no longer uses.
+# shellcheck source=../../scripts/claude-mods.sh
+. "$PACKAGE_ROOT/scripts/claude-mods.sh"
+
+# mods_asserts <calls file of the engine that should have been used> — the two
+# commands the install path takes, and the folder they are taken against.
+mods_commands() {
+  local calls="$1" vault="$2"
+  has "$calls" "plugin marketplace add $vault/scripts/claude-mods" \
+      "Claude was pointed at the wiki's own copy of the mods"
+  has "$calls" "plugin install --scope user --yes cold-cache-warning@moblee-mods" \
+      "and asked to install the band at user scope, without a prompt"
+}
+
+# The mods land in the wiki whatever Claude turns out to be, because the wiki is
+# where they live: an owner whose Claude catches up later needs them to be there.
+mods_in_wiki() {
+  local vault="$1"
+  isfile "$vault/scripts/claude-mods/.claude-plugin/marketplace.json" \
+         "the mods are in the wiki, as scripts/claude-mods/"
+  isfile "$vault/scripts/claude-mods/cold-cache-warning/.claude-plugin/plugin.json" \
+         "with the band's own folder inside it"
+  ( cd "$vault" && HOME="$HOME_DIR" git ls-files -- scripts/claude-mods ) \
+    > "$HOME_DIR/mods-tracked.txt" 2>/dev/null
+  has "$HOME_DIR/mods-tracked.txt" "scripts/claude-mods/cold-cache-warning" \
+      "and they are in the wiki's history, not left untracked"
+}
+
+# Branch one: a Claude new enough is on the owner's own PATH, which is the one
+# they type, so that is the one used.
+case_engine_path() {
+  start engine_path
+  local calls="$HOME_DIR/path-engine-calls.txt"
+  engine_stub "$HOME_DIR/bin/claude" "2.1.295" "$calls"
+  app_engine_stub "$HOME_DIR" "2.1.200" "bbbbbbbbbbbb" "$HOME_DIR/app-engine-calls.txt"
+  local was_path="$PATH"
+  PATH="$HOME_DIR/bin:$PATH"
+  run_install "$HOME_DIR" "$SBX" claude
+  PATH="$was_path"
+  local out="$HOME_DIR/install-output.txt" diary="$HOME_DIR/.config/moblee/install-diary.txt"
+  same "$RC" "0" "the installer exits cleanly"
+  mods_in_wiki "$SBX"
+  mods_commands "$calls" "$SBX"
+  has  "$out" "$MODS_YES_SENTENCE" "the screen says the band is in place"
+  has  "$diary" "mods: using the Claude on the PATH, version 2.1.295" \
+       "the diary says which Claude was used and from where"
+  has  "$diary" "mods: installed" "and that the band went in"
+  if [[ -s "$HOME_DIR/app-engine-calls.txt" ]]; then
+    hasnt "$HOME_DIR/app-engine-calls.txt" "plugin" \
+          "the older engine in the Claude app was never asked to install anything"
+  else
+    ok "the older engine in the Claude app was never asked to install anything"
+  fi
+}
+
+# Branch two: the `claude` on the PATH is too old — which is the state of the
+# author's own Mac, 2.1.277 against an app engine of 2.1.295 — so the engine
+# inside the Claude app is used instead. The old one is asked its version and
+# nothing else.
+case_engine_app() {
+  start engine_app
+  local old="$HOME_DIR/path-engine-calls.txt" new="$HOME_DIR/app-engine-calls.txt"
+  engine_stub "$HOME_DIR/bin/claude" "2.1.277" "$old"
+  app_engine_stub "$HOME_DIR" "2.1.9" "aaaaaaaaaaaa" "$HOME_DIR/app-oldest-calls.txt"
+  app_engine_stub "$HOME_DIR" "2.1.295" "9d6405864fdc" "$new"
+  local was_path="$PATH"
+  PATH="$HOME_DIR/bin:$PATH"
+  run_install "$HOME_DIR" "$SBX" both
+  PATH="$was_path"
+  local out="$HOME_DIR/install-output.txt" diary="$HOME_DIR/.config/moblee/install-diary.txt"
+  same "$RC" "0" "the installer exits cleanly"
+  mods_in_wiki "$SBX"
+  mods_commands "$new" "$SBX"
+  has   "$old" "--version" "the Claude on the PATH was asked its version"
+  hasnt "$old" "plugin" "and, being too old, was asked to do nothing else"
+  hasnt "$HOME_DIR/app-oldest-calls.txt" "plugin" \
+        "and neither was the older of the app's own engines"
+  has   "$diary" "mods: using the Claude in the Claude app, version 2.1.295" \
+        "the diary says the app's engine was the one used"
+  has   "$out" "$MODS_YES_SENTENCE" "and the screen says the band is in place"
+}
+
+# Branch three: no Claude on this Mac is new enough. One plain sentence, in the
+# same words on the screen and in the diary, the mods still laid into the wiki,
+# and an install that finishes cleanly — nothing else depends on the band.
+case_engine_none() {
+  start engine_none
+  local calls="$HOME_DIR/path-engine-calls.txt"
+  engine_stub "$HOME_DIR/bin/claude" "2.1.277" "$calls"
+  app_engine_stub "$HOME_DIR" "2.1.200" "bbbbbbbbbbbb" "$HOME_DIR/app-engine-calls.txt"
+  local was_path="$PATH"
+  PATH="$HOME_DIR/bin:$PATH"
+  run_install "$HOME_DIR" "$SBX" claude
+  PATH="$was_path"
+  local out="$HOME_DIR/install-output.txt" diary="$HOME_DIR/.config/moblee/install-diary.txt"
+  same  "$RC" "0" "the installer finishes cleanly all the same"
+  has   "$diary" "=== Moblee install finished ===" "and the diary records a finish"
+  mods_in_wiki "$SBX"
+  has   "$out" "$MODS_NO_ENGINE_SENTENCE" "the screen says it in one plain sentence"
+  has   "$diary" "$MODS_NO_ENGINE_SENTENCE" "and the diary carries the same sentence, word for word"
+  has   "$diary" "the newest Claude found was 2.1.277" \
+        "with the version it found written down beside it"
+  hasnt "$calls" "plugin" "no plugin command was run against a Claude too old to know them"
+  hasnt "$HOME_DIR/app-engine-calls.txt" "plugin" "nor against the old engine in the app"
+  hasnt "$out" "could not be registered" "and nothing is reported as having failed"
+}
+
+# --------------------------------------------------------------------------
+# The commit gate the installer wires into the wiki (scripts/vault-gate.py,
+# called by the tracked hook at scripts/hooks/pre-commit). The cases below do
+# not run the installer: they build a throwaway wiki wired the way the installer
+# wires one, make the commit the owner would make, and read what the gate said.
+#
+# make_gate_vault <dir> — that wiki, with one starting commit the gate allowed.
+# Everything is under TMPDIR, and git is given the case's sandboxed HOME, so no
+# setting of this Mac's own is read and nothing of the owner's is written. The
+# pages come from fixtures/make-gate-wiki.py, as the oversized Index of the
+# `refused` case does, so that the awkward file names are written once and read
+# the same way everywhere.
+make_gate_vault() {
+  local v="$1"
+  python3 "$FIXTURES/make-gate-wiki.py" "$v" "$PACKAGE_ROOT" >/dev/null
+  (
+    cd "$v" || exit 1
+    export HOME="$HOME_DIR"
+    git init -q
+    git config user.email "test-owner@example.invalid"
+    git config user.name "Test Owner"
+    git config commit.gpgsign false
+    git config core.hooksPath scripts/hooks
+    git add -A
+    git commit -q -m "the practice wiki as it starts"
+  ) >/dev/null 2>&1
+  if gate_git "$v" rev-parse --verify -q HEAD >/dev/null 2>&1; then
+    ok "the practice wiki starts with a commit the gate allowed"
+  else
+    bad "the practice wiki starts with a commit the gate allowed"
+  fi
+}
+
+# gate_git <dir> [args...] — git in that wiki, with the sandboxed HOME.
+gate_git() { local v="$1"; shift; ( cd "$v" && HOME="$HOME_DIR" git "$@" ); }
+
+# gate_pages <dir> <set...> — lay down one of the fixture's sets of pages.
+gate_pages() { local v="$1"; shift; python3 "$FIXTURES/make-gate-wiki.py" "$v" "$PACKAGE_ROOT" "$@" >/dev/null; }
+
+# gate_commit <dir> <message> <output file> — stage everything and commit
+# through the gate, keeping whatever the gate printed; sets RC.
+gate_commit() {
+  local v="$1" msg="$2" out="$3"
+  (
+    cd "$v" || exit 1
+    export HOME="$HOME_DIR"
+    git add -A
+    git commit -q -m "$msg"
+  ) >"$out" 2>&1
+  RC=$?
+}
+
+# --------------------------------------------------------------------------
+# The gate has to read every file name, whatever it is written in. Until
+# v0.10.0 it asked git for the staged paths a line at a time and with git's
+# default settings, which hands back a name holding anything but plain English
+# letters as a quoted string of octal escapes — "wiki/\331\205..." — matching no
+# file on the disk. Every check then passed over that page in silence: the owner
+# was told nothing was wrong with a page the gate had never read.
+#
+# Both names here are ones that form breaks on: one written in Arabic, one with
+# a space and a quote mark in it. Each page adds a link to a page that does not
+# exist, which is G6's business, so the gate cannot say anything at all about
+# either file without having read it.
+case_gate_names() {
+  start gate_names
+  local v="$SBX"
+  make_gate_vault "$v"
+  gate_pages "$v" awkward-names
+  gate_commit "$v" "two pages with awkward names" "$HOME_DIR/names-blocked.txt"
+  local out="$HOME_DIR/names-blocked.txt"
+  same "$RC" "1" "the gate refuses the commit"
+  has  "$out" 'wiki/مرحبا بالعالم.md' "it read the page named in Arabic, by its real name"
+  has  "$out" 'wiki/A page with "quotes" in it.md' "and the page with a space and a quote mark in its name"
+  hasnt "$out" '\331' "no name came back as git's octal escapes"
+  hasnt "$out" '\"quotes\"' "and none came back backslash-escaped"
+  # the same two pages once the page they link to is there: both go in
+  gate_pages "$v" link-target
+  gate_commit "$v" "the pages, with their link resolving" "$HOME_DIR/names-passed.txt"
+  same "$RC" "0" "and passes them once the link resolves"
+  # Read back what is now tracked the way the gate itself reads git's paths:
+  # with -z, which is the only form that hands a name holding a quote mark back
+  # as it really is. Asked for a line at a time, git returns that one quoted and
+  # backslash-escaped however core.quotepath is set.
+  gate_git "$v" ls-files -z 2>/dev/null | tr '\0' '\n' > "$HOME_DIR/names-committed.txt"
+  has "$HOME_DIR/names-committed.txt" 'wiki/مرحبا بالعالم.md' "the Arabic-named page is in the commit"
+  has "$HOME_DIR/names-committed.txt" 'wiki/A page with "quotes" in it.md' "and so is the quoted one"
+}
+
+# --------------------------------------------------------------------------
+# G7, new in v0.10.0. A comma inside a value, left unquoted, pushes everything
+# after it into the next column, and the file reads wrong from that line down
+# without ever looking broken.
+case_gate_csv() {
+  start gate_csv
+  local v="$SBX"
+  make_gate_vault "$v"
+  gate_pages "$v" csv-unquoted
+  gate_commit "$v" "a row with an unquoted comma" "$HOME_DIR/csv-blocked.txt"
+  same "$RC" "1" "the gate refuses a row that does not fit the header"
+  has "$HOME_DIR/csv-blocked.txt" "G7 wiki/data/notes.csv" "and names the file"
+  has "$HOME_DIR/csv-blocked.txt" "reads as 4 columns against the header's 3" \
+      "and says in plain words what is wrong with it"
+  # the same row with the value quoted, which is how a comma is written in a CSV
+  gate_pages "$v" csv-quoted
+  gate_commit "$v" "the same row, quoted" "$HOME_DIR/csv-passed.txt"
+  same "$RC" "0" "and passes the same row once the value is quoted"
+}
+
+# --------------------------------------------------------------------------
+# G8, new in v0.10.0. A colon followed by a space inside a plain value ends the
+# `---` block at the top of a page early; Obsidian then shows the page with no
+# properties at all rather than an error, so nobody notices.
+case_gate_frontmatter() {
+  start gate_frontmatter
+  local v="$SBX"
+  make_gate_vault "$v"
+  gate_pages "$v" frontmatter-broken
+  gate_commit "$v" "frontmatter with an unquoted colon" "$HOME_DIR/fm-blocked.txt"
+  same "$RC" "1" "the gate refuses frontmatter that no longer reads as YAML"
+  has "$HOME_DIR/fm-blocked.txt" "G8" "and says which check stopped it"
+  has "$HOME_DIR/fm-blocked.txt" "wiki/A page.md" "and names the page"
+  gate_pages "$v" frontmatter-fixed
+  gate_commit "$v" "the same page, quoted" "$HOME_DIR/fm-passed.txt"
+  same "$RC" "0" "and passes the page once the value is quoted"
+  # The same fault on a Mac with no PyYAML, where the gate uses its own simpler
+  # test instead. Nothing in the pack installs PyYAML, so that is the path most
+  # owners run.
+  gate_pages "$v" frontmatter-broken
+  gate_git "$v" add -A >/dev/null 2>&1
+  ( cd "$v" && HOME="$HOME_DIR" python3 "$FIXTURES/gate-without-pyyaml.py" ) \
+    > "$HOME_DIR/fm-no-pyyaml.txt" 2>&1
+  same "$?" "1" "the same fault is caught where PyYAML is not installed"
+  has "$HOME_DIR/fm-no-pyyaml.txt" "unquoted ': '" "and the owner is told which value to quote"
+}
+
+# --------------------------------------------------------------------------
 printf '\n  Moblee install test — %s\n  scratch: %s\n' "$(cat "$PACKAGE_ROOT/VERSION")" "$ROOT"
-for c in happy refused skills skills_failed; do
+for c in happy refused skills skills_failed engine_path engine_app engine_none \
+         gate_names gate_csv gate_frontmatter; do
   if wanted "$c"; then "case_$c"; fi
 done
 
