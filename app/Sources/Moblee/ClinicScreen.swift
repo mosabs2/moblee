@@ -108,6 +108,18 @@ struct ClinicScreen: View {
                     .font(Theme.font(14))
                     .fixedSize(horizontal: false, vertical: true)
                     .lineLimit(2)
+                // (v0.10.0) One line, under the headline, in the check-up's own
+                // words: whether the wiki saves itself after every reply. Drawn
+                // here and not among the findings below because it is not a
+                // fault — it is as often "yes" — and because nothing that is
+                // right ever reaches that list.
+                if !card.saving.isEmpty {
+                    Text(card.saving)
+                        .font(Theme.font(13))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(2)
+                }
                 ForEach(Array(Self.rowsShown(card).enumerated()), id: \.offset) { _, row in line(row) }
                 if let more = Self.andMore(shown: Self.rowsShown(card).count, of: Self.rowsThereAre(card)) {
                     Text(more).font(Theme.font(13)).foregroundStyle(.secondary)
@@ -186,6 +198,7 @@ struct ClinicScreen: View {
     /// drift apart, and static so a check can read it back.
     static func said(_ card: Clinic.Card, saved: Bool = true) -> String {
         var out = [cardTitle + ". " + card.headline]
+        if !card.saving.isEmpty { out.append(card.saving) }
         out += rowsShown(card).map { $0.line }
         if let more = andMore(shown: rowsShown(card).count, of: rowsThereAre(card)) { out.append(more) }
         if let first = card.actions.first { out.append("What to do next. " + first) }

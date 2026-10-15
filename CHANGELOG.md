@@ -1,5 +1,45 @@
 # Changelog
 
+## v0.10.0 (14 October 2026)
+
+**Nothing is left unsaved, and you are told when a conversation has gone cold.** Two things owners kept paying for without knowing it. You leave a conversation in the middle of something, and whatever your assistant had changed sits unsaved until you come back and ask for it — and asking, hours later, is the dearest message of the day, because your assistant re-reads the whole conversation before it can do anything at all. Both of those are now handled for you, with nothing to turn on and nothing to remember.
+
+### Your wiki saves itself at the end of every reply
+
+- **You can stop in the middle of something, close the window and walk away.** The work up to that point is saved. You never have to open a conversation again just to say "save everything".
+- **Your assistant still saves each piece of finished work itself**, under its own description, as before. This catches whatever is left over when a reply ends, and it is a backstop rather than a replacement.
+- **It saves in two parts, so the history still reads.** What that conversation changed itself goes in under the conversation's own title. Everything else — a file a script wrote, work another conversation left, something that arrived from another machine — goes in as "changes found in the wiki".
+- **The commit gate still checks every save.** If the gate refuses one, each file is offered again on its own, so one bad file no longer holds up the rest. The files it still refuses are **left exactly as they were** — the work is still on your Mac, nothing is lost — and they are written down. **Press "Check my wiki" and it tells you how many are still unsaved and what to ask for**; the line above the prompt says the same once it appears; and asking your assistant makes it read the record. You are never left believing work was saved when it was not.
+- **Your own half-finished work is never swept into a save in Moblee's name.** If you have been editing your rules file, your `.gitignore` or a script of your own, those are left for your own next commit rather than going in under a message saying Moblee did it, and the check-up says what is waiting.
+- **It never pushes anything anywhere, never deletes anything, and never gets round the gate.** Your reply never waits for it either: it lets go of your assistant at once and does its work behind the scenes.
+- **The record of what each conversation last saved** is kept at `~/.config/moblee/state/turn-end-commit.json`, for thirty days. It is outside Claude's and ChatGPT's own folders, which Moblee's rules put out of bounds, and both assistants share the one place.
+- **With ChatGPT there is one extra press.** A new entry in ChatGPT's hooks file has to be trusted, so the update prints those steps again when it adds one, and the app's Trust screen now names **both** of Moblee's hooks. Before this it named one, and an owner who trusted only that one would have had no end-of-reply save and no way of knowing.
+
+### A line above the prompt when a long conversation has gone cold
+
+- **With Claude, a line appears above where you type** once a long conversation has sat without a reply for about an hour: how long it has been, roughly how much your next message would make Claude re-read, and that a fresh conversation starts far smaller. There is a "Got it" button. Typing `/cache` asks the same question at any time.
+- **It also tells you whether your work is saved**, reading the record above: either everything from this conversation is committed and it is safe to start a new one, or how many files the gate stopped and what to say in a new conversation.
+- **Nothing is sent anywhere and no model call is ever made** to work any of that out, and **no message of yours is ever held or stopped** — so a long one you have dictated can never be lost to it.
+- **The hour is not a fact on every plan**, so the line says "about an hour on most plans" rather than pretending to certainty. If you know your own figure, put the number of minutes in `~/.config/moblee/cache-minutes` and it will use that.
+- **Moblee installs it for you**, without Terminal. It needs a recent Claude; where the Claude on your Mac is older, Moblee says so in one sentence and nothing else is affected — the line appears on its own once Claude has updated itself. For a wiki used with ChatGPT alone there is nothing to install, and Moblee says that too.
+
+### Fixed
+
+- **A page named in Arabic, Chinese or Greek was passed over in silence by every check in the commit gate** — as was one holding a space or a quote mark in its name. Git hands such a name back spelled out in escapes, which matches no file on the disk, so the gate looked, found nothing, and let the commit through saying all was well. The gate now reads every name as it stands. Two checks come with it: a row added to a `.csv` under `wiki/` must have as many columns as its own header (one unquoted comma and everything below reads wrong), and a page whose properties this commit touched must still read as properties (an unquoted colon ends the block early and the page silently loses all of them).
+- **The wiki's health check now warns before a file is too big, not after.** A file your assistant loads at every session is reported once it reaches 95 per cent of its limit, in words that say plainly that nothing is broken yet and what to do. It also no longer dies when one of its own checks breaks: that check is reported as a fault in Moblee, and every other check still runs, so you always get a report. And one of those always-loaded files going missing is now reported and counted, where before it was quietly skipped and the wiki could still come back all-clean.
+- **The delete guard goes to v5.1, closing six ways round it**: Python that starts a process under another name, wrappers it did not look through, `git checkout`'s cleverer spellings, your wiki named by its full path from somewhere else, `ssh` options that run a command on your own Mac, and the guard's own files, which could be edited or replaced. The check-up now also tells you **which guard is on your Mac**, beside the existing check that it is Moblee's own copy.
+- **An update would never have put the new above-the-prompt line into your wiki.** The updater decides whether a file is your own work by asking whether Moblee ships a file of that name, and this is the first thing Moblee ships under one name and installs under another. Every file of it read as yours, so it would have been named on screen as your work and left out of Moblee's save.
+- **"4 thing(s)" is gone from the rest of the pack.** v0.9.6 took it off the screens and said a few older findings still carried it; those are now done — the check-up's line about things waiting in the app, the updater's two counts and the diary line it writes, and the app's own note of what a drop copied in. They say "1 thing" and "4 things".
+
+### Tested
+
+- **435 checks in the app that need no window, 0 failed**, among them that 0.10.0 counts as newer than 0.9.6 in both of the places that compare versions — which is the comparison every 0.9.6 app already on an owner's Mac is about to make — and that the Trust screen names both hooks and says what each is for. **Eighty-eight drawn screens**, each in light and dark and laid out both ways, all twelve runs identical, and the new line on the check-up card looked at in every size.
+- **The end-of-reply save was watched doing it.** Its own suite is 105 checks, 0 failed, covering both parts, a file the gate stops (named, never forced through), a rename, a file someone else had staged, two runs at once, the detached run, a hook message with nothing in it, and every one of the faults the cold reading below turned up. Then the real headless Claude was asked for a one-line edit in a practice wiki in a sandboxed home, and the wiki saved itself when the reply ended, with the record written. The previous version could test everything but that.
+- **The above-the-prompt line validates and passes its own tests on Claude's current engine** (22 checks, 0 failed, up from 9), type-checks clean, and was installed for real in a sandboxed home, where Claude listed it as installed and switched on. All three cases of "which Claude is on this Mac" were exercised, two of them for real on the machine that built this.
+- **The guard's suite is 507 refusals and 240 allowances, 0 failures**, against v0.9.6's 380 and 184: nothing once refused is now allowed, and nothing once allowed is now refused. The check-up is 317 checks, up from 179. The health check has a suite of its own for the first time, 34 checks. The rules-file engine is 138, up from 119. The weekly card 44, the starting memories 93, every finding's code documented, and all pinned hashes current.
+- **Three people who had seen none of the work read it cold before it was finished**, as every version since v0.8.0 has had. One ran the installer's and updater's code against throwaway wikis and proved six ways the end-of-reply save could lose or mislabel an owner's work; one read every screen and every line of the check-up as somebody who does not read much, and found twelve places where the words were wrong for that reader; one swept the whole tree and every commit message for anything personal. Everything they found that was a fault is fixed and tested, and the two things that are judgements rather than faults are written down for whoever cuts the release.
+- **Two walk-throughs are still waiting on a person**, and this version did not clear them: the one in `vault-template/Welcome.md` and the one in `docs/03-first-conversation.md`. Both describe what an owner does in ChatGPT, and both can only be confirmed by somebody sitting in front of it.
+
 ## v0.9.6 (27 September 2026)
 
 **Seeing what a wiki is, and checking your own.** v0.9.4 fixed what owners hit and v0.9.5 gave them things to use. Owners said, in different words, the same two things: they did not know what the wiki was for, and when something felt wrong they had no way to find out. This version answers both, and adds one screen for the person who helps them.
@@ -352,7 +392,7 @@ The number 0.8.0 was carried by the builds tested on that account and was never 
 
 ### Verified
 
-On the maintainer's two Macs, on the committed code: the installer test (62 checks: the app-style and Terminal installs, the diary, a place already taken, a broken settings file, a half-made wiki, a skill already under one of Moblee's names, the starter dates, the connections check seen and unseen, the saved record) and the release test (72 checks: a fresh install, the checklist engine, the updater on a wiki made by 0.7.0, the check-up, made-to-measure skills, and `safety/release-hashes.py --check`) passed on every round; the app test (46 checks) drew twenty-three screens in light and dark and drove the real window through an install, the home screen, each kind of addition, a stale note of where the pack is, an aged guard repaired, three hostile requests refused, and the move to Applications from a pretend Downloads against an older Moblee, first with a copy made to fail and then for real. Fifteen awkward owner names, among them Arabic, accented, quoted and command-shaped ones, installed correctly and none was ever executed. The signed app was then run by a person on a new macOS account with nothing on it, three times, on the builds before this one, and the findings of those runs are the section above. What changed after the third run is small and is listed last in that section. Two reviewers who had seen none of the reasoning read the changes cold, one before the second run and one before this build.
+On two Macs, on the committed code: the installer test (62 checks: the app-style and Terminal installs, the diary, a place already taken, a broken settings file, a half-made wiki, a skill already under one of Moblee's names, the starter dates, the connections check seen and unseen, the saved record) and the release test (72 checks: a fresh install, the checklist engine, the updater on a wiki made by 0.7.0, the check-up, made-to-measure skills, and `safety/release-hashes.py --check`) passed on every round; the app test (46 checks) drew twenty-three screens in light and dark and drove the real window through an install, the home screen, each kind of addition, a stale note of where the pack is, an aged guard repaired, three hostile requests refused, and the move to Applications from a pretend Downloads against an older Moblee, first with a copy made to fail and then for real. Fifteen awkward owner names, among them Arabic, accented, quoted and command-shaped ones, installed correctly and none was ever executed. The signed app was then run by a person on a new macOS account with nothing on it, three times, on the builds before this one, and the findings of those runs are the section above. What changed after the third run is small and is listed last in that section. Two reviewers who had seen none of the reasoning read the changes cold, one before the second run and one before this build.
 
 ## v0.7.0 (19 September 2026)
 
@@ -433,7 +473,7 @@ A refinement release: fixes from the first remote support sessions, an optional 
 
 ## v0.5.0 (16 September 2026)
 
-The safety release. It exists because a recipient's vault lost a folder the day after its first housekeeping run, and the review that followed found that the three things protecting the maintainer's own vault (a delete guard, a permission list, and a written identity for Claude) had never shipped: all three lived outside the vault, and the v0.4 port had taken the vault as the boundary of the pattern. The rule from here on: a recipient gets what the maintainer has, or the pack does not ship.
+The safety release. It exists because a recipient's vault lost a folder the day after its first housekeeping run, and the review that followed found that the three things protecting the wiki it was all built on (a delete guard, a permission list, and a written identity for Claude) had never shipped: all three lived outside the vault, and the v0.4 port had taken the vault as the boundary of the pattern. The rule from here on: a recipient gets what the pack's own wiki has, or the pack does not ship.
 
 ### Added
 
@@ -448,7 +488,7 @@ The safety release. It exists because a recipient's vault lost a folder the day 
 - **`scripts/log-append.py`**, the one way a log entry is written: it reads the clock itself and emits the one correct header form, retiring hand-composed timestamps.
 - **The commit gate wired through `scripts/hooks/`** and `git config core.hooksPath`, so the gate is versioned and updates reach it; nothing is written into `.git/hooks/` any more. Gate gains **G6**: a wikilink added to `wiki/` must resolve (folder links advisory).
 - **Five more lint checks**, generalised: frontmatter schema (cluster notes, daily notes), duplicate frontmatter, session-metadata footers, prose boilerplate, skills-layer weight.
-- **`clinic/`**: the maintainer's tools for looking after a vault remotely by exchanging files: a clinic-note template, a checker that runs every command in a note through the guard, and the ten-point standard a note must pass before it is sent.
+- **`clinic/`**: the tools for looking after a vault remotely by exchanging files: a clinic-note template, a checker that runs every command in a note through the guard, and the ten-point standard a note must pass before it is sent.
 - `docs/08-updating.md` and `docs/09-safety.md`.
 
 ### Changed
@@ -484,7 +524,7 @@ Installed end to end three times in a sandboxed `HOME` on a stock `PATH`, with H
 
 ## v0.4.1 (4 September 2026)
 
-First-install fixes, found by running the installer as a fresh user on a stock Mac rather than on the maintainer's machine.
+First-install fixes, found by running the installer as a fresh user on a stock Mac rather than on the machine it was written on.
 
 ### Fixed
 
@@ -493,7 +533,7 @@ First-install fixes, found by running the installer as a fresh user on a stock M
 
 ## v0.4 (1 September 2026)
 
-The maintainer's operational layer, generalised. Everything below was built and battle-tested on the maintainer's live vault June-August 2026, then ported with all personal content stripped and vault-path detection generalised (`~/.config/moblee/vault-path`, written by the installer; `MOBLEE_VAULT` env override; walk-up fallback).
+The operational layer, generalised. Everything below was built and proved on a live wiki between June and August 2026, then ported with all personal content stripped and vault-path detection generalised (`~/.config/moblee/vault-path`, written by the installer; `MOBLEE_VAULT` env override; walk-up fallback).
 
 ### Added
 
@@ -512,7 +552,7 @@ The maintainer's operational layer, generalised. Everything below was built and 
 
 ### Not ported, deliberately
 
-The maintainer's personal automations (scheduled news briefs, domain dashboards, semantic recall, cross-machine sync tooling) stay out: they are one person's assistant, not the pattern. The pattern is what ships.
+Automations fitted to one person (scheduled news briefs, domain dashboards, semantic recall, cross-machine sync tooling) stay out: they are one person's assistant, not the pattern. The pattern is what ships.
 
 ### Migration
 
@@ -520,7 +560,7 @@ Existing installs keep working. To adopt v0.4 pieces on an existing vault: re-ru
 
 ## v0.3 (5 June 2026)
 
-`wiki-to-pdf` rendering upgrades, ported from the maintainer's live skill and brand-abstracted so they are driven by your own `design-your-brand` settings.
+`wiki-to-pdf` rendering upgrades, ported from a live skill and brand-abstracted so they are driven by your own `design-your-brand` settings.
 
 ### Added
 
@@ -536,7 +576,7 @@ Existing installs keep working. To adopt v0.4 pieces on an existing vault: re-ru
 
 ### Brand abstraction
 
-The CV style reads `--brand-primary`, `--brand-secondary`, `--brand-body`, and `--brand-font-family` from the same `brand.css` `:root` block that `design-your-brand` writes, so one brand setup drives both render styles. No maintainer-specific colours, fonts, or assets are baked in. The EB Garamond serif is the fixed signature of the statement style.
+The CV style reads `--brand-primary`, `--brand-secondary`, `--brand-body`, and `--brand-font-family` from the same `brand.css` `:root` block that `design-your-brand` writes, so one brand setup drives both render styles. No one person's colours, fonts, or assets are baked in. The EB Garamond serif is the fixed signature of the statement style.
 
 ## v0.2 (25 May 2026)
 

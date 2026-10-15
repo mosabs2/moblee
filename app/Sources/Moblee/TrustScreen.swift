@@ -55,12 +55,16 @@ enum Trust {
     }
 
     /// The five steps, as verified in the ChatGPT app for Mac.
+    /// (v0.10.0) Moblee now enters two hooks of its own, the delete guard and
+    /// the end-of-reply save, and ChatGPT trusts them one at a time. Steps four
+    /// and five therefore name both and are done for each; the count stays at
+    /// five, because the first three are one journey to one page.
     static let steps = [
         "Open the ChatGPT menu and choose Settings",
         "Choose Hooks, under the heading Coding",
         "Open “User config”",
-        "Press Trust beside the hook that ends bash-guard.py",
-        "Turn its switch on",
+        "Press Trust beside each hook Moblee has entered: one ends bash-guard.py, which is the delete guard, and one ends turn-end-commit.py, which saves your wiki",
+        "Turn each of their switches on",
     ]
 
     /// Before the five steps. ChatGPT's Hooks page lists nothing at all, and
@@ -387,7 +391,12 @@ struct TrustScreen: View {
     }
 
     /// The same over both beats, the folder and the steps: one screen, one reason.
-    static let reasonSentence = "ChatGPT will not run your wiki's delete guard until you tell it to trust it."
+    // (v0.10.0) Moblee enters two hooks, so the sentence above the steps names
+    // both and says what each is for. It used to name the delete guard alone,
+    // while step four asked for two — so the owner was asked to trust a file
+    // the screen never explained, on a screen built for somebody who cannot
+    // read a Terminal.
+    static let reasonSentence = "ChatGPT will not run your wiki's delete guard, or the save that keeps your work at the end of every reply, until you tell it to trust them."
     /// The verdict alone. What to do about it (`Trust.folderThenSteps`) is said
     /// beneath it, above the steps.
     static let notRunningSentence = "The guard is not running in ChatGPT yet."

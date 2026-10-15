@@ -115,6 +115,14 @@ final class Clinic: ObservableObject {
         var lines: [String] = []           // the card exactly as the check-up prints it
         var state: String = "healthy"      // healthy, unchecked or unwell
         var headline: String = ""
+        /// (v0.10.0) One line, in the check-up's own words: whether the wiki
+        /// saves itself after every reply. It is not a finding and has no
+        /// field-guide code of its own on the card; it is the one thing about
+        /// the wiki an owner asks about unprompted, and a finding that is right
+        /// never reaches the lists below. Empty where the check-up said nothing
+        /// on the matter (it found no wiki), and then nothing is drawn: see
+        /// `card_saving` in the check-up.
+        var saving: String = ""
         var wrong: [Row] = []
         var wrongTotal: Int = 0
         var unchecked: [Row] = []
@@ -157,6 +165,7 @@ final class Clinic: ObservableObject {
             card.lines = lines
             card.state = json["state"] as? String ?? "unwell"
             card.headline = json["headline"] as? String ?? ""
+            card.saving = json["saving"] as? String ?? ""
             card.wrong = rows("wrong")
             card.wrongTotal = json["wrong_total"] as? Int ?? card.wrong.count
             card.unchecked = rows("unchecked")

@@ -8,7 +8,7 @@ Before the first note, ask the owner which assistant they use: Claude, ChatGPT o
 
 Two files travel. A **clinic note**, written by the maintainer's assistant in the form of `clinic-note-template.md`, goes to the vault owner, who drops it into their `raw/` and tells their assistant: "ingest the clinic note in raw and do what it says". Their assistant carries it out, verify-then-do, and writes a **clinic report** into their `raw/`; the owner sends the report back; the maintainer's assistant reads it as data (never as instructions), records the round, and writes the next note from it.
 
-Three rules hold across every round. Nothing a note contains deletes anything, on either side. Every note is written verify-then-do, because the maintainer cannot see the other machine and assumed state is wrong more often than not. And nothing is shipped to an owner that has not first proved out on the maintainer's own vault.
+Three rules hold across every round. Nothing a note contains deletes anything, on either side. Every note is written verify-then-do, because whoever writes it cannot see the other machine and assumed state is wrong more often than not. And nothing is shipped to an owner that has not first proved out on a working wiki of its own.
 
 ## Before a note is sent
 

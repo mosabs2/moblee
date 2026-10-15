@@ -21,7 +21,9 @@
 # every file that is replaced is first copied to ~/.config/moblee/backups/<stamp>/.
 #
 #   1. Checks the folder is a vault and reads its current version.
-#   2. Replaces the vault tooling in scripts/ and dashboard/ with the new copies.
+#   2. Replaces the vault tooling in scripts/ and dashboard/ with the new copies,
+#      lays Claude's own additions into scripts/claude-mods/ and brings the band
+#      above the prompt up to date.
 #   3. Points git at scripts/hooks/ (the commit gate), moving any old
 #      .git/hooks/pre-commit aside so only one gate runs.
 #   4. Replaces the bundled skills in ~/.claude/skills/ (old copies kept).
@@ -129,11 +131,16 @@ ustep_note() {
   RUN_NOTES+=("${USTEP:-starting}: $1")
   diary "update step $USTEP_N of $USTEP_TOTAL, ${USTEP:-starting}: DID NOT FINISH — $1"
 }
+# (v0.10.0) `4 thing(s)` asks the reader to choose the right word out of the
+# brackets, which is a programmer's shortcut for not choosing, in a product whose
+# own rules tell every assistant to use plain words.
+things() { if [[ "$1" == 1 ]]; then echo "1 thing"; else echo "$1 things"; fi; }
+
 ustep_close() {
   [[ -n "$USTEP" ]] || return 0
   if [[ ${#USTEP_NOTES[@]} -gt 0 ]]; then
     emit "$USTEP" partial
-    diary "update step $USTEP_N of $USTEP_TOTAL, $USTEP: done, except ${#USTEP_NOTES[@]} thing(s) named above"
+    diary "update step $USTEP_N of $USTEP_TOTAL, $USTEP: done, except $(things ${#USTEP_NOTES[@]}) named above"
   else
     emit "$USTEP" ok
     diary "update step $USTEP_N of $USTEP_TOTAL, $USTEP: done"
@@ -307,6 +314,16 @@ owners_own_file() {
   case "$1" in
     CLAUDE.md|AGENTS.md|.gitignore) return 0 ;;
     VERSION|.claude/settings.local.json) return 1 ;;
+    # (v0.10.0) Claude's own additions are the one thing the pack ships under
+    # one name and lays into the wiki under another: mods/ at the pack root
+    # becomes scripts/claude-mods/ in the wiki. The test below asks whether the
+    # pack ships a file of this name, which for these can only ever be no, so
+    # without this every one of them would read as the owner's own work — and
+    # each would be named on the screen as theirs and left out of the update's
+    # commit, which is to say the band would never be committed into the wiki.
+    scripts/claude-mods/*)
+      if [[ -e "$PACKAGE_ROOT/mods/${1#scripts/claude-mods/}" ]]; then return 1; fi
+      return 0 ;;
   esac
   [[ -e "$PACKAGE_ROOT/$1" || -e "$PACKAGE_ROOT/vault-template/$1" ]] && return 1
   return 0
@@ -367,7 +384,10 @@ if [[ -f "$SCRIPT_DIR/orient-extras.sh.example" && ! -f "$VAULT/scripts/orient-e
   diary "added scripts/orient-extras.sh, the owner's own orientation checks"
 fi
 
-for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh log-append.py weekly-card.py; do
+# (v0.10.0) turn-end-commit.py joins the list: the end-of-reply save lives in
+# the wiki beside the commit gate, and the safety step (step 4 below) registers
+# it as the assistant's Stop hook once it is there.
+for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh log-append.py weekly-card.py turn-end-commit.py; do
   if [[ -f "$SCRIPT_DIR/$tool" ]]; then
     if [[ -f "$VAULT/scripts/$tool" ]] && ! cmp -s "$SCRIPT_DIR/$tool" "$VAULT/scripts/$tool"; then
       keep_copy "$VAULT/scripts/$tool"
@@ -412,6 +432,26 @@ if [[ -d "$PACKAGE_ROOT/dashboard" ]]; then
     fi
     mkdir -p "$VAULT/dashboard"
     cp -R "$PACKAGE_ROOT/dashboard/." "$VAULT/dashboard/"
+  fi
+fi
+# ----- Claude's own additions (v0.10.0) ---------------------------------------
+# mods/ sits at the pack root, like dashboard/ above and unlike the folders in
+# the loop before it, so it is read from $PACKAGE_ROOT and not from $SCRIPT_DIR.
+# It goes into the wiki at scripts/claude-mods/, only when it differs from the
+# copy already there, and the old copy is kept. Claude is then pointed at that
+# folder and the band above the prompt brought up to date. The engine-finding
+# and the plugin commands live in scripts/claude-mods.sh, which the installer
+# sources too, so an install and an update do exactly the same thing.
+#
+# None of it can stop an update. The band is an addition to Claude's own screen
+# and no part of the wiki depends on it: an owner whose Claude is too old gets
+# the band later, and is told so here, in the diary and by the check-up.
+if [[ -f "$SCRIPT_DIR/claude-mods.sh" ]]; then
+  # shellcheck source=claude-mods.sh
+  . "$SCRIPT_DIR/claude-mods.sh"
+  mods_do "$PACKAGE_ROOT" "$VAULT" "$ASSISTANT" update "   "
+  if [[ "$MODS_STATE" == "failed" ]]; then
+    ustep_note "Claude's band above the prompt could not be registered (the diary says what Claude replied)"
   fi
 fi
 mkdir -p "$HOME/.config/moblee"
@@ -611,8 +651,11 @@ print_trust_steps() {
   echo "${pad}1. Open the ChatGPT menu and choose Settings."
   echo "${pad}2. Choose Hooks, under the heading Coding."
   echo "${pad}3. Open \"User config\"."
-  echo "${pad}4. Press Trust beside the hook that ends bash-guard.py."
+  echo "${pad}4. Press Trust beside each hook Moblee has entered: one ends bash-guard.py, which is the delete guard, and one ends turn-end-commit.py, which saves your wiki."
   echo "${pad}5. Turn its switch on."
+  # (v0.10.0) Moblee now enters two hooks, and ChatGPT trusts them one at a time:
+  # an owner who pressed Trust once would leave the second one switched off.
+  echo "${pad}Moblee enters two hooks of its own: one whose command ends bash-guard.py, which is the delete guard, and one whose command ends turn-end-commit.py, which saves your wiki at the end of every reply. Do steps 4 and 5 for each Moblee hook the page lists; ChatGPT trusts them one at a time."
   echo "${pad}If ChatGPT was open during this, quit it and open it again so that it reads the whole rules file."
   echo "${pad}Then prove it: python3 scripts/moblee-doctor.py --prove-guard (run from the Moblee folder; in the Moblee app, press Prove the guard). It uses a little of your ChatGPT allowance."
   echo "${pad}ChatGPT keeps its trust while Moblee's entry in its hooks list stays the same, so an ordinary Moblee update does not need these steps again. If an update ever does need them, Moblee says so at the end of the update and ChatGPT will not remind you. After any update, prove the guard again."
@@ -1094,9 +1137,9 @@ fi
 # (v0.9.2) Everything a step could not finish, said once at the end where the
 # owner is actually looking, and written into the diary the check-up reads.
 if [[ ${#RUN_NOTES[@]} -gt 0 ]]; then
-  diary "=== ${#RUN_NOTES[@]} thing(s) in this update did not finish ==="
+  diary "=== $(things ${#RUN_NOTES[@]}) in this update did not finish ==="
   echo
-  echo "   The update is done, but ${#RUN_NOTES[@]} thing(s) in it did not finish:"
+  echo "   The update is done, but $(things ${#RUN_NOTES[@]}) in it did not finish:"
   for n in ${RUN_NOTES[@]+"${RUN_NOTES[@]}"}; do
     echo "     - $n"
     diary "    | $n"

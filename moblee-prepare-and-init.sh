@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # moblee-prepare-and-init.sh
 #
-# One-shot finaliser for the Moblee starter pack. Run this once on the Mac mini
-# after Phase 2D, from anywhere (Terminal will resolve paths via $BASH_SOURCE).
+# One-shot finaliser for the Moblee starter pack, used once when the pack's own
+# repository was first created. It is kept for the record; an owner never runs it.
+# Run from anywhere (Terminal will resolve paths via $BASH_SOURCE).
 #
 # Usage:
-#   bash /Users/[YourUser]/Wiki/[Your Vault]/outputs/moblee/moblee-prepare-and-init.sh
-# or from inside the moblee directory:
+# Usage, from inside the moblee directory:
 #   bash moblee-prepare-and-init.sh
 #
 # What it does:

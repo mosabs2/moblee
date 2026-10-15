@@ -1,0 +1,20 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "cold-cache-warning",
+  "version": "1.0.0",
+  "description": "Shows a band above the prompt when a long conversation has gone cold, so you know the next message would make Claude re-read all of it at full price. Says how long it has been idle, roughly how much would be re-read, and whether the wiki's work is committed. Adds the /cache command. Sends nothing anywhere.",
+  "author": {
+    "name": "Moblee"
+  },
+  "types": "./types/index.d.ts",
+  "license": "MIT",
+  "homepage": "https://github.com/mosabs2/moblee",
+  "repository": "https://github.com/mosabs2/moblee",
+  "keywords": [
+    "cache",
+    "cost",
+    "context",
+    "band",
+    "hooks"
+  ]
+}

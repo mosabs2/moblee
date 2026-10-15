@@ -8,7 +8,7 @@ By this point you have a working Moblee vault and the skills installed. This doc
 
 **Claude Code** runs in a Terminal session that's `cd`'d into your vault. Use it for serious wiki work: batch ingests, lint passes, PDF renders, anything where Claude needs to make a sequence of edits and commit them. Claude Code can also run git directly, so commits happen automatically at the close of each unit of work.
 
-**Cowork** is the desktop app. Use it for casual capture: a thought you want to file, a chat you want to save, a quick query. Cowork can also do ingests and most other wiki operations, but it cannot run git directly (a platform constraint of the sandbox it runs in). Instead, it leaves the working tree dirty and your next Claude Code session auto-commits with the `vault` shell function.
+**Cowork** is the desktop app. Use it for casual capture: a thought you want to file, a chat you want to save, a quick query. Cowork can also do ingests and most other wiki operations, but it cannot run git itself (a constraint of the sandbox it runs in), so it leaves its work unsaved and notes what it changed in your `wiki/log.md`. It does not stay unsaved for long. The wiki now saves itself at the end of every reply, so the next conversation you have in your wiki saves whatever Cowork left, as "changes found in the wiki".
 
 A typical day might use both: Cowork during the day for whatever comes up, Claude Code in the evening for the bigger sessions.
 
@@ -24,6 +24,10 @@ Whatever the task, the flow looks roughly the same:
 4. **Your assistant reports back.** A short summary of what changed and, if relevant, an offer to continue ("Would you like me to also update the related page on X?").
 
 You almost never need to tell your assistant where to put things, what to name files, or how to format. The schema in `CLAUDE.md` answers all of that. You describe the work; your assistant handles the bookkeeping.
+
+**Nothing is left unsaved.** The wiki also saves itself at the end of every reply. You can stop in the middle of something, close the window and walk away: the work up to that point is saved, and you never have to come back and ask for it. If a save was refused, nothing is lost: the work is still on your Mac, exactly as it was left, and only its entry in the wiki's history is missing. Two things tell you. **The check-up** — "Check my wiki" in the Moblee app — says how much the last save left unsaved and what to ask for; and **the band above where you type** in Claude says whether the wiki's work is saved, though only when it appears, which is on a long conversation that has gone quiet. And if you ask your assistant "what is still unsaved?", it reads the record and tells you. That record is kept at `~/.config/moblee/state/turn-end-commit.json`.
+
+**Your own unfinished work is never swept into it.** Anything you have half-written yourself — in the rules file, or in Moblee's own folders — is left for your own next commit rather than saved under Moblee's name, and the check-up tells you it was left.
 
 ## Common requests
 

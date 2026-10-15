@@ -23,7 +23,7 @@ First open your wiki folder in ChatGPT (File menu, Open Folder). Until a folder 
 1. Open the ChatGPT menu and choose Settings.
 2. Choose Hooks, under the heading Coding.
 3. Open "User config".
-4. Press Trust beside the hook that ends `bash-guard.py`.
+4. Press Trust beside each hook Moblee has entered: one ends `bash-guard.py`, which is the delete guard, and one ends `turn-end-commit.py`, which saves your wiki.
 5. Turn its switch on.
 
 If ChatGPT is open, quit it and open it again afterwards, so that it reads the whole rules file.

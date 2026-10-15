@@ -42,6 +42,22 @@ Checks (hard failures block the commit):
       restricted folders, links inside code spans, and wiki/log.md (append-
       only, so a historical entry's link cannot be corrected). A link whose
       target is a folder rather than a page is advisory (W2), not blocking.
+  G7  Rows added to a `.csv` file under wiki/ have as many fields as the
+      file's own header row. One comma left unquoted — in a page title, say —
+      splits a row into the wrong columns, and everything read from that line
+      down is then wrong. Scoped to the rows this commit adds, as G6 is.
+  G8  A page whose frontmatter (the `---` block at the top) this commit
+      touches still reads as valid YAML. An unquoted `: ` inside a plain
+      value ends the block early and the page silently loses every property,
+      with no error anywhere. Scoped to wiki/ pages whose own frontmatter
+      lines this commit changed, with wiki/log.md exempt as append-only. The
+      full parse is done by PyYAML where it is installed, and by a test for
+      that one fault where it is not; a page in a restricted folder is named
+      by its folder only, never by its title.
+  Every check sees the real name of every file, whatever it is written in: the
+  gate reads git's paths with -z and core.quotepath=false, so a page named in
+  Arabic, Chinese or Greek, or one holding a space or a quote mark, is read as
+  it stands rather than coming back escaped and matching nothing.
 Advisory (printed, never blocks):
   W1  Superlative phrasing in added lines (first/largest/only/densest/
       on record ...) — grep the corpus before letting these stand.
@@ -54,12 +70,18 @@ Escape hatch for a deliberate exception: VAULT_GATE_SOFT=1 git commit ...
 """
 from __future__ import annotations
 
+import csv
 import datetime
 import os
 import re
 import subprocess
 import sys
 from pathlib import Path
+
+try:  # optional: with it, G8 does the full YAML parse; without it, a simpler test
+    import yaml
+except ImportError:
+    yaml = None
 
 
 def find_vault_root() -> Path:
@@ -128,8 +150,8 @@ VAULT = find_vault_root()
 # (v0.9.1) The instruction file's cap was 10,000 tokens against a rules file the
 # pack itself ships at about 9,100, leaving an owner 900 tokens of their own
 # before every commit in their vault — not Moblee's commits, every commit —
-# started being refused. One owner crossed the line on 21 September 2026 through
-# no fault of his own, and the updater's own patcher can add up to about 2,500
+# started being refused. An owner crossed that line in testing through
+# no fault of their own, and the updater's own patcher can add up to about 2,500
 # more. A cap a pack sets and then all but fills itself is not a discipline, it
 # is a trap, so the figure is derived rather than guessed: the shipped file
 # (~9,100) plus the patcher's worst case (~2,500) plus room for the owner's own
@@ -170,6 +192,10 @@ ATTACHMENT_SUFFIXES = {
 }
 NON_PAGE_LINK_PREFIXES = ("reference-", "reference_", "feedback-", "feedback_", "project-", "memory/")
 ANY_WIKILINK = re.compile(r"(!?)\[\[([^\]]+)\]\]")
+# G8: one `key: value` line of a page's frontmatter. Used only where PyYAML is
+# not installed, to find the one fault that causes nearly all of these — a
+# colon-and-space left unquoted inside the value.
+FM_KEY = re.compile(r"^([A-Za-z_][\w-]*):[ \t]+(.+?)\s*$")
 
 
 def strip_code(text: str) -> str:
@@ -196,16 +222,57 @@ def cluster_folders() -> tuple[str, ...]:
 
 
 def git(*args: str) -> str:
-    return subprocess.run(["git", "-C", str(VAULT), *args],
-                          capture_output=True, text=True).stdout
+    """Run git inside the vault and hand back what it printed, as text.
+
+    core.quotepath=false is what lets the gate see a file whose name is not
+    plain English. Left at git's default, a page named in Arabic, Chinese or
+    Greek — or one with an accent in it — comes back wrapped in quotes and
+    spelled out as octal escapes (`"\\303\\250"` and the like), which matches no
+    file on the disk, so every check below passed silently over that page and
+    the owner was never told.
+
+    The output is decoded as UTF-8 here rather than left to whatever text
+    setting the machine happens to have, because a commit can be started by a
+    program that sets none (a desktop git client, or a scheduled job), and a
+    gate that fails on the name of a file is worse than no gate.
+    """
+    done = subprocess.run(["git", "-C", str(VAULT), "-c", "core.quotepath=false", *args],
+                          capture_output=True)
+    return done.stdout.decode("utf-8", errors="replace")
+
+
+def git_paths(*args: str) -> list[str]:
+    """File paths from git, one entry per file, asked for with -z.
+
+    -z tells git to separate the paths with a zero byte and print each one
+    exactly as it is. That is the only form that survives every name: read line
+    by line instead, a name holding a quote mark or a space comes back quoted
+    and backslash-escaped, and matches nothing. A zero byte cannot appear in a
+    file name, so splitting on it is safe.
+    """
+    return [p for p in git(*args, "-z").split("\0") if p]
 
 
 def staged_files() -> list[str]:
-    return [f for f in git("diff", "--cached", "--name-only").splitlines() if f]
+    return git_paths("diff", "--cached", "--name-only")
+
+
+def staged_text(path: str) -> str | None:
+    """What this commit will actually hold for a path, or None where the commit
+    removes it. Read from the index rather than the disk, so a half-staged file
+    is judged on the part being committed."""
+    done = subprocess.run(["git", "-C", str(VAULT), "show", f":{path}"],
+                          capture_output=True)
+    if done.returncode != 0:
+        return None
+    return done.stdout.decode("utf-8", errors="replace")
 
 
 def added_lines(path: str) -> list[str]:
-    out = git("diff", "--cached", "--unified=0", "--", path)
+    # --literal-pathspecs tells git the name is a name and not a pattern. A page
+    # called "Star *.md" otherwise matches "Star x.md" as well, and the gate
+    # would read one page's lines as the other's and name the wrong file.
+    out = git("--literal-pathspecs", "diff", "--cached", "--unified=0", "--", path)
     return [l[1:] for l in out.splitlines()
             if l.startswith("+") and not l.startswith("+++")]
 
@@ -280,8 +347,7 @@ def main() -> int:
     # cluster-note folders yet)
     cluster_dirs = cluster_folders()
     if cluster_dirs:
-        new_files = [f for f in git("diff", "--cached", "--name-only",
-                                    "--diff-filter=A").splitlines() if f]
+        new_files = git_paths("diff", "--cached", "--name-only", "--diff-filter=A")
         index_stems = {Path(c).name.rstrip("/") for c in cluster_dirs}
         for f in new_files:
             if f.startswith(cluster_dirs) and f.endswith(".md"):
@@ -338,7 +404,79 @@ def main() -> int:
                         continue
                     hard.append(f"G6 {f} adds a link to a page that does not exist: [[{target[:60]}]]")
 
-    newly_added = set(git("diff", "--cached", "--name-only", "--diff-filter=A").splitlines())
+    # G7 — a row this commit adds to a CSV under wiki/ must have as many fields
+    # as the file's own header row. A comma left unquoted inside a value — in a
+    # page title, or in a sum written "1,200" — pushes everything after it into
+    # the wrong column, and the file reads wrong from that line down without
+    # looking broken. Only the rows this commit adds are judged, as G6 is, so an
+    # older row further up the file never blocks a commit.
+    for f in files:
+        if not (f.startswith("wiki/") and f.endswith(".csv")):
+            continue
+        staged = staged_text(f)
+        if not staged or not staged.strip():
+            continue
+        header = staged.splitlines()[0].rstrip("\r")
+        try:
+            width = len(next(csv.reader([header])))
+        except (csv.Error, StopIteration):
+            continue  # no readable header to measure against
+        for line in added_lines(f):
+            line = line.rstrip("\r")
+            if not line.strip() or line == header:
+                continue
+            # An odd number of quote marks means the row is one line of a value
+            # that runs over several lines, which is allowed and cannot be
+            # counted on its own, so it is left alone.
+            if line.count('"') % 2:
+                continue
+            try:
+                found = len(next(csv.reader([line])))
+            except (csv.Error, StopIteration):
+                continue
+            if found != width:
+                hard.append(f"G7 {f}: an added row reads as {found} columns against the "
+                            f"header's {width} (a comma that needs quoting?): {line[:70]}")
+
+    # G8 — a page whose frontmatter this commit touches must still read as
+    # YAML. The `---` block at the top of a page holds its properties; a colon
+    # followed by a space inside a plain value ends the block early, and
+    # Obsidian then shows the page with no properties at all rather than an
+    # error, so nobody notices. PyYAML does the full parse where it happens to
+    # be installed; where it is not, the plain-value colon test below catches
+    # the fault that causes nearly all of these.
+    for f in files:
+        if not (f.startswith("wiki/") and f.endswith(".md")) or f == "wiki/log.md":
+            continue
+        staged = staged_text(f)
+        if not staged or not staged.startswith("---\n"):
+            continue
+        end = staged.find("\n---", 4)
+        if end < 0:
+            continue  # no closing marker: not a frontmatter block
+        block = staged[4:end]
+        if not set(added_lines(f)) & set(block.split("\n")):
+            continue  # this commit changed the page but not its frontmatter
+        # A restricted page is named by its folder only: the gate's output can
+        # end up in a terminal log, and the title of a private page is private.
+        label = "a restricted page" if f.startswith(RESTRICTED_DIRS) else f
+        problem = None
+        if yaml is not None:
+            try:
+                yaml.safe_load(block)
+            except yaml.YAMLError as exc:
+                problem = str(exc).split("\n")[0]
+        else:
+            for ln in block.split("\n"):
+                m = FM_KEY.match(ln)
+                if m and m.group(2)[0] not in "'\"[{|>&*!" and (": " in m.group(2) or m.group(2).endswith(":")):
+                    problem = f"unquoted ': ' in the value of {m.group(1)!r}"
+                    break
+        if problem:
+            hard.append(f"G8 the properties at the top of {label} no longer read as YAML "
+                        f"({problem}) — put the value in quotes")
+
+    newly_added = set(git_paths("diff", "--cached", "--name-only", "--diff-filter=A"))
     # W1 — superlatives in added prose (advisory)
     # Scope: wiki/ only. raw/ and Clippings/ hold source material the user
     # dropped in and Claude must not rewrite, so flagging its wording is noise;

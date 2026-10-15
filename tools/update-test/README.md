@@ -57,7 +57,7 @@ directory is written or removed.
 Before 23 September 2026 there was no way to run the updater end to end off a
 real person's Mac. Every change to it was tested a piece at a time and shipped
 on reasoning, and the six faults fixed in v0.9.1 were all found by an owner
-after release, on his own wiki. Each case above is one of those faults, or the
+after release, on their own wiki. Each case above is one of those faults, or the
 ordinary behaviour they broke.
 
 ## A note for whoever runs this with an assistant
@@ -77,7 +77,7 @@ matching, the guard falls back to reading the file, and it stops on the line
 that writes a `VERSION` into the wiki. Refreshing the list in the pack
 (`python3 safety/release-hashes.py`) does not change the installed copy. So the
 rig cannot be run by an assistant on a machine whose guard predates the edit,
-and the maintainer runs it himself.
+and whoever cuts the release runs it themselves.
 
 ## Related
 

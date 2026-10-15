@@ -278,8 +278,20 @@ enum LogicCheck {
                   && Trust.emptyUntilOpened == "Until a folder has been opened, ChatGPT's Hooks page is empty.")
         check("the five steps are word for word as verified",
               Trust.steps == ["Open the ChatGPT menu and choose Settings", "Choose Hooks, under the heading Coding",
-                              "Open “User config”", "Press Trust beside the hook that ends bash-guard.py",
-                              "Turn its switch on"])
+                              "Open “User config”",
+                              "Press Trust beside each hook Moblee has entered: one ends bash-guard.py, which is the delete guard, and one ends turn-end-commit.py, which saves your wiki",
+                              "Turn each of their switches on"])
+        // (v0.10.0) The sentence above the steps names both hooks and says what
+        // each does, so the owner is never asked to trust a file the screen has
+        // not explained.
+        check("the sentence above the steps names the save as well as the guard",
+              TrustScreen.reasonSentence.contains("delete guard")
+              && TrustScreen.reasonSentence.contains("every reply"))
+        // (v0.10.0) Both of Moblee's hooks are named on the screen the owner
+        // actually reads while trusting them. An owner told about one of the two
+        // leaves the other untrusted, and the end-of-reply save then never runs.
+        check("the Trust steps name both of the hooks Moblee enters",
+              Trust.steps.contains { $0.contains("bash-guard.py") && $0.contains("turn-end-commit.py") })
         check("a guard seen not running sends the owner to the folder first, then the five steps",
               TrustScreen.notRunningSentence == "The guard is not running in ChatGPT yet."
                   && Trust.folderThenSteps
@@ -481,6 +493,13 @@ enum LogicCheck {
               NewerRelease.offer(latest: "0.9.2", current: "0.9.2", setAside: nil) == nil
               && NewerRelease.offer(latest: "0.9.1", current: "0.9.2", setAside: nil) == nil)
         check("0.10.0 counts as newer than 0.9.9", NewerRelease.offer(latest: "0.10.0", current: "0.9.9", setAside: nil) == "0.10.0")
+        // (v0.10.0) Both comparisons read a version as numbers, never as text, so the
+        // ten in 0.10.0 is ten and not a one followed by a nought. Said of this
+        // release and the one before it, which is the comparison every 0.9.6 app on
+        // an owner's Mac is about to make.
+        check("0.10.0 counts as newer than 0.9.6, in both places that compare versions",
+              HomeModel.isNewer("0.10.0", than: "0.9.6") && Placement.newer("0.10.0", than: "0.9.6")
+              && !HomeModel.isNewer("0.9.6", than: "0.10.0") && !Placement.newer("0.9.6", than: "0.10.0"))
         check("Not now keeps that version away, and a newer one is offered again",
               NewerRelease.offer(latest: "0.9.3", current: "0.9.2", setAside: "0.9.3") == nil
               && NewerRelease.offer(latest: "0.9.4", current: "0.9.2", setAside: "0.9.3") == "0.9.4")
@@ -1300,7 +1319,7 @@ enum LogicCheck {
         let dropWrote = String(whole.dropFirst(diaryBefore.count))
         check("a drop writes itself into the install diary, the way a repair does",
               whole.hasPrefix(diaryBefore) && dropWrote.contains("--- Moblee drop ---")
-                  && dropWrote.contains("drop: 1 thing(s) copied into the wiki's inbox")
+                  && dropWrote.contains("drop: 1 thing copied into the wiki's inbox")
                   && dropWrote.contains("drop: one thing was not taken: it is a folder, and Moblee takes files"))
         check("and the diary carries no file name of what was dropped, because that is the owner's own content",
               !dropWrote.contains("Confidential") && !dropWrote.contains("Zarquith")
@@ -2235,6 +2254,19 @@ enum LogicCheck {
                   && ClinicScreen.said(poorlyCard).contains(poorlyCard.wrong[0].line)
                   && ClinicScreen.said(poorlyCard).contains("and 1 more")
                   && ClinicScreen.said(poorlyCard).hasSuffix(Clinic.sendIt))
+        // (v0.10.0) The one line about the wiki saving itself after every reply.
+        // It comes out of the card the check-up hands over, in the check-up's
+        // own words, and the app writes none of it: a card that carries no such
+        // line is not given one here.
+        var savingCard = healthyCard
+        savingCard.saving = "The wiki saves itself after every reply."
+        check("the card's line about the wiki saving itself is shown and read out, in the check-up's own words",
+              ClinicScreen.said(savingCard).contains(savingCard.saving))
+        check("and a card the check-up gave no such line is not given one by the app",
+              healthyCard.saving.isEmpty && !ClinicScreen.said(healthyCard).contains("saves itself"))
+        check("the card as a program reads it carries that line",
+              Clinic.Card.read("{\"lines\": [\"one\"], \"saving\": \"The wiki saves itself after every reply.\"}")?.saving
+                  == "The wiki saves itself after every reply.")
         // (v0.9.6) It used to end "all of them in the report", and the report
         // does not hold all of them: the card the check-up hands over carries
         // five findings at most. The screen must not oversell the file the owner

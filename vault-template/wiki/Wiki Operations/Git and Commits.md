@@ -33,7 +33,41 @@ One exception to `git add .`: when the commit is not an ingest, and a file is si
 
 The workable mechanism is the **clipboard handoff**. Claude composes the full git command, including any stale-lock cleanup (`rm -f .git/index.lock .git/index.lock.stale`) if an earlier sandbox attempt left files behind, writes it to the owner's clipboard with `mcp__computer-use__write_clipboard` (which needs `clipboardWrite: true` in the `request_access` call), brings Terminal forward with `open_application` if needed, and asks the owner to paste and press Return. Two keystrokes, with nothing to remember.
 
-An alternative for Cowork is a `vault` shell function installed once on the owner's machine, which commits everything accumulated at the start of their next Claude Code session. Cowork sessions then leave the working tree dirty and note what changed in their `wiki/log.md` entry, which is the audit trail.
+A Cowork session that cannot commit leaves its work unsaved and notes what it changed in its `wiki/log.md` entry, which is the audit trail. It does not stay unsaved: the end-of-reply save below picks it up, as changes found in the wiki, at the end of the next reply in any conversation. Some owners also have a `vault` shell function installed on their machine, which commits everything accumulated at the start of their next Claude Code session.
+
+## The wiki saves itself at the end of every reply
+
+From v0.10.0 the wiki has a second way of being saved, and it needs nobody to ask for it. `scripts/turn-end-commit.py`, inside the wiki, is wired as the assistant's Stop hook — with Claude and with ChatGPT alike — so it runs once a reply has finished. It saves in up to two parts: the files that conversation changed itself, under the conversation's own title, and anything else it finds changed as "changes found in the wiki".
+
+**This is a backstop, not a replacement for the commits above.** The assistant still saves each piece of work itself, under its own description, because that is the message the owner reads months later. The end-of-reply save only catches what is left over. That matters most when the owner walks away mid-task: without it, their next message in that conversation has to be "save everything", which is the dearest message of the day, because the assistant re-reads the whole conversation before it can do anything.
+
+The commit gate runs on it exactly as on any other save. When the gate stops a part, every file in that part is offered again on its own, so one unhappy file cannot hold back the rest. The files the gate still stops are left unsaved and named in the record. The save never pushes, never deletes and never gets round the gate.
+
+**What it leaves alone, and names in the record instead.** Three things, and none of them is a fault:
+
+- **The owner's own uncommitted work**, which is this hook's business to leave: the rules file, `AGENTS.md`, `.gitignore`, and anything in `scripts/`, `dashboard/` or `.claude/`. It is left for the owner's own next commit, exactly as `scripts/update.sh` leaves it, and for the same reason: an update can print "nothing of yours was committed" and a reply can end seconds later, and the two must not contradict each other.
+- **A file somebody has staged and changed again since.** Naming a path in a commit takes what is on the disk, which would throw away the snapshot they staged on purpose.
+- **The whole wiki while its history is not on a branch** (git's detached HEAD — an older version of a page being looked at, a bisect). A save made then belongs to no branch and is gone from the wiki the moment it goes back to one.
+
+**Nobody is told any of this by itself.** The hook's own output goes nowhere, and nothing puts the record into the next reply. So the record is the thing to read, and reading it is the assistant's job:
+
+- **when the owner asks what is unsaved**, and
+- **when a session opens on a wiki whose `git status` shows changes from earlier work** — which is the moment the rules file already tells you to commit those first.
+
+Read it, and say plainly what is in it. Never let the owner believe work was saved when it was not. The owner's own two ways of seeing it without asking are **the Moblee check-up** (`moblee-doctor.py`, or "Check my wiki" in the app), which reports what the last save left, and **the band above the prompt** in Claude, which says whether the wiki's work is saved — but only when it appears, which is on a long conversation that has gone cold.
+
+Where the record is kept:
+
+- `~/.config/moblee/state/turn-end-commit.json` — one record per conversation: what was saved, what the gate stopped (`own_left`, `other_left`), what was left for the owner's own commit (`yours_left`, `staged_left`). Kept for 30 days.
+- `~/.config/moblee/logs/turn-end-commit.log` — one line per run.
+
+**A leftover `index.lock`.** While `.git/index.lock` sits in the wiki, nothing can be saved at all — not this hook, not your own commits — and nothing in git ever clears it. The hook does not clear it either: it records that it found one, and the check-up tells the owner (field guide F49). Clearing it is a person's decision, because a lock that really does belong to a running git command must not be taken away behind its back. So: make sure nothing else is using the wiki, then move the file aside — `mv .git/index.lock .git/index.lock.old` — rather than deleting it, and try the commit again.
+
+To read one conversation's record, from the wiki:
+
+```
+python3 scripts/turn-end-commit.py --status <conversation id>
+```
 
 ## When a commit is refused
 

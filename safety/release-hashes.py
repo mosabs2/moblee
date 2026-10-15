@@ -44,6 +44,10 @@ FILES = [
     "scripts/vault-gate.py",
     "scripts/log-append.py",
     "scripts/weekly-card.py",
+    # (v0.10.0) The end-of-reply save. It is copied into the wiki and run by the
+    # assistant's Stop hook, and it stages, commits and rewrites its own record
+    # file, which the guard reads as clobbering.
+    "scripts/turn-end-commit.py",
     "scripts/vault-orient-preflight.sh",
     "scripts/patch-claude-md.py",
     "scripts/moblee-setup.py",

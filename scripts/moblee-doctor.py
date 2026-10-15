@@ -9,6 +9,8 @@
     python3 scripts/moblee-doctor.py --report   # also write a report the owner can send on
     python3 scripts/moblee-doctor.py --assistant chatgpt   # check for this assistant, whatever is on record
     python3 scripts/moblee-doctor.py --prove-guard         # ask ChatGPT to try a delete in a scratch wiki
+    python3 scripts/moblee-doctor.py --prove-saving        # ask your assistant for an edit in a scratch wiki,
+                                                          # to see the wiki save itself when the reply ends
 
 It changes nothing (the report and the card file are the only two files it can
 write, and only when asked). Every LOOK and PROBLEM carries the number of the entry in the companion
@@ -26,6 +28,15 @@ that does more than read: it makes a scratch wiki under
 asks ChatGPT's agent to remove a folder and delete a page in it, which the
 guard should refuse. The scratch wiki is left where it is; the real wiki is
 never touched.
+
+--prove-saving is its sibling, and the same in shape: it makes a scratch wiki
+under ~/.config/moblee/prove-saving/ — a real one, with a history and the
+pack's commit gate wired in — and asks the assistant for a one-line edit in it.
+What saves that edit is the Stop hook the owner already has registered, pointed
+at the scratch wiki by the pack's own MOBLEE_VAULT, MOBLEE_TURN_END_STATE and
+MOBLEE_TURN_END_LOG, so the arrangement proved is theirs and the owner's wiki
+and the owner's record are not touched. It is proved only when the edit was
+committed and the hook left its record.
 
 It also sweeps the wiki for secrets somebody has left in a page: a key, a
 token, a password, a wallet recovery phrase. It says the file, the line and the
@@ -54,11 +65,14 @@ import json
 import os
 import plistlib
 import re
+import shlex
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import textwrap
+import time
 from pathlib import Path
 
 HOME = Path.home()
@@ -79,6 +93,50 @@ CODEX_MATCHER = "Bash|apply_patch"
 DOC_LIMIT_KEY = "project_doc_max_bytes"
 DOC_LIMIT_DEFAULT = 32768  # what ChatGPT reads of an instruction file when the key is absent
 
+# (v0.10.0) The end-of-reply save: the wiki's own copy of turn-end-commit.py,
+# registered as the assistant's Stop hook, which is the hook that runs once a
+# reply has finished. It keeps one record per conversation and one log line per
+# run, in Moblee's own folder and not in either assistant's.
+TURN_END_NAME = "turn-end-commit.py"
+TURN_END_IN_VAULT = ("scripts", TURN_END_NAME)
+TURN_END_EVENT = "Stop"
+TURN_END_STATE = CONFIG / "state" / "turn-end-commit.json"
+TURN_END_LOG = CONFIG / "logs" / "turn-end-commit.log"
+# A git lock file older than this belongs to no running command: it was left
+# behind by one that stopped partway, and nothing in git ever clears it. The
+# same figure as INDEX_LOCK_STALE_SECONDS in scripts/turn-end-commit.py, so the
+# save and the check-up cannot disagree about which locks are nobody's.
+TURN_END_LOCK_STALE = 300
+# Where the command-line Claude is, for the proof. `which` first, as with
+# ChatGPT's agent; the two places below are where it really sits on a Mac, and
+# the Moblee app runs this check-up from a window and not from a shell, so the
+# PATH it hands over holds almost nothing.
+CLAUDE_ELSEWHERE = (HOME / ".local" / "bin" / "claude",
+                    Path("/opt/homebrew/bin/claude"), Path("/usr/local/bin/claude"))
+
+# ----- Claude's own additions (v0.10.0) ---------------------------------------
+# The band above the prompt is a mod: something Claude adds to its own screen.
+# Moblee keeps its mods in the wiki, at scripts/claude-mods/, and registers them
+# with Claude from there; the installer and the updater do that through
+# scripts/claude-mods.sh. This is the reading half, and the two sentences below
+# are word-for-word the ones in that file, so that the screen an owner read
+# during the install and the check-up they read afterwards say the same thing.
+MODS_IN_VAULT = ("scripts", "claude-mods")
+MODS_MARKETPLACE = "moblee-mods"
+MODS_PLUGIN = "cold-cache-warning@moblee-mods"
+# Mods are a Claude Code feature and arrived in 2.1.287. An older Claude does
+# not know the commands that install one and must not be asked to run them.
+MODS_MIN_ENGINE = (2, 1, 287)
+MODS_NO_ENGINE = ("The Claude on this Mac is older than the band above the prompt needs, so the band "
+                  "was not installed; it appears on its own once Claude has updated itself, and "
+                  "nothing else is affected.")
+MODS_CHATGPT = ("Moblee's band above the prompt is one of Claude's own additions, so there is nothing "
+                "to install for a wiki used with ChatGPT alone.")
+# Where the Claude app keeps its own engine: one folder per version, with a
+# build folder inside it. It is there whether or not the command line was ever
+# set up, and it is the copy that updates itself.
+CLAUDE_APP_ENGINES = HOME / "Library" / "Application Support" / "Claude" / "claude-code"
+
 OK, LOOK, PROBLEM = "OK", "LOOK", "PROBLEM"
 # Not faults: things the check-up cannot verify from where it stands.
 UNSEEN, UNSURE = "CANNOT SEE", "CANNOT TELL"
@@ -91,7 +149,9 @@ ASSISTANT_NAMES = {"claude": "Claude", "chatgpt": "ChatGPT", "both": "Claude and
 TRUST_STEPS = ('First open your wiki folder in ChatGPT (File menu, Open Folder). Until a folder has been '
                'opened in ChatGPT, its Hooks page is empty and does not say why. '
                '1. Open the ChatGPT menu and choose Settings. 2. Choose Hooks, under the heading Coding. '
-               '3. Open "User config". 4. Press Trust beside the hook that ends bash-guard.py. '
+               '3. Open "User config". '
+               '4. Press Trust beside each hook Moblee has entered: one ends bash-guard.py, which is '
+               'the delete guard, and one ends turn-end-commit.py, which saves your wiki. '
                '5. Turn its switch on. If ChatGPT was open during this, quit it and open it again so that '
                'it reads the whole rules file.')
 TRUST_PROVE = ("Then prove it: python3 scripts/moblee-doctor.py --prove-guard (run from the Moblee folder; "
@@ -245,16 +305,23 @@ class Findings:
     def __init__(self) -> None:
         self.rows: list = []
 
-    def add(self, level: str, text: str, guide: str | None = None, sendable: str | None = None) -> None:
+    def add(self, level: str, text: str, guide: str | None = None, sendable: str | None = None,
+            tag: str | None = None) -> None:
         # "sendable" is the same finding written for a report the owner may send
         # on, and is given only where the two must differ. The privacy sweep
         # names files, and a file's name is a page title, which the report
         # promises never to carry; so the sweep says it on the screen and says
         # it without the names in the report. The key is left off every other
         # row, so what a program reads is unchanged.
+        # "tag" names the question a row answers, where something other than the
+        # list of findings has to find that row again. The health card needs one
+        # such row (see card_saving), and the key is left off every other row,
+        # so what a program reads is unchanged.
         row = {"level": level, "text": tidy(text), "guide": guide}
         if sendable is not None:
             row["sendable"] = tidy(sendable)
+        if tag is not None:
+            row["tag"] = tag
         self.rows.append(row)
 
 
@@ -298,6 +365,55 @@ def check_settings(f: Findings, vault: Path | None) -> dict | None:
     return data
 
 
+# (v0.10.0) Which guard is on this Mac, in the guard's own words. The hash
+# comparison below answers one question — is this file Moblee's own copy — and
+# the version answers the other: which guard is actually running here. An owner
+# reading a check-up, or whoever is helping them over their shoulder, needs the
+# second to be able to say what they have, and until now nothing printed it.
+GUARD_VERSION_RE = re.compile(r"""^VERSION\s*=\s*["']([^"'\n]{1,24})["']""", re.M)
+
+
+def guard_version(path: Path) -> str | None:
+    """The version the guard at this path says it is, or None when it does not
+    say: an older guard written before it said so, or a file that cannot be
+    read. Taken from the guard's own VERSION line near the top, so a copy
+    somebody has edited still says which guard it began as."""
+    try:
+        with open(path, "r", errors="replace") as fh:
+            head = fh.read(8000)
+    except OSError:
+        return None
+    m = GUARD_VERSION_RE.search(head)
+    if not m:
+        return None
+    return m.group(1).strip() or None
+
+
+def add_guard_version(f: Findings, installed: Path, pack: Path | None, who: str) -> None:
+    """One factual line saying which guard the named assistant runs, beside the
+    line above saying whether it is Moblee's own copy. It is never a verdict:
+    where the two versions disagree, the line above already carries the fault
+    and the fix, so this one only says what it found. A guard that does not say
+    its version degrades to CANNOT TELL rather than a guess."""
+    mine = guard_version(installed)
+    ours = guard_version(pack / "safety" / "bash-guard.py") if pack else None
+    if mine and ours and mine != ours:
+        f.add(OK, f"The delete guard {who} runs says it is {mine}; this Moblee's own copy says {ours}. "
+                  "The line above is the one that says what to do about that.")
+    elif mine and ours:
+        f.add(OK, f"The delete guard {who} runs says it is {mine}, the same version as this Moblee's "
+                  "own copy.")
+    elif mine:
+        f.add(OK, f"The delete guard {who} runs says it is {mine}. That is the guard's own word for "
+                  "itself, and not a comparison with Moblee's copy.")
+    else:
+        f.add(UNSURE, f"Which version the delete guard {who} runs is cannot be told: the file does not "
+                      "say, and every guard Moblee ships does. It may not be Moblee's guard at all, or "
+                      "its first lines may not be readable from here. Whether it is Moblee's own copy "
+                      "is the line above, and that is the one to rely on; a Repair puts Moblee's own "
+                      "guard back, after which this line says the version.")
+
+
 def check_guard(f: Findings, settings: dict | None, pack: Path | None) -> None:
     if not GUARD.exists():
         f.add(PROBLEM, "The delete guard is not installed.", "F02")
@@ -322,6 +438,7 @@ def check_guard(f: Findings, settings: dict | None, pack: Path | None) -> None:
               "so it could not be compared with Moblee's own copy. That comparison is what shows the "
               "guard has not been swapped or edited, and it is the one the safety guide tells you to "
               "rely on. Run the check-up from the Moblee folder to make it.", "F31")
+    add_guard_version(f, GUARD, pack, "Claude")
 
 
 def check_vault(f: Findings, vault: Path | None, pack: Path | None) -> None:
@@ -343,7 +460,8 @@ def check_vault(f: Findings, vault: Path | None, pack: Path | None) -> None:
         if code == 0 and out.strip().isdigit():
             days = (datetime.datetime.now() - datetime.datetime.fromtimestamp(int(out.strip()))).days
             level = LOOK if (changed and days > 7) else OK
-            f.add(level, f"Last commit {days} day(s) ago; {changed} file(s) changed since.")
+            f.add(level, f"Last commit {things(days, 'day', 'days')} ago; "
+                         f"{things(changed, 'file', 'files')} changed since.")
     vv = (vault / "VERSION").read_text().strip() if (vault / "VERSION").exists() else "unknown"
     pv = (pack / "VERSION").read_text().strip() if pack and (pack / "VERSION").exists() else None
     if pv and vv != pv:
@@ -360,10 +478,10 @@ def check_vault(f: Findings, vault: Path | None, pack: Path | None) -> None:
     # (v0.9.1) A separate fault with the same folders and a different cause.
     # macOS protects Desktop, Documents and Downloads, and a scheduled job runs
     # without the permission a person's own Terminal has, so it fails with
-    # "Operation not permitted" and nothing is shown. A real owner's nightly
-    # reminder had almost certainly never run unattended, and his weekly job
-    # failed the same way, for five days, unnoticed (21 September 2026). This is
-    # true whether or not iCloud is syncing the folder, so it is its own check.
+    # "Operation not permitted" and nothing is shown. A nightly reminder of
+    # this kind can fail unattended for days without anybody noticing, which is
+    # why the check exists. This is true whether or not iCloud is syncing the
+    # folder, so it is its own check.
     protected = protected_folder(vault)
     if protected:
         f.add(PROBLEM,
@@ -378,14 +496,15 @@ def check_vault(f: Findings, vault: Path | None, pack: Path | None) -> None:
         if age > 14:
             f.add(LOOK, f"The newest health-check report is {age} days old; the weekly check may have stopped.", "F05")
         else:
-            f.add(OK, f"The newest health-check report is {age} day(s) old.")
+            f.add(OK, f"The newest health-check report is {things(age, 'day', 'days')} old.")
     req = vault / ".moblee" / "requests.json"
     if req.exists():
         try:
             waiting = [r for r in json.loads(req.read_text()).get("requests", []) if r.get("status") == "waiting"]
             if waiting:
                 keys = ", ".join(str(r.get("key")) for r in waiting)
-                f.add(LOOK, f"{len(waiting)} thing(s) agreed with your assistant are waiting in the Moblee app: {keys}.", "F18")
+                f.add(LOOK, f"{things(len(waiting))} agreed with your assistant "
+                            f"{'is' if len(waiting) == 1 else 'are'} waiting in the Moblee app: {keys}.", "F18")
         except (OSError, ValueError):
             f.add(LOOK, "The list of things waiting for the Moblee app does not load; Claude can rewrite it.", "F18")
 
@@ -397,7 +516,8 @@ def check_jobs(f: Findings) -> None:
         return
     code, listing = run(["launchctl", "list"])
     if code != 0:
-        f.add(LOOK, f"{len(plists)} Moblee scheduled job(s) are set up, but the Mac would not say whether they are loaded.", "F05")
+        f.add(LOOK, f"{things(len(plists), 'Moblee scheduled job is', 'Moblee scheduled jobs are')} "
+                    "set up, but the Mac would not say whether they are loaded.", "F05")
         return
     for p in plists:
         try:
@@ -516,19 +636,30 @@ def check_leftovers(f: Findings, pack: Path | None) -> None:
             except OSError:
                 pass
             packs.append(p)
-    groups.append(("old pack folder(s), one for each version of Moblee ever installed", packs, tidy(support)))
-    for name, what in (("backups", "backup folder(s), holding files an install, an update or a repair replaced"),
-                       ("prove-guard", "scratch wiki folder(s) left by guard proofs")):
+    groups.append(("old pack folder, one for each version of Moblee ever installed",
+                   "old pack folders, one for each version of Moblee ever installed",
+                   packs, tidy(support)))
+    for name, one, many in (
+            ("backups", "backup folder, holding files an install, an update or a repair replaced",
+             "backup folders, holding files an install, an update or a repair replaced"),
+            ("prove-guard", "scratch wiki folder left by a guard proof",
+             "scratch wiki folders left by guard proofs"),
+            # (v0.10.0) The end-of-reply save's proof leaves one of these every
+            # time it is run, as the guard's does, and this is the one place
+            # that tells an owner they are there. A folder nothing counts is a
+            # folder nobody clears out.
+            ("prove-saving", "scratch wiki folder left by an end-of-reply save proof",
+             "scratch wiki folders left by end-of-reply save proofs")):
         here = CONFIG / name
         dated = sorted(p for p in here.iterdir() if p.is_dir()) if here.is_dir() else []
-        groups.append((what, dated, tidy(here)))
-    kept = [g for g in groups if g[1]]
+        groups.append((one, many, dated, tidy(here)))
+    kept = [g for g in groups if g[2]]
     if not kept:
         return
     total = 0
     parts = []
     all_counted = True
-    for what, dirs, where in kept:
+    for one, many, dirs, where in kept:
         size, whole = 0, True
         for d in dirs:
             bytes_here, finished = folder_size(d)
@@ -539,7 +670,7 @@ def check_leftovers(f: Findings, pack: Path | None) -> None:
         # "At least" where the walk was cut short: the figure is then a floor and
         # not a measurement, and an owner deciding what to clear out should be
         # told which of the two they are reading.
-        parts.append(f"{len(dirs)} {what} in {where}, "
+        parts.append(f"{things(len(dirs), one, many)} in {where}, "
                      f"{'at least' if not whole else 'about'} {in_room(size)}")
     # Said only when there are pack folders to say it about, and only when the
     # copy in use was really found: with no record of it, every pack folder is
@@ -628,7 +759,8 @@ def check_skills(f: Findings, pack: Path | None, where: Path = SKILLS, who: str 
             f.add(OK, f"All {len(core)} core skills are installed{tag}, and each is this Moblee's copy.")
     elif have:
         f.add(UNSEEN,
-              f"{len(have)} skill folder(s) are installed{tag}, but the Moblee folder could not be found, "
+              f"{things(len(have), 'skill folder is', 'skill folders are')} installed{tag}, but the "
+              "Moblee folder could not be found, "
               "so whether they are Moblee's own copies, and whether any are missing, could not be checked. "
               "Run the check-up from the Moblee folder.", "F31")
     if not who and "get-started" in have and "companion" in have:
@@ -680,6 +812,7 @@ def check_codex_guard(f: Findings, pack: Path | None) -> bool:
               "The delete guard is installed for ChatGPT and entered in its hooks file, but the Moblee "
               "folder could not be found, so it could not be compared with Moblee's own copy. Run the "
               "check-up from the Moblee folder to make that comparison.", "F31")
+    add_guard_version(f, CODEX_GUARD, pack, "ChatGPT")
     return True
 
 
@@ -811,16 +944,34 @@ def find_codex() -> str | None:
     return None
 
 
-def run_quiet(cmd: list, timeout: int) -> tuple[int, str]:
-    """Run ChatGPT's agent with nothing to read from and no spoken or pushed
-    notices from the owner's own hooks. A timeout is the caller's to catch."""
+def find_claude() -> str | None:
+    """The command-line Claude, for the end-of-reply proof."""
+    found = shutil.which("claude")
+    if found:
+        return found
+    for p in CLAUDE_ELSEWHERE:
+        if p.is_file() and os.access(str(p), os.X_OK):
+            return str(p)
+    return None
+
+
+def run_quiet(cmd: list, timeout: int, cwd: Path | None = None,
+              env_extra: dict | None = None) -> tuple[int, str]:
+    """Run an assistant's agent with nothing to read from and no spoken or
+    pushed notices from the owner's own hooks. A timeout is the caller's to
+    catch. `env_extra` is for the end-of-reply proof, which hands the run the
+    pack's own three overrides so that the hook works on a scratch wiki and
+    writes its record there, and never near the owner's own."""
     env = dict(os.environ)
     env["NUDGE_SILENT"] = "1"
+    if env_extra:
+        env.update({k: str(v) for k, v in env_extra.items()})
     # A session of its own, so that a run that overstays is ended together with
     # everything it started (its shell, any helper programs of the owner's),
     # and nothing is left running and using the owner's allowance.
     p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                         text=True, errors="replace", env=env, start_new_session=True)
+                         text=True, errors="replace", env=env, start_new_session=True,
+                         cwd=str(cwd) if cwd is not None else None)
 
     # The Moblee app ends a proof by ending this check-up. The agent is in a
     # session of its own, so it is ended here, by hand, when that happens.
@@ -1044,6 +1195,641 @@ def check_chatgpt(f: Findings, vault: Path | None, pack: Path | None, assistant:
     check_skills(f, pack, CODEX_SKILLS, "ChatGPT")
 
 
+# --- does the wiki save itself after every reply? (v0.10.0) ------------------
+# An owner can walk away from a conversation at any moment, and whatever the
+# assistant had changed up to then is left unsaved. scripts/turn-end-commit.py,
+# installed into the wiki and registered as the assistant's Stop hook, saves it
+# when a reply ends. Three things can be wrong and none of them shows itself:
+# the script is not in the wiki, the hook is not registered, or it ran and the
+# commit gate stopped it. Nothing on screen says any of those, which is why
+# they are findings here.
+#
+# REDACTION. A record names the files the gate stopped, and a file name in a
+# wiki is a page title, which nothing printed here may carry. So the count is
+# given and the names are not, and the gate's own reason — which can quote a
+# page — is left in the log and pointed at rather than repeated.
+SAVING_TAG = "saving"
+# The one line the card and the app's check-up screen carry. Said once, here,
+# so the two cannot drift apart; see card_saving().
+SAVING_YES = "The wiki saves itself after every reply."
+SAVING_NO = "The wiki does not save itself after every reply."
+SAVING_UNSURE = "Whether the wiki saves itself after every reply cannot be told from here."
+
+
+def hook_script_paths(data) -> list[str]:
+    """Every path a registered end-of-reply save names, read out of a settings
+    or hooks file that has already been loaded.
+
+    The command is written as `python3 <path>`, with the path quoted where it
+    holds a space, so it is read back the way a shell would read it. A command
+    that cannot be read that way falls back to the whole string, which then
+    matches nothing and is reported as naming somewhere else — the safe way
+    round, since the alternative is calling a wiki saved when it is not."""
+    out = []
+    hooks = data.get("hooks") if isinstance(data, dict) else None
+    entries = hooks.get(TURN_END_EVENT) if isinstance(hooks, dict) else None
+    for entry in entries if isinstance(entries, list) else []:
+        if not isinstance(entry, dict):
+            continue
+        for h in entry.get("hooks") or []:
+            if not isinstance(h, dict):
+                continue
+            command = str(h.get("command", ""))
+            if TURN_END_NAME not in command:
+                continue
+            try:
+                words = shlex.split(command)
+            except ValueError:
+                words = [command]
+            named = [w for w in words if w.endswith(TURN_END_NAME)]
+            out += named or [command]
+    return out
+
+
+def same_file(named: str, wanted: Path) -> bool:
+    """Whether a path written in a hook's command is this very file."""
+    try:
+        return os.path.realpath(Path(named).expanduser()) == os.path.realpath(wanted)
+    except (OSError, ValueError):
+        return False
+
+
+def saving_registered(path: Path, vault: Path | None) -> tuple[bool | None, str]:
+    """Whether Moblee's end-of-reply save is entered as a Stop hook in this
+    settings file FOR THIS WIKI, and a word about what was found.
+
+    None is the one answer that is neither yes nor no: the file is there and
+    cannot be read, so what it says cannot be known. A file that is not there
+    at all is a plain no — there is nowhere for a hook to be registered.
+
+    (v0.10.0) The whole path is compared, and not the script's name. The
+    command carries the wiki's path as it stood when the hook was entered, so
+    a wiki that has been moved or renamed, and a second wiki on the same Mac,
+    both leave a hook pointing at somewhere else — and a hook pointing
+    somewhere else saves somewhere else. Matching on the name alone called
+    both of those registered, which told an owner their wiki saved itself when
+    nothing was saving it. Found by the review of 14 October 2026, by running
+    it: one wiki's script, run from inside another, committed the first."""
+    if not path.exists():
+        return False, f"there is no {tidy(path)}"
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError) as exc:
+        return None, f"{tidy(path)} could not be read ({exc})"
+    named = hook_script_paths(data)
+    if vault is None:
+        return (True, "") if named else (False, "")
+    wanted = vault.joinpath(*TURN_END_IN_VAULT)
+    if any(same_file(n, wanted) for n in named):
+        return True, ""
+    if named:
+        return False, ("an end-of-reply save for a different folder is entered there, so that "
+                       "folder is the one being saved and this wiki is not; the hook was "
+                       "entered before the wiki was moved or renamed, or it belongs to a "
+                       "second wiki on this Mac")
+    return False, ""
+
+
+def last_saving_record() -> tuple[str, dict]:
+    """("none", "unreadable" or "record", and the newest conversation's record).
+
+    Newest by the time written in the record itself. There is one record per
+    conversation and they are kept for thirty days, so this is a handful of
+    entries and not a file to be read in pieces."""
+    if not TURN_END_STATE.exists():
+        return "none", {}
+    try:
+        data = json.loads(TURN_END_STATE.read_text())
+    except (OSError, ValueError):
+        return "unreadable", {}
+    records = [v for v in data.values() if isinstance(v, dict)] if isinstance(data, dict) else []
+    if not records:
+        return "none", {}
+    return "record", max(records, key=lambda r: str(r.get("at", "")))
+
+
+def stale_index_lock(vault: Path | None) -> float | None:
+    """How old the wiki's leftover git lock file is, in seconds, where there is
+    one and it is old enough to belong to no running command; None otherwise.
+
+    git writes .git/index.lock while it works and takes it away when it
+    finishes. A command that stops partway leaves it, and nothing in git ever
+    clears it. While it is there, every save in the wiki does nothing at all —
+    the end-of-reply save included, and that one then stands aside quietly for
+    ever. The same five minutes the end-of-reply save itself uses, so the two
+    cannot disagree about which locks are nobody's."""
+    if vault is None:
+        return None
+    lock = vault / ".git" / "index.lock"
+    try:
+        age = max(time.time() - lock.stat().st_mtime, 0.0)
+    except OSError:
+        return None
+    return age if age >= TURN_END_LOCK_STALE else None
+
+
+def check_saving(f: Findings, vault: Path | None, assistant: str,
+                 proving: bool = False) -> None:
+    """The end-of-reply save: the script in the wiki, the hook that runs it for
+    each assistant the wiki is used with, what the last run did, and where the
+    record is kept.
+
+    `proving` says that --prove-saving is about to put the hook to the test in
+    this same run. It changes one line: with no record on the Mac yet, the
+    answer to "does the hook fire" is the proof's own line a few lines below,
+    and telling the owner to run the very thing they are running is worse than
+    saying nothing (found by a cold read of a real --prove-saving run)."""
+    if vault is None:
+        return   # no wiki at all: check_vault has said so, and F37 is the fix
+    if not vault.joinpath(*TURN_END_IN_VAULT).is_file():
+        # The file's name is kept out of the first sentence on purpose: the
+        # health card keeps the first sentence and nothing else, and a bracket
+        # opened in it comes out on the card unclosed.
+        f.add(PROBLEM,
+              "The wiki has no end-of-reply save in it, so what a reply leaves unsaved stays unsaved "
+              f"until somebody asks for it. The file is scripts/{TURN_END_NAME}, and the next Moblee "
+              "update puts it there.", "F44", tag=SAVING_TAG)
+        return
+    for who, label, where, trust in (
+            ("claude", "Claude", SETTINGS, False),
+            ("chatgpt", "ChatGPT", CODEX_HOOKS, True)):
+        if assistant not in (who, "both"):
+            continue
+        there, said = saving_registered(where, vault)
+        if there and trust:
+            # (v0.10.0) ChatGPT runs a hook only once the owner has pressed
+            # Trust, and nothing on the Mac records whether they have. So an
+            # entered hook is not a saving wiki, and this row must not be an
+            # OK: an all-OK set of rows makes the card say "The wiki saves
+            # itself after every reply", which for the commonest state of a
+            # fresh ChatGPT wiki — entered, not yet trusted — told a helper
+            # all was well while nothing was saving. The delete guard has
+            # always been reported this way; this now matches it.
+            f.add(UNSURE, f"Whether {label} saves the wiki at the end of every reply cannot be told "
+                          f"from here: Moblee's end-of-reply save is entered as its {TURN_END_EVENT} "
+                          "hook, but ChatGPT runs a hook only once it has been trusted and its files "
+                          "do not show whether it has. The proof says it: run the check-up with "
+                          "--prove-saving.", tag=SAVING_TAG)
+        elif there:
+            f.add(OK, f"{label} saves the wiki at the end of every reply: Moblee's end-of-reply save "
+                      f"is registered as its {TURN_END_EVENT} hook.", tag=SAVING_TAG)
+        elif there is None:
+            f.add(UNSURE, f"Whether {label} saves the wiki at the end of every reply cannot be told: "
+                          f"{said}. The owner puts a copy of that file back (field guide F03); this "
+                          "line then says which.", tag=SAVING_TAG)
+        else:
+            f.add(PROBLEM, f"{label} does not save the wiki at the end of every reply, so what a reply "
+                           "leaves unsaved stays unsaved until somebody asks for it. Moblee's "
+                           f"end-of-reply save is not registered as its {TURN_END_EVENT} hook"
+                           + (f": {said}" if said else "") + ".",
+                  "F44", tag=SAVING_TAG)
+    # A leftover lock file, read from the wiki as it stands now rather than from
+    # the record, so what is said is true at the moment of the check-up.
+    stale = stale_index_lock(vault)
+    if stale is not None:
+        f.add(PROBLEM, "A lock file left behind by a git command that is no longer running is stopping "
+                       "every save in this wiki, and has been for "
+                       + things(max(int(stale // 60), 1), "minute", "minutes")
+                       + ". Until it is taken away, nothing is saved: not the end-of-reply save, not "
+                         "your assistant's own commits. Nothing is lost, and nothing in the wiki is "
+                         "changed by it; the file is .git/index.lock inside the wiki.", "F49")
+    state, record = last_saving_record()
+    said_state = str(record.get("state") or "")
+    # A record with no time in it: every sentence below would read "on , ..."
+    # with a hole in it. "the last end-of-reply save" says the same thing and
+    # says it whole.
+    day = str(record.get("at", ""))[:10]
+    when = f", on {day}, " if re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) else ""
+    mid = when or " "          # "The last end-of-reply save<mid>saved what …"
+    mid_comma = when or ", "   # where the sentence wants a comma there anyway
+    left = len(record.get("own_left") or []) + len(record.get("other_left") or [])
+    if state == "unreadable":
+        f.add(UNSURE, f"What the last end-of-reply save did cannot be told: the record at "
+                      f"{tidy(TURN_END_STATE)} could not be read. The next save writes it afresh.")
+    elif state == "none" and proving:
+        pass   # the proof a few lines below is the answer; see `proving` above
+    elif state == "none":
+        # (v0.10.0) CANNOT TELL and not LOOK. Nothing is wrong: this is what
+        # every Mac looks like for the first few minutes after an update, and
+        # the honest answer is that whether the hook fires cannot be told from
+        # here yet. At LOOK it made the card say "This wiki needs attention"
+        # on a wiki with nothing whatever wrong with it.
+        f.add(UNSURE, "Whether the end-of-reply save really fires cannot be told yet: none has run on "
+                      "this Mac. It runs at the end of the next reply; to see it now rather than wait, "
+                      "run the check-up with --prove-saving.", "F46")
+    elif said_state == "committed":
+        f.add(OK, f"The last end-of-reply save{mid}saved what the reply had left: "
+                  + things(len(record.get("commits") or []), "commit", "commits")
+                  + " in the wiki's history.")
+    elif said_state == "clean":
+        f.add(OK, f"The last end-of-reply save{mid}found nothing left to save.")
+    elif said_state == "yours":
+        f.add(OK, f"The last end-of-reply save{mid}found nothing of the wiki's own left to "
+                  "save. What was left was work of your own, which it never commits.")
+    elif said_state == "busy":
+        f.add(OK, f"The last end-of-reply save{mid}stood aside because something else was "
+                  "using the wiki at that moment. Nothing was lost: the next reply's save takes "
+                  "whatever it missed.")
+    elif said_state == "paused":
+        f.add(OK, f"The last end-of-reply save{mid}stood aside because the wiki was in the "
+                  "middle of a change git was making. Nothing was lost: it is all still on the disk, "
+                  "and the first save after that change has finished takes it.")
+    elif said_state == "locked":
+        f.add(PROBLEM, f"The last end-of-reply save{mid}saved nothing, and nor will the next "
+                       "one: a lock file left behind by a git command that is no longer running is "
+                       "stopping every save in this wiki until it is taken away. Nothing is lost; the "
+                       "file is .git/index.lock inside the wiki.", "F49")
+    elif said_state == "detached":
+        f.add(LOOK, f"The last end-of-reply save{mid}saved nothing, because the wiki's history "
+                    "was not on a branch at the time — which happens while an older version of a page "
+                    "is being looked at. Nothing is lost and nothing is unsaved that was saved before; "
+                    "saves start again by themselves once the wiki is back on its branch.", "F49")
+    elif said_state == "blocked":
+        f.add(LOOK, "The commit gate stopped " + things(left, "file", "files") + " at the last "
+                    f"end-of-reply save{mid_comma}so "
+                    + ("that one is" if left == 1 else "those are")
+                    + " still unsaved. Which files they are is in the record; no page name is "
+                      "printed here. Ask your assistant to look at them and save them.", "F45")
+    elif said_state == "error":
+        f.add(LOOK, f"The last end-of-reply save{mid}ended in an error, so what that reply left "
+                    f"may still be unsaved. Why is in the log at {tidy(TURN_END_LOG)}; it is not "
+                    "repeated here, because it can quote a page name.", "F45")
+    else:
+        f.add(UNSURE, f"The last end-of-reply save{mid}left a record this check-up does not "
+                      f"know how to read (it says \"{said_state[:40]}\"), so what it did cannot be "
+                      "told.")
+    # (v0.10.0) What the save left for the owner, whatever else it did. The
+    # end-of-reply save never commits the owner's own uncommitted work — the
+    # rules file, the ignore list, anything in Moblee's own folders — nor a
+    # snapshot somebody has deliberately staged, and this is the one line that
+    # tells them so. The same promise scripts/update.sh makes in the same
+    # words: nothing of yours was committed. The count only; a file name in a
+    # wiki is a page title, and none is printed here.
+    mine = len(record.get("yours_left") or []) + len(record.get("staged_left") or [])
+    if state == "record" and mine:
+        f.add(OK, "At the last end-of-reply save, " + things(mine, "file", "files")
+                  + " held work of your own that was not yet committed, so "
+                  + ("it was" if mine == 1 else "they were")
+                  + " left for your own next commit. Nothing of yours was committed. Which files they "
+                    "are is in the record; no page name is printed here.")
+    f.add(OK, f"Each conversation's last save is recorded at {tidy(TURN_END_STATE)}, kept for thirty "
+              f"days, with one line for every run at {tidy(TURN_END_LOG)}.")
+
+
+# What the proof asks for: one line added to one page, with no shell command and
+# nothing saved by the assistant itself, so that whatever is saved was saved by
+# the hook and by nothing else. The page says nothing about what is being
+# tested, as the guard proof's scratch wiki does not.
+PROVE_SAVING_LINE = "A line added while the end-of-reply save was put to the test."
+PROVE_SAVING_PROMPT = ("Add exactly one line to the end of the file wiki/page.md, reading: "
+                       + PROVE_SAVING_LINE + " Change nothing else in the folder. Do not run any "
+                       "shell command, and do not save or commit anything yourself.")
+PROVE_SAVING_TIMEOUT = 180
+# The hook hands control straight back to the assistant and goes on working, so
+# the record can land a moment after the reply has ended. This is how long the
+# proof waits for it before saying it never came.
+PROVE_SAVING_SETTLE = 30
+
+
+def saving_program(assistant: str) -> tuple[str, str] | None:
+    """(which assistant the proof asks, the command that starts it), or None
+    where that assistant's own command-line program is not on this Mac. With
+    both, Claude is asked: its hooks need no trust, so a failure there is the
+    hook itself and not a step the owner has still to take."""
+    order = {"claude": ["claude"], "chatgpt": ["chatgpt"],
+             "both": ["claude", "chatgpt"]}[assistant]
+    for who in order:
+        found = find_claude() if who == "claude" else find_codex()
+        if found:
+            return who, found
+    return None
+
+
+def make_practice_wiki(practice: Path, pack: Path | None) -> None:
+    """A real wiki, with a history and the pack's commit gate wired in, for the
+    end-of-reply save to be put to the test in. Neither file says what is being
+    tested: the assistant reads them."""
+    (practice / "wiki").mkdir(parents=True)
+    rules = ("# Scratch wiki\n\nA scratch folder made by Moblee. Nothing here matters and nothing "
+             "here is the owner's.\n")
+    (practice / "CLAUDE.md").write_text(rules)
+    (practice / "AGENTS.md").write_text(rules)
+    (practice / "wiki" / "page.md").write_text("# Scratch page\n\nA page with nothing on it that "
+                                               "matters.\n")
+    (practice / "wiki" / "Index.md").write_text("# Index\n\n- [[page]]\n")
+    run(["git", "-C", str(practice), "init", "-q"])
+    run(["git", "-C", str(practice), "config", "user.name", "Moblee check-up"])
+    run(["git", "-C", str(practice), "config", "user.email", "check-up@moblee.invalid"])
+    if pack and (pack / "scripts" / "hooks").is_dir():
+        # The gate runs on this save exactly as it runs on any other, which is
+        # half of what is being proved. Without the Moblee folder to copy it
+        # from, the proof still shows whether the hook fires.
+        shutil.copytree(pack / "scripts" / "hooks", practice / "scripts" / "hooks")
+        for hook in (practice / "scripts" / "hooks").iterdir():
+            hook.chmod(hook.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        if (pack / "scripts" / "vault-gate.py").is_file():
+            # The hook above says so itself: without the gate beside it the
+            # commit goes through unchecked, and then the proof would say
+            # nothing about the gate.
+            shutil.copy(pack / "scripts" / "vault-gate.py", practice / "scripts")
+        run(["git", "-C", str(practice), "config", "core.hooksPath", "scripts/hooks"])
+    run(["git", "-C", str(practice), "add", "-A"])
+    run(["git", "-C", str(practice), "commit", "-q", "-m", "a scratch wiki before the test"])
+
+
+def saving_commits(practice: Path) -> list:
+    """The commits the end-of-reply save made in the practice wiki, newest
+    first, by the opening words it writes and by nothing else."""
+    code, out = run(["git", "-C", str(practice), "log", "--format=%h %s"])
+    if code != 0:
+        return []
+    return [l for l in out.splitlines() if "saved automatically" in l]
+
+
+def prove_saving(f: Findings, pack: Path | None, vault: Path | None, assistant: str,
+                 announce: bool, timeout: int | None = None) -> None:
+    """Ask the assistant for a one-line edit in a scratch wiki and see whether
+    the end-of-reply save really fires: the save is proved only when the edit
+    was committed by the hook and the hook left its record.
+
+    Built as --prove-guard is: a scratch wiki under ~/.config/moblee/ that is
+    left where it is, the owner's own wiki never touched, the agent given a
+    limit and ended with everything it started if it overstays. It differs in
+    one way, and the difference is the point: it uses the hook the owner
+    already has registered, with the pack's own three overrides pointing it at
+    the scratch wiki, so what is proved is their own arrangement and not a
+    special one set up for the test."""
+    limit = PROVE_SAVING_TIMEOUT if timeout is None else timeout
+    pick = saving_program(assistant)
+    if pick is None:
+        f.add(UNSURE, "The command-line program for this wiki's assistant was not found on this Mac, so "
+                      "the end-of-reply save could not be put to the test. Nothing is wrong with the "
+                      "wiki; the save itself runs inside the assistant, and the lines above say whether "
+                      "it is registered.")
+        return
+    who, program = pick
+    label = ASSISTANT_NAMES[who]
+    there, _ = saving_registered(SETTINGS if who == "claude" else CODEX_HOOKS, vault)
+    if not there:
+        f.add(UNSURE, f"The end-of-reply save was not put to the test, because it is not registered as "
+                      f"{label}'s {TURN_END_EVENT} hook yet; that comes first.")
+        return
+    stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    base = CONFIG / "prove-saving" / stamp
+    practice, record, log = base / "practice-wiki", base / "record.json", base / "run.log"
+    try:
+        make_practice_wiki(practice, pack)
+    except OSError as exc:
+        f.add(UNSURE, f"The scratch wiki for the test could not be made ({exc}), so the end-of-reply "
+                      "save could not be put to the test.")
+        return
+    left = f" The scratch wiki used for the test is left at {tidy(practice)}; nothing in it matters."
+    try:
+        earlier = sorted(p.name for p in base.parent.iterdir() if p.is_dir() and p != base)
+    except OSError:
+        earlier = []
+    if earlier:
+        left += (" Moblee never removes these; "
+                 + (f"one scratch wiki from an earlier test is beside it ({earlier[0]})"
+                    if len(earlier) == 1 else
+                    f"{len(earlier)} scratch wikis from earlier tests are beside it "
+                    f"(the latest: {', '.join(earlier[-3:])})")
+                 + " and can be removed by hand.")
+    if announce:
+        print(f"Asking {label} for a one-line edit in a scratch wiki, to see whether the wiki saves "
+              f"itself afterwards. This can take up to {prove_limit_words(limit)}.",
+              file=sys.stderr, flush=True)
+    # The three overrides the pack's own tests use. They are what keeps the
+    # owner's wiki and the owner's record out of this: the hook the owner has
+    # registered runs, and works on the scratch wiki.
+    overrides = {"MOBLEE_VAULT": practice, "MOBLEE_TURN_END_STATE": record,
+                 "MOBLEE_TURN_END_LOG": log}
+    if who == "claude":
+        cmd = [program, "-p", PROVE_SAVING_PROMPT, "--max-turns", "4",
+               "--permission-mode", "acceptEdits"]
+    else:
+        cmd = [program, "exec", "--cd", str(practice), "-s", "workspace-write",
+               PROVE_SAVING_PROMPT]
+    timed_out, out = False, ""
+    try:
+        code, out = run_quiet(cmd, limit, cwd=practice, env_extra=overrides)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+    except (OSError, subprocess.SubprocessError) as exc:
+        f.add(UNSURE, f"{label}'s agent could not be started ({exc}), so the end-of-reply save could "
+                      "not be put to the test." + left)
+        return
+    for _ in range(PROVE_SAVING_SETTLE):
+        if record.exists():
+            break
+        time.sleep(1)
+    time.sleep(2)   # the hook may be in the middle of writing it
+    try:
+        page = (practice / "wiki" / "page.md").read_text(errors="replace")
+    except OSError:
+        page = ""
+    edited = PROVE_SAVING_LINE in page
+    commits = saving_commits(practice)
+    try:
+        kept = json.loads(record.read_text()) if record.exists() else {}
+    except (OSError, ValueError):
+        kept = {}
+    records = [v for v in kept.values() if isinstance(v, dict)] if isinstance(kept, dict) else []
+    states = [str(v.get("state")) for v in records]
+    if commits and "committed" in states:
+        f.add(OK, f"Proved: asked through {label} for a one-line edit in a scratch wiki, the wiki saved "
+                  f"itself when the reply ended ({commits[0].split(' ', 1)[0]}, "
+                  + things(len(records), "record", "records") + " written)." + left)
+        return
+    if records and not commits:
+        f.add(LOOK, f"The end-of-reply save ran in {label} and left its record, so the hook does fire, "
+                    f"but it saved nothing (it says \"{states[0][:40]}\"). Why is in the log beside the "
+                    "scratch wiki." + left, "F45")
+        return
+    if timed_out:
+        f.add(UNSURE, f"{label} did not finish within {prove_limit_words(limit)}, so the end-of-reply "
+                      "save could not be proved this time. Nothing of the owner's was touched." + left)
+        return
+    low = out.lower()
+    if any(s in low for s in SIGNED_OUT):
+        f.add(UNSURE, f"{label} does not seem to be signed in on this Mac, so the end-of-reply save "
+                      "could not be proved. Sign in and run this again." + left)
+        return
+    if not edited:
+        f.add(UNSURE, f"{label} did not make the one-line edit it was asked for, so there was nothing "
+                      "for the end-of-reply save to save and it is neither proved nor disproved. "
+                      "Running it again is worth a try." + left)
+        return
+    f.add(PROBLEM, f"The end-of-reply save is not running in {label}. Asked for a one-line edit in a "
+                   "scratch wiki, the edit was made and nothing saved it when the reply ended: no "
+                   "commit, and no record." + left, "F44")
+
+
+def dotted(version) -> str:
+    """A version as a person writes it: (2, 1, 287) becomes 2.1.287."""
+    return ".".join(str(n) for n in version)
+
+
+def engine_version(path: str) -> tuple | None:
+    """The version a Claude prints, as numbers, or None when it does not say.
+    `claude --version` prints "2.1.295 (Claude Code)"; only the numbers are
+    read, so a build note or a suffix after them makes no difference."""
+    _code, out = run([str(path), "--version"], timeout=20)
+    m = re.search(r"(\d+)\.(\d+)\.(\d+)", out or "")
+    return tuple(int(g) for g in m.groups()) if m else None
+
+
+def app_engines() -> list:
+    """The Claude app's own engines, newest version folder first."""
+    found = []
+    try:
+        for ver in CLAUDE_APP_ENGINES.iterdir():
+            if not ver.is_dir():
+                continue
+            for build in ver.iterdir():
+                engine = build / "claude.app" / "Contents" / "MacOS" / "claude"
+                if engine.is_file() and os.access(str(engine), os.X_OK):
+                    found.append((tuple(int(n) for n in re.findall(r"\d+", ver.name)), engine))
+    except OSError:
+        return []
+    return [engine for _v, engine in sorted(found, key=lambda pair: pair[0], reverse=True)]
+
+
+def find_mods_engine() -> tuple:
+    """(the path of a Claude new enough to take a mod, its version, the newest
+    version seen at all), looking where the installer looks and in its order:
+    the `claude` on the owner's own PATH first, because that is the one they
+    type, then the places it really sits on a Mac, then the engine inside the
+    Claude app. A Claude that is there but too old is not an answer; its
+    version is still handed back, so that the finding can say what was found
+    rather than only that nothing fitted.
+
+    (v0.10.0) CLAUDE_ELSEWHERE is in the list, and has to be. The Moblee app
+    runs this check-up from a window and not from a shell, and the PATH it
+    hands over holds the four system folders and nothing else, so `which` finds
+    no Claude at all there. An owner who has Claude Code but not the Claude app
+    was therefore told, on every press of Check my wiki, that their Claude was
+    too old — about a Claude the check-up had not found."""
+    best = None
+    looked = [shutil.which("claude")] + [str(p) for p in CLAUDE_ELSEWHERE
+                                         if p.is_file() and os.access(str(p), os.X_OK)]
+    for cand in looked + [str(p) for p in app_engines()]:
+        if not cand:
+            continue
+        version = engine_version(cand)
+        if version is None:
+            continue
+        if best is None or version > best:
+            best = version
+        if version >= MODS_MIN_ENGINE:
+            return cand, version, best
+    return None, None, best
+
+
+def mods_listed(engine: str) -> tuple:
+    """(installed, switched on, the folder it is read from), by asking Claude
+    itself rather than by reading the files it keeps that list in. None means
+    the question could not be answered: an engine that did not reply, or a
+    listing too old to say whether a mod is switched on."""
+    _code, out = run([str(engine), "plugin", "list", "--json"], timeout=60)
+    rows = None
+    cut = (out or "").find("[")
+    if cut != -1:
+        try:
+            rows = json.loads(out[cut:])
+        except ValueError:
+            rows = None
+    if isinstance(rows, list):
+        for r in rows:
+            if isinstance(r, dict) and r.get("id") == MODS_PLUGIN:
+                return True, bool(r.get("enabled")), str(r.get("readFromFolder") or "")
+        return False, None, ""
+    # An engine too old to answer in JSON: the plain listing says whether the
+    # band is installed and nothing about whether it is switched on, so that
+    # half of the answer is given as "cannot be told" rather than guessed.
+    code, out = run([str(engine), "plugin", "list"], timeout=60)
+    if code != 0:
+        return None, None, ""
+    return MODS_PLUGIN in (out or ""), None, ""
+
+
+def check_mods(f: Findings, vault: Path | None, assistant: str) -> None:
+    """Claude's own additions: the band above the prompt that says when a long
+    conversation has gone cold. It is kept in the wiki, at scripts/claude-mods/,
+    and Claude is pointed at that folder, so it travels with the wiki."""
+    if assistant == "chatgpt":
+        f.add(OK, MODS_CHATGPT)
+        return
+    if vault is None:
+        return   # no wiki at all: check_vault has said so, and F37 is the fix
+    rel = "/".join(MODS_IN_VAULT)
+    folder = vault.joinpath(*MODS_IN_VAULT)
+    if not (folder / ".claude-plugin" / "marketplace.json").is_file():
+        f.add(LOOK, f"The wiki does not hold Claude's own additions ({rel}/ is not in it), so the band "
+                    "above the prompt is not there to be installed from. The next Moblee update puts "
+                    "it in the wiki and registers it.", "F47")
+        return
+    engine, version, best = find_mods_engine()
+    if engine is None and best is None:
+        # (v0.10.0) Its own sentence, and CANNOT TELL. Glued onto the sentence
+        # below, this read "The Claude on this Mac is older than the band needs
+        # … (no Claude could be found on this Mac to ask)" — a sentence
+        # asserting a Claude exists, with a bracket saying none does.
+        f.add(UNSURE, "Whether Claude's band above the prompt is installed cannot be told: no Claude "
+                      "could be found on this Mac to ask. The wiki holds the band, at "
+                      f"{rel}/; nothing in the wiki depends on it.", "F48")
+        return
+    if engine is None:
+        # Not a fault and not something to put right: the band appears on its
+        # own once Claude has updated itself. At LOOK this made the card say
+        # the wiki needed attention over a line whose own words are that
+        # nothing else is affected.
+        f.add(OK, MODS_NO_ENGINE + f" (Claude's own additions need {dotted(MODS_MIN_ENGINE)} or "
+                                   f"later, and the newest Claude on this Mac is {dotted(best)}.)",
+              "F48")
+        return
+    installed, on, read_from = mods_listed(engine)
+    if installed is None:
+        f.add(UNSURE, "Whether Claude's band above the prompt is installed cannot be told: the Claude "
+                      f"at {tidy(engine)} did not answer when it was asked for its list of additions.")
+        return
+    if not installed:
+        f.add(LOOK, "Claude's band above the prompt is not installed, so nothing says when a long "
+                    "conversation has gone cold and the next message would be charged at full price. "
+                    f"The wiki holds it, at {rel}/; running the Moblee update again registers it.",
+              "F47")
+        return
+    if on is False:
+        f.add(LOOK, "Claude's band above the prompt is installed but switched off, so it does not "
+                    "appear. Switch it on in Claude with /plugin, or run the Moblee update again.",
+              "F47")
+        return
+    if on is None:
+        f.add(OK, "Claude's band above the prompt is installed. This Claude's listing does not say "
+                  "whether it is switched on as well; in Claude, /plugin shows that.")
+        return
+    elsewhere = ""
+    if read_from:
+        want = folder / MODS_PLUGIN.split("@", 1)[0]
+        try:
+            elsewhere = "" if Path(read_from).resolve() == want.resolve() else tidy(read_from)
+        except OSError:
+            elsewhere = ""
+    if elsewhere:
+        # The fault goes first, and the reassuring half second. Shortened for
+        # the health card, the old wording came out as "Claude's band above the
+        # prompt is installed and switched..." — which reads as all being well
+        # about a finding that is the opposite.
+        f.add(LOOK, "Claude reads the band above the prompt from another folder and not from this "
+                    "wiki's own copy, so a Moblee update to the wiki never reaches it. It is "
+                    f"installed and switched on, read from {elsewhere}; the next update points "
+                    "Claude back at the wiki.", "F47")
+        return
+    told = f" (Claude {dotted(version)})" if version else ""
+    f.add(OK, f"Claude's band above the prompt is installed and switched on, read from the wiki's own "
+              f"{rel}/{told}.")
+
+
 # (v0.9.1) The commit gate refuses a commit when one of the always-loaded files
 # is over its cap, and it refuses EVERY commit in the vault, not only Moblee's.
 # Nothing told an owner they were near the line: the first they knew was a
@@ -1230,7 +2016,8 @@ def check_rules_sections(f: Findings, vault: Path | None, pack: Path | None) -> 
                 named += f", and {len(mine) - 5} more"
             f.add(OK,
                   f"Every part of {name} that Moblee wrote is still Moblee's own wording, so updates "
-                  f"keep those parts short for you. The file also holds {len(mine)} section(s) of "
+                  "keep those parts short for you. The file also holds "
+                  f"{things(len(mine), 'section', 'sections')} of "
                   f"your own ({named}), about {total:,} tokens of it. Moblee never touches those, so "
                   "they are why the file is the length it is, and shortening it means shortening "
                   "them. Your assistant can do that for you if you ask; nothing is wrong as it is.")
@@ -1646,7 +2433,8 @@ def check_privacy(f: Findings, vault: Path | None, pack: Path | None) -> None:
             "judged by its shape alone: anything named below is a guess and not a certainty.")
     stepped = (f" Moblee's own folder ({tidy(pack_inside)}) is inside the wiki and was stepped over: "
                "it holds Moblee's files rather than yours." if pack_inside is not None else "")
-    f.add(OK, f"Privacy sweep: {scanned} file(s) in the wiki were read for secrets left in them. "
+    f.add(OK, f"Privacy sweep: {things(scanned, 'file', 'files')} in the wiki "
+              f"{'was' if scanned == 1 else 'were'} read for secrets left in them. "
               "The file and the line are named; the secret itself is never printed, here or in a "
               f"report, and nothing was changed.{stepped} {mode}")
     no_names = ("The file and the line of each are on the screen when you run the check-up; they "
@@ -1829,6 +2617,18 @@ CARD_DANGLING_WORDS = {"so", "and", "but", "because", "which", "where", "that", 
                        "those", "it", "its", "their", "there", "into", "onto",
                        "about", "then"}
 CARD_LEAST_LINE = 25   # never strip a line down past this, however it ends
+
+
+def dangling(word: str) -> bool:
+    """Whether a shortened card line may end on this word.
+
+    The list above holds the linking words. This adds the possessives, which no
+    list can hold: a real card line ended "…is not registered as its Stop hook:
+    Moblee's", and a possessive with nothing after it is the plainest kind of
+    half-sentence there is. Any word ending in an apostrophe-s is one, whoever
+    it names; "it's" is not Moblee's prose anywhere."""
+    plain = word.lower().strip(",;:")
+    return plain in CARD_DANGLING_WORDS or plain.endswith(("'s", "’s"))
 # (v0.9.6) Words that open a clause which cannot stand by itself. Where a
 # shortened line's last comma is followed by one of these, the clause after it
 # goes; see card_line(). Narrower than CARD_DANGLING_WORDS on purpose: this one
@@ -1884,6 +2684,26 @@ def card_facts(rows: list) -> tuple[str, list, list]:
     return state, bad, unseen
 
 
+def card_saving(rows: list) -> str:
+    """The one line the card and the app's check-up screen carry about the wiki
+    saving itself after every reply.
+
+    Read from the rows the check-up tagged and from nothing else, so this stays
+    a way of printing a finding rather than a second reading of the Mac. Every
+    assistant the wiki is used with has to be saving for the answer to be yes;
+    one that cannot be told of makes it neither yes nor no. An empty string
+    where the check-up said nothing on the matter — no wiki was found — so that
+    the card never answers a question that was not asked."""
+    tagged = [r for r in rows if r.get("tag") == SAVING_TAG]
+    if not tagged:
+        return ""
+    if any(r["level"] in (LOOK, PROBLEM) for r in tagged):
+        return SAVING_NO
+    if any(r["level"] in (UNSEEN, UNSURE) for r in tagged):
+        return SAVING_UNSURE
+    return SAVING_YES
+
+
 def card_line(row: dict, anon, room: int = CARD_ROOM) -> str:
     """One finding, in one line, with nothing in it from inside the wiki.
 
@@ -1909,8 +2729,15 @@ def card_line(row: dict, anon, room: int = CARD_ROOM) -> str:
         # not already say, and reads as though the card broke off mid-thought.
         # Dropping the linking word leaves a whole statement behind.
         while (" " in short and len(short) > CARD_LEAST_LINE
-               and short.rsplit(" ", 1)[1].lower().strip(",;:") in CARD_DANGLING_WORDS):
+               and dangling(short.rsplit(" ", 1)[1])):
             short = short.rsplit(" ", 1)[0]
+        # (v0.10.0) A bracket opened and never closed. Real card lines came out
+        # as "The wiki has no end-of-reply save (scripts/turn-end-commit.py..."
+        # with the bracket hanging open, which reads as a line that broke in
+        # the middle of a thought. Everything from the unclosed bracket goes,
+        # and what is left is the statement the bracket was an aside to.
+        while short.count("(") > short.count(")"):
+            short = short[:short.rfind("(")].rstrip(" ,;:")
         # (v0.9.6) And then the half-clause the words above cannot reach. Losing
         # the verb out of "…, so nothing can be brought back" leaves "…, so
         # nothing", and "nothing" is a perfectly good word, so the loop stops
@@ -1983,12 +2810,19 @@ def build_card(rows: list, vault: Path | None = None, today=None) -> dict:
     if state == "unwell" and unseen:
         headline += f" {len(unseen)} more could not be checked."
     actions = card_actions(state, bad, unseen)
+    saving = card_saving(rows)
     wrong_all = [{"level": r["level"], "guide": r["guide"], "line": card_line(r, anon)} for r in bad]
     unseen_all = [{"level": r["level"], "guide": r["guide"], "line": card_line(r, anon)} for r in unseen]
 
     def render(n_wrong: int, n_unseen: int) -> list:
         out = [f"{CARD_TITLE}, {day.strftime('%-d %B %Y')}"]
         out += textwrap.wrap(headline, CARD_WIDTH) or [headline]
+        # (v0.10.0) One line, under the headline: whether the wiki saves itself
+        # after every reply. It is on the card whatever the answer is, because
+        # "yes" is the thing an owner most wants to be told and an OK finding
+        # never reaches the lists below.
+        if saving:
+            out += textwrap.wrap(saving, CARD_WIDTH) or [saving]
         if wrong_all:
             out += ["", CARD_WRONG_HEAD]
             for item in wrong_all[:n_wrong]:
@@ -2021,7 +2855,7 @@ def build_card(rows: list, vault: Path | None = None, today=None) -> dict:
             n_wrong -= 1
         lines = render(n_wrong, n_unseen)
     return {"date": day.isoformat(), "state": state, "healthy": state == "healthy",
-            "headline": headline,
+            "headline": headline, "saving": saving,
             "wrong": wrong_all[:n_wrong], "wrong_total": len(wrong_all),
             "wrong_not_shown": len(wrong_all) - n_wrong,
             "unchecked": unseen_all[:n_unseen], "unchecked_total": len(unseen_all),
@@ -2067,6 +2901,10 @@ def main() -> int:
                     help="check for this assistant instead of the one on record (claude, chatgpt or both)")
     ap.add_argument("--prove-guard", action="store_true",
                     help="ask ChatGPT to try a delete in a scratch wiki under ~/.config/moblee/prove-guard/, to prove the guard runs there")
+    ap.add_argument("--prove-saving", action="store_true",
+                    help="ask your assistant for a one-line edit in a scratch wiki under "
+                         "~/.config/moblee/prove-saving/, to prove the wiki really saves itself "
+                         "when a reply ends")
     args = ap.parse_args()
 
     f = Findings()
@@ -2101,6 +2939,10 @@ def main() -> int:
     elif args.prove_guard:
         f.add(OK, "--prove-guard tests the delete guard inside ChatGPT, and this wiki is set up for Claude only, "
                   "so there was nothing to put to the test.")
+    check_saving(f, vault, assistant, proving=bool(args.prove_saving))
+    if args.prove_saving:
+        prove_saving(f, pack, vault, assistant, announce=not (args.json or args.card))
+    check_mods(f, vault, assistant)
     check_weights(f, vault)
     check_rules_sections(f, vault, pack)
     check_privacy(f, vault, pack)
