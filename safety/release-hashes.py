@@ -73,6 +73,14 @@ FILES = [
     "safety/test-guard.py",
     "voice/install-voice.py",
     "skills/wiki-to-pdf/render.py",
+    # (v0.11.0) The build skill's two helpers run in place from the skill's
+    # folder, so their bytes are fixed and can be pinned. scaffold.py shells
+    # out to osacompile for the launcher and keychain.py to `security`; the
+    # parts it copies into an owner's app folder carry no such call, because
+    # their bytes change with the name filled in and could not be pinned.
+    "skills/build/parts/scaffold.py",
+    "skills/build/parts/keychain.py",
+    "tools/test-build.py",
 ]
 ENTRY_RE = re.compile(r'"([0-9a-f]{64})":\s*"([^"]*)"')
 

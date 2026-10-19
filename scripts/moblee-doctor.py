@@ -503,10 +503,118 @@ def check_vault(f: Findings, vault: Path | None, pack: Path | None) -> None:
             waiting = [r for r in json.loads(req.read_text()).get("requests", []) if r.get("status") == "waiting"]
             if waiting:
                 keys = ", ".join(str(r.get("key")) for r in waiting)
-                f.add(LOOK, f"{things(len(waiting))} agreed with your assistant "
-                            f"{'is' if len(waiting) == 1 else 'are'} waiting in the Moblee app: {keys}.", "F18")
+                # (v0.11.0) The names come first. The health card keeps only the
+                # start of a line, and a real card came back from an owner with
+                # this line cut just before the one word that mattered, so the
+                # helper reading it could not tell which tile was waiting.
+                f.add(LOOK, f"Waiting in the Moblee app: {keys}. "
+                            f"{things(len(waiting)).capitalize()} agreed with your assistant, not yet added.", "F18")
         except (OSError, ValueError):
             f.add(LOOK, "The list of things waiting for the Moblee app does not load; Claude can rewrite it.", "F18")
+
+
+HEAVY_FOLDERS = ("node_modules", ".venv", "venv", ".next", "dist", "build", "target", "Pods")
+BAD_PORTS = {
+    1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79, 87, 95, 101, 102, 103, 104,
+    109, 110, 111, 113, 115, 117, 119, 123, 135, 137, 139, 143, 161, 179, 389, 427, 465, 512, 513, 514, 515,
+    526, 530, 531, 532, 540, 548, 554, 556, 563, 587, 601, 636, 989, 990, 993, 995, 1719, 1720, 1723, 2049,
+    3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6697, 10080,
+}
+
+
+def check_apps(f: Findings, vault: Path | None) -> None:
+    """(v0.11.0) The things built beside the wiki by the build skill: one folder
+    each under apps/, with an app.json the skill's scaffold wrote. What is read
+    is whether each one's record is whole, whether its job last ran and
+    succeeded, whether its port is one a browser will open, whether an install
+    folder has crept into the wiki, and whether a folder outside the wiki is
+    still where the record says. Names of the things are the owner's, so the
+    sendable wording carries counts and never names."""
+    if vault is None:
+        return
+    apps = vault / "apps"
+    if not apps.is_dir():
+        return
+    folders = sorted(p for p in apps.iterdir() if p.is_dir() and not p.name.startswith("."))
+    if not folders:
+        return
+    names = []
+    for app in folders:
+        name = app.name
+        manifest = app / "app.json"
+        if not manifest.exists():
+            f.add(LOOK, f"apps/{name}/ has no app.json, the small file that says what it is, so the check-up "
+                        f"cannot tell. The assistant writes one from what is in the folder.", "F50",
+                  sendable="One folder in apps/ has no app.json, the small file that says what it is.")
+            continue
+        try:
+            m = json.loads(manifest.read_text())
+        except (OSError, ValueError):
+            f.add(LOOK, f"apps/{name}/app.json, the small file that says what it is, cannot be read. "
+                        f"The assistant rewrites it from the page.", "F50",
+                  sendable="One app.json in apps/ cannot be read; the assistant rewrites it.")
+            continue
+        title = str(m.get("title") or name)
+        names.append(title)
+        missing = []
+        if not (app / "README.md").exists():
+            missing.append("its README")
+        page = m.get("page")
+        if page and not (vault / page).exists():
+            missing.append("its page in the wiki")
+        if missing:
+            f.add(LOOK, f"{title} (apps/{name}/) is missing {' and '.join(missing)}. The build skill's method "
+                        f"records every build; the assistant can write what is missing from what is there.", "F50",
+                  sendable=f"One thing in apps/ is missing {' and '.join(missing)}.")
+        outside = m.get("outside")
+        if outside:
+            where = Path(str(outside)).expanduser()
+            if not where.is_dir():
+                f.add(LOOK, f"{title} is recorded as living outside the wiki at {tidy(str(where))}, and that folder "
+                            f"is not there. It may have been moved; the assistant searches before concluding anything.", "F54",
+                      sendable="One thing recorded as living outside the wiki is not at the folder its record names.")
+        port = m.get("port")
+        if isinstance(port, int) and port in BAD_PORTS:
+            f.add(LOOK, f"{title} is set to port {port}, the number at the end of its address, which browsers "
+                        f"refuse to open. The assistant changes it to a free one between 7400 and 7499 and "
+                        f"tells you the new address.", "F52",
+                  sendable="One thing in apps/ is set to a port browsers refuse to open.")
+        heavy = [h for h in HEAVY_FOLDERS if (app / h).exists()]
+        if heavy:
+            f.add(LOOK, f"{title} has an install folder inside the wiki ({', '.join(heavy)}). Installs belong "
+                        f"outside the wiki, at ~/Apps/{name}/, with a pointer here. Ask the assistant to move it "
+                        f"out; nothing is deleted.", "F51",
+                  sendable="One thing in apps/ has an install folder inside the wiki.")
+        job = m.get("job")
+        if job:
+            every = float(job.get("every_hours") or 24) if isinstance(job, dict) else 24.0
+            last = app / "state" / "last-run.json"
+            if not last.exists():
+                f.add(LOOK, f"{title}'s job has never run on this Mac. If it was meant to be switched on, the "
+                            f"README has the two lines; if not, nothing is wrong.", "F53",
+                      sendable="One thing's scheduled job has never run on this Mac.")
+            else:
+                try:
+                    run_ = json.loads(last.read_text())
+                    finished = datetime.datetime.fromisoformat(str(run_.get("finished")))
+                    age_h = (datetime.datetime.now() - finished).total_seconds() / 3600
+                    if not run_.get("ok", False):
+                        f.add(LOOK, f"{title}'s job failed when it last ran ({finished.strftime('%-d %B %Y')}): "
+                                    f"{tidy(str(run_.get('message') or ''))[:160]}", "F53",
+                              sendable="One thing's scheduled job failed when it last ran.")
+                    elif age_h > 2 * every:
+                        f.add(LOOK, f"{title}'s job last ran {things(int(age_h // 24), 'day', 'days')} ago and was "
+                                    f"due every {things(int(every), 'hour', 'hours')}; it may have stopped.", "F53",
+                              sendable="One thing's scheduled job is overdue and may have stopped.")
+                    else:
+                        f.add(OK, f"{title}'s job last ran {finished.strftime('%-d %B %Y')} and succeeded.",
+                              sendable="One thing's scheduled job last ran on time and succeeded.")
+                except (OSError, ValueError, TypeError):
+                    f.add(LOOK, f"{title}'s last-run record cannot be read. The next run writes it afresh.", "F53",
+                          sendable="One thing's last-run record cannot be read.")
+    if names:
+        f.add(OK, f"{things(len(names))} built beside the wiki, in apps/: {', '.join(names)}.",
+              sendable=f"{things(len(names)).capitalize()} built beside the wiki, in apps/.")
 
 
 def check_jobs(f: Findings) -> None:
@@ -2947,6 +3055,7 @@ def main() -> int:
     check_rules_sections(f, vault, pack)
     check_privacy(f, vault, pack)
     check_jobs(f)
+    check_apps(f, vault)
     check_diary(f)
     check_mac(f, assistant)
     check_leftovers(f, pack)

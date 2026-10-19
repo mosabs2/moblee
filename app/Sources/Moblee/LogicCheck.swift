@@ -2121,6 +2121,15 @@ enum LogicCheck {
                   // first word left the bare word "PARTIAL", which says nothing.
                   && ends.clinicFiles.count == 1
                   && ends.clinicFiles.first?.status == "EXECUTED 2026-09-24")
+        // (v0.11.0) The refresh line as the brain skill writes it, in words. The
+        // first owner's report back from a 0.10.0 wiki said a date Moblee could
+        // not read, because only 2026-10-19 was read and the line said
+        // "19 October 2026 20:30".
+        check("a refresh date written in words is read, and one in no known form is said to be unreadable",
+              Clinic.firstProseDate(in: "Last refreshed: 19 October 2026 20:30 +01 BST, for the workday") == "2026-10-19"
+                  && Clinic.firstProseDate(in: "Last refreshed: 1 may 2027") == "2027-05-01"
+                  && Clinic.firstProseDate(in: "Last refreshed: [Date], initial setup") == nil
+                  && Clinic.firstProseDate(in: "Last refreshed: 32 October 2026") == nil)
         // (v0.9.6) A report of Moblee's own is not a clinic note and is not
         // listed as one. The companion is told never to move a report out of
         // `raw/`, so without this every round would list the rounds before it as

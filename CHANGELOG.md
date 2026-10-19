@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.11.0 (19 October 2026)
+
+**Build things on your wiki, and let your assistant do the rest.** Owners were already building on Moblee: a health dashboard over a fitness band's numbers, a concierge that books tables. Each one's assistant started from nothing, invented its own home, its own installer and its own habits, and what one owner built would have stopped another. This version makes building a thing a part of Moblee, with the assistant doing the architecture, the planning, the coding and the placing.
+
+### A new skill, `build`
+
+- **You say what you want in your own words**: "I want a page that shows my gym sessions by week", "make me something that checks the tide times every morning". Your assistant asks at most three questions, plans it on one screen (what it will look like, where it will live, what it will read and write, what it will cost, what it will not do) and waits for your yes.
+- **The page comes before the code.** Every build has a page in your wiki under `wiki/Projects/` with the plan on it, the decisions and a dated Progress list, and `wiki/Projects.md` is the index of everything built. A build without a page is one the next conversation does not know exists.
+- **Where it lives is decided by what it needs.** Anything that runs on what the Mac already has lives in the wiki at `apps/<name>/`, where the wiki's history keeps every version. Anything that needs installing, or must be reached from outside your Mac, lives outside the wiki at `~/Apps/<name>/`, with a pointer in `apps/` and anything worth keeping under `wiki/data/<name>/`.
+- **Every build shares the same proven parts** rather than inventing its own: a server that shows the page on your Mac only, refuses other websites and stops when you close the tab; a page in the Mac's own typeface, light and dark, with nothing fetched from the internet; plain data files that a change to the code never touches, each save keeping the previous copy; a job that writes a record every time it runs, so a job that quietly stopped is seen; a launcher, `Open <Title>.app`, to double-click or keep in the Dock; and a Keychain helper, so a secret never goes into a file.
+- **It is proved on your screen** with your real data before it is called done, and made to fail once on purpose so that you both see the failure say so calmly.
+- **What it never does**: install software itself, switch on a scheduled job, put a secret in a file, make anything reachable from outside your Mac, delete, or overwrite your data.
+- The rules file gains a short section, "Things built for the owner", added to existing wikis by the update; the companion hands over to the new skill when a wish is this size; `docs/12-building-things.md` explains it all in plain words.
+
+### The check-up reads what is built
+
+- **Every folder in `apps/` is read**: whether its record is whole (F50), whether an install folder has crept into the wiki (F51), whether its port is one browsers accept (F52), whether its scheduled job last ran and succeeded (F53), and whether a thing recorded as living outside the wiki is still there (F54). Five new field-guide entries say what fixes each and who does the fix. The report a helper is sent carries counts and never a thing's name.
+
+### Fixed, from the first 0.10.0 report back from the field
+
+- **The line about things waiting in the Moblee app was cut off before the name**, so a helper reading the health card could see that one thing was waiting but not which. The name now comes first.
+- **The app's check-up said it could not read the wiki's refresh date** whenever the date was written as words ("19 October 2026"), which is how the brain skill writes it. It reads both forms now.
+
+### Tested
+
+- **A suite of its own for the build skill** (`tools/test-build.py`, 102 checks, 0 failed): the scaffold against a fresh template wiki, every placeholder filled, a second run leaving everything alone, the outside-the-wiki pointer, a port chosen and recorded, titles that would make an unopenable page or clash with a page the wiki already has refused, a folder name holding an ampersand still giving a scheduler file the Mac accepts; the copied server started as the owner starts it, serving its page, refusing a foreign Host, a foreign Origin, a save without the page's header, folder listings, and anything under `state/` or hidden however the path is spelt, keeping the previous copy of a saved file, finding its own first copy on a second start, stopping on the page's goodbye and stopping when nobody is looking; the copied job recording a success and a failure; the launcher made on a Mac; the check-up's five findings each from the state that earns it; the Keychain helper never putting a secret on a command line; and the delete guard letting every copied part run while still refusing a deletion in the same folder. Run again on a Mac's stock Python 3.9.6, which is what an owner's scheduled job runs.
+- **Everything else as before:** the check-up's own suite, 317 checks; the rules-file section engine, 138; the delete guard, 507 refusals and 240 allowances; every field-guide code accounted for; the app's 436 logic checks on a bundle built from the committed pack, the new date check among them; and the installer and updater each run end to end against throwaway wikis, 83 and 150 checks.
+- **Three readers who had seen none of the work read it cold before it was finished**, as every version since v0.8.0 has had. One ran the copied parts and the scaffold against throwaway wikis on the Mac's own Python and found eight faults, every one fixed and tested: a check on which files the server would serve that could be got round by spelling the path differently, a HEAD request that skipped every check, a scheduler file that broke on a folder name holding an ampersand, a launcher that did nothing after a fresh copy of the wiki, a secret that reached a command line, a title check that let through names Obsidian cannot open, a page name that could clash with one the wiki already had, and a hand-edited `app.json` that stopped the server starting. One read every word an owner would meet as somebody who does not read much and found twelve places to put right, among them instructions with nobody named to do them and two names that belonged to real people's projects. One swept the whole tree and every commit message for anything personal.
+
 ## v0.10.0 (14 October 2026)
 
 **Nothing is left unsaved, and you are told when a conversation has gone cold.** Two things owners kept paying for without knowing it. You leave a conversation in the middle of something, and whatever your assistant had changed sits unsaved until you come back and ask for it — and asking, hours later, is the dearest message of the day, because your assistant re-reads the whole conversation before it can do anything at all. Both of those are now handled for you, with nothing to turn on and nothing to remember.

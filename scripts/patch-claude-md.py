@@ -227,6 +227,7 @@ SECTIONS: list[tuple[str, tuple[str, ...], str, str]] = [
     ("Hard rules", (), REPLACE, ""),
     ("Wikilinks and structure", (), REPLACE, ""),
     ("Tools", ("Useful tools in this environment",), REPLACE, ""),
+    ("Things built for the owner", (), REPLACE, ""),   # (v0.11.0) the build skill's rules
     ("The companion", (), REPLACE, ""),
     # Dropped: every one of these now has a fuller home on a page the assistant
     # reads when the work calls for it. Nothing is lost; it moves.
@@ -518,6 +519,19 @@ BLOCKS = [
         "section-after",
         "## The companion",
         '## The companion\n\n**One guide, one offer, one page.** The `companion` skill is the owner\'s standing guide. It holds the first conversation ("get me started" or "guide me"), offers at most one next step in a session and only when asked, builds small made-to-measure tools by the method in its folder, and runs the read-only check-up (`scripts/moblee-doctor.py` in the Moblee folder) when something seems wrong. What the assistant and the owner agree to add is written to `.moblee/requests.json` in the vault, and the owner adds it by pressing its button in the Moblee app. At the start of any session, read `wiki/Wiki Operations/Habits and Tools.md` along with `_context.md`: it holds how the owner likes to be spoken to and everything they have corrected.\n\n**Corrections are written down the moment they are made.** When the owner corrects how the assistant works ("shorter", "stop asking me that", "show me first"), it adds a dated line in their words under "Working with the owner" on that page, without being asked, and follows it from then on.\n\n**Short in conversation.** Unless that page says otherwise, the back-and-forth is two or three lines, one question at a time, in plain words, with more when the owner asks for it. This is about conversation only: a summary, an analysis or a wiki page is as long as the work needs.\n',
+    ),
+    (
+        # (v0.11.0) Owners build things beside the wiki, and the rule that says
+        # where they live and that every build has a page has to reach a rules
+        # file the engine does not recognise too. Anchored on the companion
+        # section, which every vault from v0.8 carries; the marker is a phrase
+        # the engine's own copy of the section shares, so where the engine has
+        # already written it this does nothing.
+        "things built for the owner (v0.11.0)",
+        r"^## The companion\s*$",
+        "section-after",
+        "## Things built for the owner",
+        "## Things built for the owner\n\n**Owners build things on their wiki, and the assistant does the architecture, the planning, the coding and the placing.** A dashboard, a tracker, a page over their data, a tool on a schedule, an app: the `build` skill owns it, from the owner's wish in plain words to a thing they open with a click. Three rules hold whoever is building. **Where it lives is decided by what it needs:** anything that runs on what the Mac already has (Python, a browser) lives in the wiki at `apps/<name>/`; anything that needs installing (a runtime, a database, packages) or must be reached from outside the Mac lives outside the wiki at `~/Apps/<name>/`, with a pointer in `apps/<name>/` and anything worth keeping under `wiki/data/<name>/`. **Every build has a page**, `wiki/Projects/<Title>.md`, with the decisions and a dated Progress list, and one line on `wiki/Projects.md`; a build without a page is a build the next session does not know exists. **Nothing is built before the owner has said yes to a one-screen plan**, and nothing is called finished before it has been opened on their screen and seen to work. A server binds to this Mac only; a secret goes in the Keychain, never a file; a scheduled job writes a record of every run; a change to code never touches data; the owner installs and switches on, the assistant never does.\n",
     ),
     (
         "identity file in the session opener",

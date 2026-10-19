@@ -422,7 +422,28 @@ final class Clinic: ObservableObject {
         guard let text = try? String(contentsOf: vault.appendingPathComponent("wiki/_context.md"), encoding: .utf8)
         else { return nil }
         for line in text.split(separator: "\n", omittingEmptySubsequences: false) where line.contains("Last refreshed") {
-            return firstDate(in: String(line)) ?? "a date Moblee could not read"
+            // (v0.11.0) The brain skill writes this line as "19 October 2026
+            // 20:30", not as 2026-10-19, so on most wikis the first reader
+            // found nothing and the report said a date Moblee could not read.
+            // Both forms are read now.
+            return firstDate(in: String(line)) ?? firstProseDate(in: String(line)) ?? "a date Moblee could not read"
+        }
+        return nil
+    }
+
+    /// The first "19 October 2026" in a piece of text, as YYYY-MM-DD, or nothing.
+    /// Only the twelve English month names are known; a date in another form is
+    /// left for the caller to say it could not read.
+    nonisolated static func firstProseDate(in text: String) -> String? {
+        let months = ["january", "february", "march", "april", "may", "june", "july",
+                      "august", "september", "october", "november", "december"]
+        let words = text.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map { String($0) }
+        guard words.count >= 3 else { return nil }
+        for i in 0..<(words.count - 2) {
+            guard let day = Int(words[i]), (1...31).contains(day),
+                  let month = months.firstIndex(of: words[i + 1].lowercased()),
+                  let year = Int(words[i + 2]), (1900...2999).contains(year) else { continue }
+            return String(format: "%04d-%02d-%02d", year, month + 1, day)
         }
         return nil
     }
