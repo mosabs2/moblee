@@ -83,6 +83,7 @@ moblee/
 │   ├── brain/                 ← reflective queries against the wiki, and the daily rhythm
 │   ├── compact/               ← keeps the always-loaded files light (asks before dropping anything)
 │   ├── companion/             ← your standing guide: the first conversation, one next step, made-to-measure tools, the check-up (v0.8.1)
+│   ├── build/                 ← builds things on your wiki for you: dashboards, trackers, tools, apps, from your words to a click (v0.11.0)
 │   ├── galaxy/                ← rebuilds and opens the 3D graph of the wiki
 │   ├── wiki-capture/          ← funnels chat content into the vault
 │   ├── wiki-interview/        ← builds a page from your own testimony
@@ -128,7 +129,8 @@ moblee/
 │   ├── 08-updating.md         ← how to update a vault without touching its content (v0.5)
 │   ├── 09-safety.md           ← why your assistant cannot delete your files (v0.5)
 │   ├── 10-connections.md      ← the checklist item by item, and what Claude may do with each (v0.6.0)
-│   └── 11-the-app-and-the-companion.md  ← the Moblee app and the companion skill, explained together (v0.8.1)
+│   ├── 11-the-app-and-the-companion.md  ← the Moblee app and the companion skill, explained together (v0.8.1)
+│   └── 12-building-things.md  ← building things on your wiki: how it goes, where they live, the parts they share (v0.11.0)
 ├── archive/
 │   └── windows/               ← retired files, kept but not maintained
 └── CHANGELOG.md               ← release notes, v0.1 to v0.9.4

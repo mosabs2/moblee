@@ -1,6 +1,6 @@
 # Skills bundle
 
-This folder ships eight skills that pair with the Moblee vault template. They are the same `SKILL.md` folders for Claude and for ChatGPT. Once installed, your assistant picks them up automatically and uses one when what you say matches its description. **With Claude:** that means Claude Code, or Cowork with the vault mounted. **With ChatGPT:** the ChatGPT app on the Mac.
+This folder ships nine skills that pair with the Moblee vault template. They are the same `SKILL.md` folders for Claude and for ChatGPT. Once installed, your assistant picks them up automatically and uses one when what you say matches its description. **With Claude:** that means Claude Code, or Cowork with the vault mounted. **With ChatGPT:** the ChatGPT app on the Mac.
 
 ## What's in the bundle
 
@@ -11,11 +11,12 @@ This folder ships eight skills that pair with the Moblee vault template. They ar
 - **`design-your-brand/`**, short interview skill that captures the user's visual identity (colours, typography, monogram) and applies it to `wiki-to-pdf`. Run this first if you want the PDFs to be in your brand rather than the neutral default.
 - **`compact/`**, keeps the always-loaded files light. Acts on the lint's vault-weight flags: archive-only rotations run unattended, anything that drops a line or moves a file is listed and confirmed first, and lossy prose trims are proposed with before/after sizes and executed only on sign-off.
 - **`companion/`**, the owner's standing guide, which replaces `get-started` from v0.8.1. It holds the first conversation in a new vault (how the owner works, then the first page, then one or two checklist items that fit), offers at most one next step in any later session, builds small made-to-measure tools by the method in its folder (`method.md`, `builders-rules.md`), runs the read-only check-up (`scripts/moblee-doctor.py`) against its `field-guide.md` when something seems wrong, and holds the setup reviews. It records what is agreed on `wiki/Wiki Operations/Habits and Tools.md` and in `.moblee/requests.json` in the vault, which the Moblee app reads; without the app it gives the owner a `moblee-setup.py --tick` command to run themselves. "Get me started", "guide me", "review my setup", "something is wrong". Never installs anything itself and never edits your assistant's settings.
+- **`build/`**, builds things on the wiki for its owner (v0.11.0): a dashboard, a tracker, a page over their data, a tool on a schedule, an app. The assistant does the architecture, the planning, the coding and the placing, from the owner's wish in plain words to a thing they open with a click. Decides where it lives (`apps/<name>/` in the wiki, or `~/Apps/<name>/` outside it when it needs installing), lays it down from the standard parts in `build/parts/` (a Mac-only server that stops with its tab, a page, plain data files, a job that records every run, a launcher, a Keychain helper), proves it on the owner's screen and records it on its own page under `wiki/Projects/`. Never installs, never loads a job, never puts a secret in a file, never deletes. "Build me", "make me", "I want an app that".
 - **`galaxy/`**, rebuilds the offline 3D knowledge-graph view of the vault (`scripts/wiki-galaxy/build.py`, output in `outputs/galaxy/`) and opens it in the default browser. "Galaxy", "show me my brain in 3D". Read-only on `wiki/`.
 
 ## Recommended install order
 
-1. Install all eight skills (one shell command, below).
+1. Install all nine skills (one shell command, below).
 2. Install the WeasyPrint Python and system dependencies if you plan to use `wiki-to-pdf`.
 3. Run `design-your-brand` once, in chat, to set up the brand.
 4. Try `wiki-to-pdf` against any wiki page to confirm the brand applies.

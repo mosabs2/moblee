@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__APP_TITLE__</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1d1d1f; --muted: #6e6e73; --line: #e5e5ea; --accent: #0a60c2;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1c1c1e; --fg: #f2f2f7; --muted: #98989d; --line: #3a3a3c; --accent: #6cb4ff; }
+  }
+  html, body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; }
+  main { max-width: 56rem; margin: 0 auto; padding: 2rem 1rem; }
+  h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
+  .muted { color: var(--muted); }
+  section { border-top: 1px solid var(--line); padding: 1.25rem 0; }
+  table { border-collapse: collapse; width: 100%; }
+  td, th { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .note { background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: .5rem; padding: .75rem 1rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>__APP_TITLE__</h1>
+  <p class="muted" id="status">Loading…</p>
+
+  <section id="content">
+    <!-- The page's own parts go here. -->
+  </section>
+
+  <section>
+    <p class="note">This page runs on this Mac only. Close the tab and it stops.</p>
+  </section>
+</main>
+<script src="moblee-app.js"></script>
+<script>
+  // A starting point: show what is in data/, if anything. Replace with the
+  // page's real work. mobleeApp.load(name) reads data/<name>.json;
+  // mobleeApp.save(name, value) writes it and keeps the previous copy.
+  (async function () {
+    const status = document.getElementById("status");
+    try {
+      const example = await mobleeApp.load("example");
+      status.textContent = example ? "Showing data/example.json." : "No data yet. Nothing is wrong: this page has not been given anything to show.";
+      if (example) {
+        const pre = document.createElement("pre");
+        pre.textContent = JSON.stringify(example, null, 2);
+        document.getElementById("content").appendChild(pre);
+      }
+    } catch (e) {
+      status.textContent = "Could not read the data: " + e.message;
+    }
+  })();
+</script>
+</body>
+</html>

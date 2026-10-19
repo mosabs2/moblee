@@ -135,6 +135,10 @@ The assistant has a dashboard, a 3D galaxy view of the vault, an optional voice 
 
 What each tool is, how to reach it and what the checklist can add is in [[Tools and Connections]]. Read that page when a tool is actually needed.
 
+## Things built for the owner
+
+**Owners build things on their wiki, and the assistant does the architecture, the planning, the coding and the placing.** A dashboard, a tracker, a page over their data, a tool on a schedule, an app: the `build` skill owns it, from the owner's wish in plain words to a thing they open with a click. Three rules hold whoever is building. **Where it lives is decided by what it needs:** anything that runs on what the Mac already has (Python, a browser) lives in the wiki at `apps/<name>/`; anything that needs installing (a runtime, a database, packages) or must be reached from outside the Mac lives outside the wiki at `~/Apps/<name>/`, with a pointer in `apps/<name>/` and anything worth keeping under `wiki/data/<name>/`. **Every build has a page**, `wiki/Projects/<Title>.md`, with the decisions and a dated Progress list, and one line on `wiki/Projects.md`; a build without a page is a build the next session does not know exists. **Nothing is built before the owner has said yes to a one-screen plan**, and nothing is called finished before it has been opened on their screen and seen to work. A server binds to this Mac only; a secret goes in the Keychain, never a file; a scheduled job writes a record of every run; a change to code never touches data; the owner installs and switches on, the assistant never does.
+
 ## The companion
 
 **One guide, one offer, one page.** The `companion` skill is the owner's standing guide. It holds the first conversation ("get me started" or "guide me"), offers at most one next step in a session and only when asked, builds small made-to-measure tools, and runs the read-only check-up (`python3 scripts/moblee-doctor.py`, from the Moblee folder) when something seems wrong. What the owner agrees to add is written to `.moblee/requests.json` in the vault, and the owner adds it by pressing its button in the Moblee app.
