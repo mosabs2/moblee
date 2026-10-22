@@ -73,6 +73,7 @@ _lock = threading.Lock()
 _last_beat = time.monotonic()
 _leaving_at: float | None = None
 _stay = False
+_reach_live: str | None = None   # the phone-route address this run is answering on, if any
 
 
 def log(line: str) -> None:
@@ -203,6 +204,12 @@ class Handler(SimpleHTTPRequestHandler):
         if path == "/api/ping":
             self._send(200, {"app": APP_NAME, "title": APP_TITLE, "ok": True})
             return True
+        if path == "/api/reach":
+            addr = _reach_live
+            port = self.server.server_address[1]
+            self._send(200, {"address": addr, "url": f"http://{addr}:{port}/" if addr else None,
+                             "note": "reachable from your phone while this Mac is awake" if addr else "on this Mac only"})
+            return True
         if path.startswith("/api/data/"):
             name = safe_name(path[len("/api/data/"):])
             file = DATA / f"{name}.json" if name else None
@@ -301,6 +308,29 @@ def save_data(name: str, value) -> dict:
     return {"ok": True, "file": f"data/{name}.json"}
 
 
+def reach_address() -> str | None:
+    """The address this thing also listens on for the owner's phone: only when
+    app.json says reach, and only the address Moblee's Reach item recorded in
+    ~/.config/moblee/reach.json. A plain IPv4 or IPv6 address or a hostname
+    of ordinary characters; anything else is ignored."""
+    try:
+        m = json.loads((HERE / "app.json").read_text(encoding="utf-8"))
+        if not (isinstance(m, dict) and m.get("reach") is True):
+            return None
+    except (OSError, ValueError):
+        return None
+    try:
+        cfg = json.loads((Path(os.path.expanduser("~")) / ".config" / "moblee" / "reach.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    addr = str(cfg.get("address") or "").strip() if isinstance(cfg, dict) else ""
+    if not addr or len(addr) > 253 or not all(c.isalnum() or c in ".-:" for c in addr):
+        return None
+    if addr in ("127.0.0.1", "localhost", "::1", "0.0.0.0", "::"):
+        return None
+    return addr
+
+
 def open_page(url: str) -> None:
     """Open the page in the browser, and say what to do if no browser would."""
     try:
@@ -312,7 +342,7 @@ def open_page(url: str) -> None:
 
 
 def main() -> int:
-    global _stay
+    global _stay, _reach_live
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", type=int)
     ap.add_argument("--open", action="store_true", help="open the page in the browser")
@@ -334,6 +364,23 @@ def main() -> int:
     server.daemon_threads = True
     threading.Thread(target=watchdog, args=(server,), daemon=True).start()
     log(f"{APP_TITLE} at {url}")
+    # (0.12.0) The owner's phone route, when this thing was built with --reach
+    # and the owner chose a route in Moblee's Reach item: the same page, also
+    # answered on that one address, while this Mac is awake. Nothing else is
+    # listened on, and the Host and Origin checks hold for that address too.
+    global _reach_live
+    reach = reach_address()
+    if reach:
+        try:
+            second = ThreadingHTTPServer((reach, port), Handler)
+            second.daemon_threads = True
+            Handler.allowed_hosts.add(f"{reach}:{port}")
+            Handler.allowed_origins.add(f"http://{reach}:{port}")
+            threading.Thread(target=second.serve_forever, daemon=True).start()
+            _reach_live = reach
+            log(f"{APP_TITLE} also at http://{reach}:{port}/ from your phone, while this Mac is awake")
+        except OSError as exc:
+            log(f"not reachable from the phone just now ({exc}); this Mac may be off its private network")
     if args.open:
         open_page(url)
     try:

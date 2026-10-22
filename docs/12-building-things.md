@@ -29,9 +29,29 @@ Whichever it is, the thing's page is `wiki/Projects/<Title>.md`, and `wiki/Proje
 - **The server** shows the page on your Mac only. Nothing on the network can reach it, and another website open in your browser cannot use it. It stops by itself when you close the tab, or after half an hour with nobody looking. Closing the tab is the only "off" you ever do.
 - **The launcher**, `Open <Title>.app` in the thing's folder, starts the server if it is not running and opens the page. Double-click it, or keep it in the Dock. Or say "open <Title>" to your assistant.
 - **The data** is plain files in `data/`: JSON, CSV, markdown. Yours. A change to the code never touches them. Every save keeps the previous copy.
-- **A job**, if the thing runs on a schedule, writes a record every time it runs, succeed or fail, so a job that has quietly stopped is seen at the next check-up. You switch it on with two lines in a Terminal window of your own; your assistant never switches on anything that runs when you are not looking.
+- **A job**, if the thing runs on a schedule, writes a record every time it runs, succeed or fail, so a job that has quietly stopped is seen at the next check-up. You switch it on from the Moblee app, by pressing a tile your assistant asks it to show; your assistant never switches on anything that runs when you are not looking.
 - **A secret** (an API key, a password) goes in your Mac's Keychain. You type it at a prompt; it never goes into a file in the wiki, onto a Terminal line, or into a conversation.
 - **A port browsers accept.** The port is the number at the end of the page's address, like `:7412`. Browsers refuse a handful of them without saying why; Moblee chooses from a range they all accept.
+
+## What you will be asked
+
+Very little, from 0.12.0. Moblee has said yes in advance to the tools a build uses and made the builds' home, `~/Apps`, a folder your assistant may edit in, so a build outside the wiki no longer asks before every file. The delete guard knows a build folder from your wiki, so clearing a build's own generated folders is allowed there, and nothing in your wiki is ever cleared. You will still be asked before software is installed, before a job is switched on to run when you are not there, and before anything of yours is sent to a website; those are yours to say yes to, and `13-when-claude-asks.md` says what each card means.
+
+## On the web, from your phone, and while you are away
+
+Four things a build can do beyond this Mac, each your choice, from 0.12.0.
+
+**A page on the web.** If a thing is a page that shows something (scores, a season, a chart, a record), your assistant offers once, at the end of the build, to put it on the web: a public page at an address of your own, which anyone who has the address can read, with its data as it stands, and which you can open from anywhere, including when this Mac is shut. It uses your GitHub connection (the GitHub item), sweeps the copy first for anything that must stay on the Mac, and Claude asks you before anything is sent up. Say no and it is not offered again; you can always ask. A thing that saves, or that needs its server, stays on the Mac.
+
+**Reach from your phone.** To open a thing on this Mac from your phone, your phone needs a private way to reach the Mac. The Moblee app's item "Reach your things from your phone" gives you the choice: Tailscale (recommended, free for your own devices, a sign-in on each), or a private network you already have, in which case you give this Mac's address. A thing built for the phone then answers there while this Mac is awake. When the Mac is asleep or shut it is not reachable; a page that must always be reachable goes on the web.
+
+**A job switched on from the app.** When a thing runs on a schedule, your assistant never switches it on. It asks Moblee to show you a tile, "Switch on <Title>", and you press it; the app does the rest. If your laptop was asleep at the job's hour, the job runs once at the next wake, however many days were missed. With the Alerts item (the free ntfy app on your phone, one code to type), a line reaches your phone when a job finishes or fails, naming the file to look at and never sending it.
+
+**A job that asks Claude.** Some jobs need Claude to think: a morning page written from your notes, a weekly tidy. These need the item "Jobs that ask Claude while you are away", which keeps a long-lived sign-in Claude makes for you once. Each run uses a little of your Claude allowance, and the thing's page says so. Such a job stays within a fence your assistant writes down with you (what it may read and write, a time limit) and waits when your laptop is on battery and low.
+
+## Sharing what you built
+
+Say "make a kit of <Title>" and your assistant packs it for someone else: the thing without your data, its page, and a note at the top that tells the other person's assistant to read it first, say what it does, and install only on their yes. Nothing with a key, a password or your name in it is packed. Fitting a kit someone sent you goes the same way, as the last section on this page says.
 
 ## Changing a thing
 
@@ -43,7 +63,7 @@ Say "something is wrong" to your assistant. The check-up reads every folder in `
 
 ## What your assistant never does when building
 
-It never installs software itself: an install is a Terminal line it gives you, or a Moblee item you press. It never switches on a scheduled job. It never writes a secret into a file. It never makes anything reachable from outside your Mac; that is a separate decision you would make knowingly, later. It never deletes, and it never overwrites your data. And it never builds on a wish of its own: a build starts from what you asked for.
+It never installs software itself: an install is a Terminal line it gives you, or a Moblee item you press. It never switches on a scheduled job; you do, from the Moblee app. It never writes a secret into a file. It never makes anything reachable from outside your Mac without your choice: the web only on your yes, your phone only over the route you chose. It never deletes anything in your wiki or any data of yours, and it never overwrites your data; the one thing it may clear is a build's own generated folders, outside the wiki. And it never builds on a wish of its own: a build starts from what you asked for.
 
 ## Moving something in that somebody else built
 

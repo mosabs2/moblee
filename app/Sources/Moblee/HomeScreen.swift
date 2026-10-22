@@ -704,12 +704,12 @@ struct RequestTile: View {
                     // size these were the only small words left on the screen.
                     // (v0.9.4)
                     Button(action: press) {
-                        Text(tile.kind == .skill ? "Look" : "Add").font(Theme.font(14, .semibold))
+                        Text(tile.kind == .skill ? "Look" : (tile.kind == .job ? "Switch on" : "Add")).font(Theme.font(14, .semibold))
                     }
                     .buttonStyle(.borderedProminent).tint(Theme.accent).controlSize(.large)
                     .keyboardReachable(Self.buttonId(tile), corner: 6, press: press)
                 case .running:
-                    Label("Adding…", systemImage: "arrow.triangle.2.circlepath")
+                    Label(tile.kind == .job ? "Switching on…" : "Adding…", systemImage: "arrow.triangle.2.circlepath")
                         .foregroundStyle(Theme.waitingText)
                 case .handedOver:
                     HStack(spacing: Theme.pt(8)) {

@@ -10,11 +10,15 @@
 #      walking up from the current directory for a folder with wiki/Index.md).
 #   2. Skips if today's report, outputs/lint/lint-v2-YYYY-MM-DD.md, already
 #      exists (so a manual run and the scheduled run never collide).
+#   2b. (0.12.0) Makes a copy of the wiki's whole history as one file under
+#      ~/Library/Application Support/Moblee/backups/, once a week, keeping all.
 #   3. Runs python3 scripts/lint-v2.py inside the vault, which writes that report.
 #   4. Writes a short log to ~/.config/moblee/logs/weekly-lint-YYYY-MM-DD.log.
 #   5. Moves logs older than 90 days into ~/.config/moblee/logs/archive/.
 #      Nothing is ever deleted.
-# It makes no network calls, never commits, and never writes into wiki/.
+# It makes no network calls, never commits, and never writes into wiki/. The
+# weekly tidy, which acts on this report, is a separate thing the owner
+# switches on from the Moblee app (apps/moblee-tidy/), and runs after it.
 set -u
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
@@ -82,6 +86,26 @@ REPORT="$VAULT/outputs/lint/lint-v2-$TODAY.md"
 if [ -e "$REPORT" ]; then
   log "today's report already exists, nothing to do: $REPORT"
   exit 0
+fi
+
+# --- 2b (0.12.0): a second copy of the wiki's whole history, outside the wiki,
+# before the week's check. One file a week under Moblee's own folder; nothing
+# older is ever removed (the check-up names the oldest when there are many).
+# A laptop that slept through Saturday makes its copy at the next wake, with
+# the rest of this run.
+BACKUPS="$HOME/Library/Application Support/Moblee/backups"
+if command -v git >/dev/null 2>&1 && [ -d "$VAULT/.git" ]; then
+  mkdir -p "$BACKUPS"
+  BUNDLE="$BACKUPS/$(basename "$VAULT")-$TODAY.bundle"
+  if [ -e "$BUNDLE" ]; then
+    log "this week's copy already exists: $BUNDLE"
+  elif git -C "$VAULT" bundle create "$BUNDLE" --all >> "$LOG" 2>&1; then
+    log "a copy of the wiki's history was made: $BUNDLE"
+  else
+    log "FAILED: the weekly copy of the wiki's history could not be made (see the lines above); the check goes on"
+  fi
+else
+  log "no copy made: git or the wiki's history is not here"
 fi
 
 # --- 3: run the lint from inside the vault.

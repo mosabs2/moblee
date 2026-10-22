@@ -1,0 +1,12 @@
+{
+  "_comment": "What the assistant may do while this job runs with nobody watching. allowed_tools are Claude's own rule forms; think-job.py drops anything that deletes, moves out or rewrites history whatever is written here. minutes is the time limit; battery_floor is the lowest battery level, on battery power, at which the job starts (0 means always); alert says whether one line goes to the owner's phone when it finishes or fails.",
+  "allowed_tools": [
+    "Read", "Grep", "Glob", "Edit", "Write",
+    "Bash(git add:*)", "Bash(git commit:*)", "Bash(git status:*)", "Bash(git log:*)",
+    "Bash(ls:*)", "Bash(cat:*)", "Bash(date:*)", "Bash(python3 scripts/log-append.py:*)"
+  ],
+  "minutes": 20,
+  "battery_floor": 30,
+  "alert": true,
+  "model": ""
+}

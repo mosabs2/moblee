@@ -1,11 +1,9 @@
 // Cold-cache warning — a band above the prompt when a long conversation has gone cold.
 //
-// Claude keeps a conversation cheap to carry on for a while after its last reply: the prompt
 // Claude keeps a long conversation cheap to carry on for a while after the last reply. That
-// hour on most plans. Once it has lapsed, the next message makes Claude re-read the whole
 // does not last — about an hour on most plans — and after it, the next message makes Claude
-// read the whole conversation again. When that has happened to a conversation big enough to matter
-// to matter, a band above the prompt says so before anything is typed: how long it has been
+// read the whole conversation again. When that has happened to a conversation big enough to
+// matter, a band above the prompt says so before anything is typed: how long it has been
 // idle, and roughly how much would be re-read. The /cache command reports the same at any time.
 //
 // Nothing is ever sent anywhere, and no model call is ever made. No message is held, delayed or

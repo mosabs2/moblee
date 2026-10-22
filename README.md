@@ -12,6 +12,8 @@ The Karpathy pattern rests on four files, each with one job. `CLAUDE.md` is the 
 
 The templates come with opinionated defaults (British English, paragraph-first prose, no em dashes, dated absolute references, structured ingest workflows), and you can keep, change or strip any of them. `CLAUDE.md` is the source of truth for your conventions; once it is installed in your vault, you own it.
 
+**New in v0.12.0.** **The platform as it was meant to work.** Building something no longer asks at every step: Claude has been told yes in advance to what a build needs, the builds' home is a folder it may edit in, the delete guard knows a build folder from your wiki, and your wiki's folder is marked trusted so its rules apply from the first conversation. A page you build can go on the web in one offer; a thing built for your phone opens there by the route you choose; a job is switched on from a tile in the app; a job can ask Claude while you are away; your phone gets one line when a job finishes or fails. The wiki looks after itself on a laptop shut most of the day: a weekly copy of its whole history, a weekly tidy, a morning page, and memory search, your wiki searched by meaning on your own Mac. `docs/15-what-runs-by-itself.md` says what runs, what each needs and what it costs. Details in `CHANGELOG.md`.
+
 **New in v0.10.0.** **Nothing is left unsaved, and you are told when a conversation has gone cold.** Your wiki now saves itself at the end of every reply, so you can stop in the middle of something, close the window and walk away: the work up to that point is saved, and you never have to come back and ask for it. If a save was refused, nothing is lost — the work is still on your Mac, exactly as it was left — and the wiki's check-up ("Check my wiki" in the app) tells you how much is still unsaved and what to ask your assistant for. Your own half-finished work is never swept into a save in Moblee's name: it is left for your own next commit, and the check-up says so. And when a long conversation has sat untouched for an hour or so, a line appears above where you type, telling you that your next message makes Claude re-read the whole conversation and that a fresh one would start far smaller. Nothing is sent anywhere to work either of those out. Details in `CHANGELOG.md`.
 
 **From v0.9.6.** **Seeing what a wiki is, and checking your own.** Before you build a wiki, you can read one: a small example wiki, made up from beginning to end, opens inside Moblee, and clicking through it answers "what is a wiki for" better than any explanation. And there is a **Check my wiki** button on the app's home screen. Press it and Moblee looks over your wiki, shows you one card saying whether it is healthy and what to look at, and saves a report into your wiki's inbox, and one more press opens the folder with the file picked out, ready to send to whoever looks after Moblee for you. You type nothing and answer no prompts. The check-up can also print that same one-screen **health card** for a relative or friend who is helping you — safe to show anybody, with no page of your wiki named and no secret on it. Details in `CHANGELOG.md`.
@@ -90,6 +92,7 @@ moblee/
 │   ├── wiki-to-pdf/           ← renders any wiki page as a branded PDF
 │   └── design-your-brand/     ← interview that captures your visual identity
 ├── extras/
+│   ├── recall/                ← memory search: the wiki searched by meaning, on this Mac (v0.12.0)
 │   └── skills/                ← skills the checklist installs when ticked (v0.6.0)
 │       ├── film/              ← video editing from a plain description
 │       ├── audio/             ← audio editing and read-aloud
@@ -130,10 +133,13 @@ moblee/
 │   ├── 09-safety.md           ← why your assistant cannot delete your files (v0.5)
 │   ├── 10-connections.md      ← the checklist item by item, and what Claude may do with each (v0.6.0)
 │   ├── 11-the-app-and-the-companion.md  ← the Moblee app and the companion skill, explained together (v0.8.1)
-│   └── 12-building-things.md  ← building things on your wiki: how it goes, where they live, the parts they share (v0.11.0)
+│   ├── 12-building-things.md  ← building things on your wiki: how it goes, where they live, the parts they share (v0.11.0)
+│   ├── 13-when-claude-asks.md ← the switch beside where you type, what Claude asks, what "denied by auto mode" means (v0.12.0)
+│   ├── 14-an-always-on-mac.md ← for the owner who wants work to happen while the laptop is shut; most need none of it (v0.12.0)
+│   └── 15-what-runs-by-itself.md ← the Saturday check and its copy, the weekly tidy, the morning page, alerts; what each needs (v0.12.0)
 ├── archive/
 │   └── windows/               ← retired files, kept but not maintained
-└── CHANGELOG.md               ← release notes, v0.1 to v0.9.4
+└── CHANGELOG.md               ← release notes, every version
 ```
 
 ## License

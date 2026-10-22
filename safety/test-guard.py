@@ -158,6 +158,28 @@ def build_fixture():
     # in, written where the installer writes it, so the by-absolute-path rules
     # are exercised against the fixture vault and not against a real one.
     write(os.path.join(root, ".config", "moblee", "vault-path"), vault + "\n")
+    # (v5.2) A build folder under ~/Apps, the home the build skill gives a
+    # thing that needs installing: its own git, generated folders, a data and
+    # a state folder that are never disposable, a script that clears a build
+    # folder by name, a script that names the wiki, a link into the wiki, and
+    # a second build folder beside it.
+    demo = os.path.join(root, "Apps", "demo")
+    write(os.path.join(demo, ".git", "HEAD"), "ref: refs/heads/main\n")
+    write(os.path.join(demo, "node_modules", "left-pad", "index.js"), "x\n")
+    write(os.path.join(demo, "dist", "app.js"), "built\n")
+    write(os.path.join(demo, "build", "out.txt"), "built\n")
+    write(os.path.join(demo, "src", "app.js"), "source\n")
+    write(os.path.join(demo, "data", "members.json"), "[]\n")
+    write(os.path.join(demo, "state", "last-run.json"), "{}\n")
+    write(os.path.join(demo, "clean.py"), 'import shutil\nshutil.rmtree("dist")\n')
+    write(os.path.join(demo, "clean-wiki.py"),
+          'import shutil\nshutil.rmtree("%s")\n' % os.path.join(vault, "wiki"))
+    os.symlink(os.path.join(vault, "wiki"), os.path.join(demo, "link"))
+    write(os.path.join(root, "Apps", "other", "README.md"), "# other\n")
+    # (v5.2, from the cold review) a wiki that lives under ~/Apps is a wiki
+    write(os.path.join(root, "Apps", "wikiapp", "CLAUDE.md"), "# CLAUDE.md\n")
+    write(os.path.join(root, "Apps", "wikiapp", "wiki", "Page.md"), "# Page\n")
+    write(os.path.join(root, "Apps", "wikiapp", ".git", "HEAD"), "ref: refs/heads/main\n")
     # (v5.1) The guard's own files, under the fixture HOME: the settings that
     # register it, the hooks folder, and two files beside them that are not the
     # guard's and must stay ordinary.
@@ -757,6 +779,100 @@ ALLOW = [
 
 # Reviewer candidates deliberately NOT blocked (documented in the report);
 # asserted at exit 0 so a change of mind is a visible test change.
+# (v5.2) Build folders: (label, command, where, expected). "demo" is the
+# build folder ~/Apps/demo under the fixture HOME, "dist" a folder inside it,
+# "vault" the wiki. Ordinary work inside a build folder passes; the folder
+# itself, its .git, data and state, anything in the wiki (by path, by link or
+# by a script's literal), and every history rewrite are refused as before.
+BUILD = [
+    # ordinary work, from inside the build folder
+    ("build: rm dependencies folder", "rm -rf node_modules", "demo", 0),
+    ("build: rm two generated folders", "rm -rf dist build", "demo", 0),
+    ("build: rm one generated file", "rm node_modules/left-pad/index.js", "demo", 0),
+    ("build: rm with a leading ./", "rm -rf ./dist", "demo", 0),
+    ("build: rm a generated folder that is not there yet", "rm -rf .next", "demo", 0),
+    ("build: find -delete in dist", "find dist -name '*.js' -delete", "demo", 0),
+    ("build: git checkout -- a file", "git checkout -- src/app.js", "demo", 0),
+    ("build: git checkout a file", "git checkout src/app.js", "demo", 0),
+    ("build: git restore a file", "git restore src/app.js", "demo", 0),
+    ("build: git stash", "git stash", "demo", 0),
+    ("build: git stash pop", "git stash pop", "demo", 0),
+    ("build: git switch -c", "git switch -c feature", "demo", 0),
+    ("build: redirect over a generated file", "echo x > dist/app.js", "demo", 0),
+    ("build: cp over a generated file", "cp src/app.js dist/app.js", "demo", 0),
+    ("build: mv over a generated file", "mv dist/app.js build/out.txt", "demo", 0),
+    ("build: mv a generated folder to /tmp", "mv dist /tmp/dist-old", "demo", 0),
+    ("build: a script that clears dist by name", "python3 clean.py", "demo", 0),
+    ("build: npm run build", "npm run build", "demo", 0),
+    ("build: rm ../node_modules from a subfolder", "rm -rf ../node_modules", "dist", 0),
+    # the same work named from the wiki
+    ("build: rm dependencies by full path, from the wiki", "rm -rf {HOME}/Apps/demo/node_modules", "vault", 0),
+    ("build: rm by ~ path, from the wiki", "rm -rf ~/Apps/demo/dist", "vault", 0),
+    ("build: find -delete by full path, from the wiki", "find {HOME}/Apps/demo/dist -delete", "vault", 0),
+    ("build: git -C checkout a file, from the wiki", "git -C {HOME}/Apps/demo checkout -- src/app.js", "vault", 0),
+    ("build: git -C stash, from the wiki", "git -C {HOME}/Apps/demo stash", "vault", 0),
+    # never
+    ("build: rm the folder itself (.)", "rm -rf .", "demo", 2),
+    ("build: rm the folder itself (../demo)", "rm -rf ../demo", "demo", 2),
+    ("build: rm the folder itself by full path", "rm -rf {HOME}/Apps/demo", "vault", 2),
+    ("build: rm ~/Apps", "rm -rf ~/Apps", "demo", 2),
+    ("build: rm another build folder itself", "rm -rf ../other", "demo", 2),
+    ("build: rm .git", "rm -rf .git", "demo", 2),
+    ("build: rm data", "rm -rf data", "demo", 2),
+    ("build: rm a data file", "rm data/members.json", "demo", 2),
+    ("build: rm state", "rm -rf state", "demo", 2),
+    ("build: rm data by full path, from the wiki", "rm -rf {HOME}/Apps/demo/data", "vault", 2),
+    ("build: rm a page by full path, from the build folder", "rm -rf {VAULT}/wiki/A.md", "demo", 2),
+    ("build: rm through a link into the wiki", "rm -rf link/A.md", "demo", 2),
+    ("build: a script that clears the wiki by name", "python3 clean-wiki.py", "demo", 2),
+    ("build: redirect over a page, from the build folder", "echo x > {VAULT}/wiki/A.md", "demo", 2),
+    ("build: cp a page to /tmp, from the build folder", "cp {VAULT}/wiki/A.md /tmp/", "demo", 2),
+    ("build: rm inside the wiki's own apps folder", "rm -rf apps/demo/node_modules", "vault", 2),
+    ("build: git reset --hard", "git reset --hard", "demo", 2),
+    ("build: git push -f", "git push -f origin main", "demo", 2),
+    ("build: git clean -fd", "git clean -fd", "demo", 2),
+    ("build: git rebase", "git rebase main", "demo", 2),
+    ("build: git checkout -f", "git checkout -f main", "demo", 2),
+    ("build: git branch -D", "git branch -D feature", "demo", 2),
+    ("build: git stash drop", "git stash drop", "demo", 2),
+    ("build: git -C reset --hard, from the wiki", "git -C {HOME}/Apps/demo reset --hard", "vault", 2),
+    # the cold review's six ways round the first cut, each closed
+    ("build: --work-tree pointed at the wiki, stash", "git --work-tree={VAULT} stash", "demo", 2),
+    ("build: --work-tree pointed at the wiki, restore", "git --work-tree={VAULT} restore wiki/A.md", "demo", 2),
+    ("build: --git-dir pointed at the wiki, restore", "git --git-dir={VAULT}/.git --work-tree={VAULT} restore .", "demo", 2),
+    ("build: GIT_DIR in the environment, stash", "GIT_DIR={VAULT}/.git GIT_WORK_TREE={VAULT} git stash", "demo", 2),
+    ("build: -C the build folder but --work-tree the wiki", "git -C {HOME}/Apps/demo --work-tree={VAULT} stash", "demo", 2),
+    ("build: core.worktree pointed at the wiki", "git -c core.worktree={VAULT} stash", "demo", 2),
+    ("build: writing the build-roots file", "echo / > {HOME}/.config/moblee/build-roots", "demo", 2),
+    ("build: writing the build-roots file with printf", "printf '%s' / > {HOME}/.config/moblee/build-roots", "demo", 2),
+    ("build: tee onto the build-roots file", "tee {HOME}/.config/moblee/build-roots <<< /", "demo", 2),
+    ("build: writing the vault-path file", "echo {HOME}/Apps/demo > {HOME}/.config/moblee/vault-path", "demo", 2),
+    ("build: rm the vault-path file", "rm {HOME}/.config/moblee/vault-path", "demo", 2),
+    ("build: rm DATA in upper case", "rm -rf DATA", "demo", 2),
+    ("build: rm a Data file in another case", "rm -rf Data/db.json", "demo", 2),
+    ("build: rm .GIT in upper case", "rm -rf .GIT", "demo", 2),
+    ("build: rm State by full path in another case", "rm -rf {HOME}/Apps/demo/State", "vault", 2),
+    ("build: mv data out", "mv data /tmp/x", "demo", 2),
+    ("build: mv .git out", "mv .git /tmp/g", "demo", 2),
+    ("build: mv state to Documents", "mv state {HOME}/Documents/", "demo", 2),
+    ("build: mv the folder itself to a new name", "mv {HOME}/Apps/demo {HOME}/Apps/demo2", "vault", 2),
+    ("build: mv data to a new name", "mv data olddata", "demo", 2),
+    ("build: cp data out is only a copy", "cp -R data /tmp/data-copy", "demo", 0),
+    ("build: rm a wiki that lives in Apps", "rm -rf ../wikiapp/wiki", "demo", 2),
+    ("build: rm a page of a wiki in Apps by full path", "rm -rf {HOME}/Apps/wikiapp/wiki/Page.md", "demo", 2),
+    ("build: redirect over a page of a wiki in Apps", "echo x > ../wikiapp/wiki/Page.md", "demo", 2),
+    ("build: checkout in a wiki in Apps", "git -C ../wikiapp checkout -- wiki/Page.md", "demo", 2),
+    ("build: stash in a wiki in Apps", "git -C {HOME}/Apps/wikiapp stash", "demo", 2),
+    ("build: rm a wiki in Apps from the home folder", "rm -rf {HOME}/Apps/wikiapp/wiki", "home", 2),
+    ("build: redirect through a link into the wiki", "echo x > link/A.md", "demo", 2),
+    # work that was refused from the home folder, where the guard's fallback
+    # took ~ itself for the vault
+    ("build: rm dependencies from the home folder", "rm -rf {HOME}/Apps/demo/node_modules", "home", 0),
+    ("build: cd into the build folder then rm", "cd {HOME}/Apps/demo && rm -rf node_modules", "home", 0),
+    ("build: git -C stash from the home folder", "git -C {HOME}/Apps/demo stash", "home", 0),
+    ("build: rm a page by full path, from the home folder", "rm -rf {VAULT}/wiki/A.md", "home", 2),
+]
+
 NOT_BLOCKED = [
     ("sed -i delete all", "sed -i '' 'd' wiki/Index.md"),
     ("sed -i overwrite", "sed -i '' 's/.*//' wiki/Index.md"),
@@ -1258,6 +1374,11 @@ def main():
         check(label, cmd, 0, "allow")
     for label, cmd in NOT_BLOCKED:
         check(label, cmd, 0, "noblock")
+    # (v5.2) build folders
+    demo = os.path.join(root, "Apps", "demo")
+    build_where = {"demo": demo, "dist": os.path.join(demo, "dist"), "vault": vault, "home": root}
+    for label, cmd, where, expect in BUILD:
+        check(label, cmd, expect, "build", build_where[where])
     # (v5.1) run from the vault, a throwaway folder, or the home folder
     where_cwd = {"vault": vault, "tmp": "/tmp", "home": root}
     for group, label, where, expect, cmd in V51:

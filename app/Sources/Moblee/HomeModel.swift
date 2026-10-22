@@ -20,7 +20,7 @@ import AppKit
 @MainActor
 final class HomeModel: ObservableObject {
     enum How: String { case silent, terminal, clicks, hidden }
-    enum Kind: String { case item, skill, connection }
+    enum Kind: String { case item, skill, connection, job }
     enum TileState: Equatable { case waiting, running, done, failed, handedOver, blocked }
 
     struct Tile: Identifiable, Equatable {
@@ -44,6 +44,7 @@ final class HomeModel: ObservableObject {
             switch kind {
             case .skill: return "wand.and.stars"
             case .connection: return "link"
+            case .job: return "clock.badge.checkmark"
             case .item:
                 switch how {
                 case .silent: return "square.and.arrow.down.fill"
@@ -631,6 +632,14 @@ final class HomeModel: ObservableObject {
                 guard !name.isEmpty else { continue }
                 tile = Tile(kind: .connection, key: name, title: "Connect \(name)",
                             why: why, detail: "A few clicks inside Claude", how: .clicks, paid: false)
+            case .job:
+                // (0.12.0) A built thing's scheduled job, switched on from here: the
+                // key is the thing's folder name under apps/, and the title comes
+                // from its own app.json, never from the request.
+                guard Self.safeName(key), let title = Self.jobTitle(for: key, vault: vault) else { continue }
+                tile = Tile(kind: .job, key: key, title: "Switch on \(title)",
+                            why: why, detail: "Runs on its own while this Mac is awake; a missed hour runs at the next wake",
+                            how: .silent, paid: false)
             }
             guard var t = tile, !seen.contains(t.id) else { continue }
             t.asked = Self.plain(r["asked"] as? String ?? "", limit: 20)
@@ -725,8 +734,23 @@ final class HomeModel: ObservableObject {
                 }
             case .connection:
                 if tiles[i].state != .done, ownerSaidDone().contains(tiles[i].doneKey) { tiles[i].state = .done }
+            case .job:
+                // switched on means the scheduler file is in place under the owner's account
+                let placed = home.appendingPathComponent("Library/LaunchAgents/com.moblee.\(tiles[i].key).plist")
+                if tiles[i].state != .done, FileManager.default.fileExists(atPath: placed.path) { tiles[i].state = .done }
             }
         }
+    }
+
+    /// (0.12.0) The title of a built thing, from apps/<name>/app.json; nil when
+    /// there is no such thing, or no scheduler file to switch on.
+    static func jobTitle(for key: String, vault: URL) -> String? {
+        guard safeName(key) else { return nil }
+        let app = vault.appendingPathComponent("apps/\(key)", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: app.appendingPathComponent("com.moblee.\(key).plist").path),
+              let m = json(app.appendingPathComponent("app.json")) else { return nil }
+        let title = plain(m["title"] as? String ?? "", limit: 60)
+        return title.isEmpty ? nil : title
     }
 
     private func setState(_ id: String, _ s: TileState, note: String = "") {
@@ -743,6 +767,7 @@ final class HomeModel: ObservableObject {
     func press(_ tile: Tile) {
         switch (tile.kind, tile.how) {
         case (.item, .silent): addSilently(tile)
+        case (.job, _): switchOnJob(tile)
         case (.skill, _):
             // Look at the draft again at this moment, so that what the owner is
             // shown is what would be added, even if the draft changed since.
@@ -777,6 +802,26 @@ final class HomeModel: ObservableObject {
                   if code == 0 && worked { self?.setState(tile.id, .done) }
                   else { self?.setState(tile.id, .failed, note: why) }
               })
+    }
+
+    /// (0.12.0) Switch a built thing's scheduled job on: the pack's own script
+    /// copies the scheduler file into place and asks the Mac's scheduler to
+    /// take it. The owner's press is the act; the assistant never runs this.
+    private func switchOnJob(_ tile: Tile) {
+        guard let pack, let vault, Self.safeName(tile.key) else { return }
+        setState(tile.id, .running)
+        EngineTask.output(of: "/usr/bin/python3",
+                          [pack.appendingPathComponent("scripts/job-switch.py").path,
+                           "--vault", vault.path, "--name", tile.key, "--on", "--json"],
+                          home: home) { [weak self] code, data in
+            guard let self else { return }
+            var why = "It could not be switched on. Tell Claude."
+            if let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let w = parsed["why"] as? String, !w.isEmpty {
+                why = Self.plain(w, limit: 160)
+            }
+            if code == 0 { self.setState(tile.id, .done) } else { self.setState(tile.id, .failed, note: why) }
+        }
     }
 
     /// After the owner has seen what the skill says it does and pressed Add.

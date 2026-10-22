@@ -5,8 +5,16 @@
 # scripts/hooks`). It runs after every successful commit and must never make
 # a commit fail, so it always exits 0.
 #
-# At present this is a deliberate no-op placeholder. A later version of the
-# pack may wire a background job here (for example, rebuilding a local search
-# index when the commit touched wiki/), launched detached so the commit never
-# waits on it. Until then there is nothing to do.
+# (0.12.0) When the owner has chosen memory search, the index is rebuilt in
+# the background after a commit that touched wiki/ or memory/, detached, so
+# the commit never waits on it and never fails because of it. Without memory
+# search there is nothing to do.
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+if [ -x "$root/scripts/recall/rebuild-index.sh" ]; then
+  # quotepath off, so a page named in Arabic or with an accent is seen; -m and
+  # --root, so a merge and the very first commit are read too
+  if git -c core.quotepath=false diff-tree --no-commit-id --name-only -r -m --root HEAD 2>/dev/null | grep -qE '^(wiki|memory)/'; then
+    (nohup bash "$root/scripts/recall/rebuild-index.sh" post-commit >/dev/null 2>&1 &)
+  fi
+fi
 exit 0

@@ -80,6 +80,22 @@ FILES = [
     # their bytes change with the name filled in and could not be pinned.
     "skills/build/parts/scaffold.py",
     "skills/build/parts/keychain.py",
+    # (0.12.0) Four more helpers that run in place from the skill's folder:
+    # the one that puts a page on the web (git, gh), the one that packs a kit,
+    # the sweep they share, and the scheduled job that asks the assistant.
+    # And the switch the Moblee app presses for a built thing's job.
+    "skills/build/parts/publish.py",
+    "skills/build/parts/share.py",
+    "skills/build/parts/sweep.py",
+    "skills/build/parts/think-job.py",
+    "scripts/job-switch.py",
+    # (0.12.0) the one compaction move done by a script, run by the weekly tidy
+    "scripts/compact-rotate.py",
+    # (0.12.0) memory search: copied into a wiki by the item, run from there
+    "extras/recall/recall.py",
+    "extras/recall/recall-inject.py",
+    "extras/recall/rebuild-index.sh",
+    "extras/recall/install-recall.py",
     "tools/test-build.py",
 ]
 ENTRY_RE = re.compile(r'"([0-9a-f]{64})":\s*"([^"]*)"')

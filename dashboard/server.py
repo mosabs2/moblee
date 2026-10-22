@@ -97,6 +97,37 @@ VAULT = find_vault()
 WIKI = os.path.join(VAULT, "wiki")
 HERE = os.path.dirname(os.path.abspath(__file__))
 CHARTS_FILE = os.path.join(HERE, "dashboard-charts.json")
+# (0.12.0) The owner's own dashboard settings, in a file beside this one that
+# an update never replaces: today only whether replies are read aloud. One
+# owner switched read-aloud off in the page's own file, and the next update
+# switched it back on by replacing the page.
+SETTINGS_FILE = os.path.join(HERE, "settings.json")
+SETTINGS_KEYS = {"read_aloud": bool}
+
+
+def load_settings():
+    try:
+        with open(SETTINGS_FILE, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_settings(changes):
+    """Merge the known keys into settings.json; anything else is ignored.
+    Written whole, to a temporary name first, so a half-written file never
+    reads as the settings."""
+    data = load_settings()
+    for key, kind in SETTINGS_KEYS.items():
+        if key in changes and isinstance(changes[key], kind):
+            data[key] = changes[key]
+    tmp = SETTINGS_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=2)
+        fh.write("\n")
+    os.replace(tmp, SETTINGS_FILE)
+    return data
 GALAXY_BUILD = os.path.join(os.path.dirname(HERE), "scripts", "wiki-galaxy",
                             "build.py")
 PORT = int(os.environ.get("MOBLEE_DASH_PORT", "7373"))
@@ -842,6 +873,8 @@ class Handler(BaseHTTPRequestHandler):
                        "text/html; charset=utf-8")
         elif path == "/api/state":
             self._send(200, build_state())
+        elif path == "/api/settings":
+            self._send(200, load_settings())
         elif path == "/api/actions":
             self._send(200, QUICK_ACTIONS)
         elif path == "/api/inbox":
@@ -936,7 +969,14 @@ class Handler(BaseHTTPRequestHandler):
                 self.headers.get("X-Requested-By") != "dashboard":
             self._send(403, {"error": "missing X-Requested-By header"})
             return
-        length = int(self.headers.get("Content-Length", 0))
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except (TypeError, ValueError):
+            self._send(400, {"error": "bad Content-Length"})
+            return
+        if length < 0:
+            self._send(400, {"error": "bad Content-Length"})
+            return
         if length > 40 * 1024 * 1024:  # cap the body before reading it into memory
             self._send(413, {"error": "request body too large"})
             return
@@ -970,6 +1010,8 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/api/stop":
             stop_local()
             self._send(200, {"ok": True})
+        elif self.path == "/api/settings":
+            self._send(200, save_settings(payload if isinstance(payload, dict) else {}))
         elif self.path == "/api/galaxy_rebuild":
             # Rebuild the Wiki Galaxy so the header button always opens a view
             # matching the current wiki. Synchronous — a build takes seconds.

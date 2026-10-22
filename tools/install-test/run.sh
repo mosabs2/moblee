@@ -109,6 +109,10 @@ case_happy() {
   has   "$HOME_DIR/last-subject.txt" "moblee: safety layer" "the install committed its own settings"
   has   "$HOME_DIR/install-output.txt" '"step":"done","state":"ok"' "the app is told the run finished"
   hasnt "$HOME_DIR/install-output.txt" "One thing is not finished" "and the screen claims nothing outstanding"
+  # (0.12.0) the folder is marked trusted in Claude's own state file, so the rules apply at once
+  has   "$HOME_DIR/.claude.json" "hasTrustDialogAccepted" "the wiki's folder is marked trusted in Claude's state file"
+  has   "$HOME_DIR/.claude.json" "$(cd "$SBX" && pwd -P)" "under the wiki's own real path"
+  hasnt "$SBX/.claude/settings.local.json" 'Write(' "no rule is written in the form Claude never reads"
 }
 
 # --------------------------------------------------------------------------

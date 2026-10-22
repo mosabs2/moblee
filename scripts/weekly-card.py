@@ -287,6 +287,11 @@ def main() -> int:
               "offered once, so there is nothing to offer now.")
     else:
         print(f"Card: not written yet. It would go to outputs/weekly/{card.name}.")
+    tidy = vault / "outputs" / "weekly" / f"tidy-{end.isoformat()}.md"
+    if tidy.exists():
+        print(f"Tidy: outputs/weekly/{tidy.name} (what the weekly tidy put right, and left for the owner to look at)")
+    else:
+        print("Tidy: no tidy page this week (the weekly tidy is not switched on, or has not run yet).")
     print(f"Quiet week: {'yes' if not entries else 'no'}")
     print()
 

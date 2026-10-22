@@ -25,3 +25,5 @@ apps/*/node_modules/
 apps/*/.venv/
 apps/*/venv/
 apps/*/__pycache__/
+# (0.12.0) a thing's web copy is its own small repository, not the wiki's
+apps/*/site/
