@@ -69,6 +69,28 @@ enum LogicCheck {
             let forBoth = wiki("both", real: ["CLAUDE.md"], links: ["AGENTS.md": "CLAUDE.md"])
             let forClaude = wiki("claude", real: ["CLAUDE.md"], links: [:])
             let twoFiles = wiki("two-real-files", real: ["CLAUDE.md", "AGENTS.md"], links: [:])
+
+            // --- (0.12.0) a built thing's job, switched on from a tile ---
+            // The title comes from the thing's own app.json, never from the
+            // request; no scheduler file, no tile; a key with a path in it, no tile.
+            let jobWiki = wiki("job-wiki", real: ["CLAUDE.md"], links: [:])
+            let demo = jobWiki.appendingPathComponent("apps/demo", isDirectory: true)
+            try? fm.createDirectory(at: demo, withIntermediateDirectories: true)
+            try? "{\"name\": \"demo\", \"title\": \"Tide Times\"}\n".write(to: demo.appendingPathComponent("app.json"), atomically: true, encoding: .utf8)
+            check("a built thing with no scheduler file offers no tile",
+                  HomeModel.jobTitle(for: "demo", vault: jobWiki) == nil)
+            try? "<plist/>\n".write(to: demo.appendingPathComponent("com.moblee.demo.plist"), atomically: true, encoding: .utf8)
+            check("with its scheduler file, the tile carries the thing's own title",
+                  HomeModel.jobTitle(for: "demo", vault: jobWiki) == "Tide Times")
+            check("a key that is not a plain name is refused",
+                  HomeModel.jobTitle(for: "../demo", vault: jobWiki) == nil
+                  && HomeModel.jobTitle(for: "demo/x", vault: jobWiki) == nil)
+            try? "{\"name\": \"demo\"}\n".write(to: demo.appendingPathComponent("app.json"), atomically: true, encoding: .utf8)
+            check("a thing with no title in its record offers no tile",
+                  HomeModel.jobTitle(for: "demo", vault: jobWiki) == nil)
+            let jobTile = HomeModel.Tile(kind: .job, key: "demo", title: "Switch on Tide Times", why: "", detail: "",
+                                         how: .silent, paid: false)
+            check("a job tile has a symbol of its own", jobTile.symbol == "clock.badge.checkmark")
             check("a real AGENTS.md with CLAUDE.md a link to it is read as a wiki for ChatGPT",
                   Assistant.inferred(vault: forChatGPT) == .chatgpt)
             check("and so is a real AGENTS.md whose link a sync tool dropped",

@@ -6,7 +6,11 @@
     --what "<one sentence>"   what it is, in the owner's words (goes on the page)
     --plan "<one sentence>"   what this first build will do (the first Progress line)
     --job                     it runs on a schedule: adds job.py and the launch agent
+    --think                   its job asks the assistant: prompt.md, fence.json and a launch
+                              agent that runs Moblee's think-job.py (implies --job)
     --hour H --minute M       when the job runs (default 07:30)
+    --reach                   it also listens on the owner's phone route (the Reach item),
+                              while the Mac is awake
     --launcher                make "Open <Title>.app" for a double-click start
     --outside <folder>        tier 3: the code lives outside the wiki (e.g. ~/Apps/<name>);
                               apps/<name>/ then holds only app.json and a README
@@ -15,12 +19,14 @@
 
 What it makes, and never overwrites (an existing file is left alone and named):
 
-    apps/<name>/README.md, app.json, index.html, moblee-app.js, server.py, data/, state/
+    apps/<name>/README.md, app.json, index.html, moblee-app.js, server.py, notify.py, data/, state/
     apps/<name>/job.py and com.moblee.<name>.plist          (--job)
+    apps/<name>/prompt.md, fence.json and the plist          (--think)
     apps/<name>/Open <Title>.app                             (--launcher, through the Mac's osacompile)
     wiki/Projects/<Title>.md                                 the thing's own page
     wiki/Projects.md                                         the index, if the wiki has none
     one line on wiki/Index.md                                 if the Projects page is not on it yet
+    one entry in .claude/launch.json                         so Claude's app can open it in its preview
 
 Nothing is deleted, moved or replaced. Run it from anywhere; it needs only the
 Python that comes with the Mac.
@@ -160,6 +166,39 @@ def add_index_line(mk: Maker, vault: Path) -> None:
         index.write_text("\n".join(lines), encoding="utf-8")
 
 
+def add_launch_entry(mk: Maker, vault: Path, name: str, app_dir: Path, port: int | None) -> None:
+    """(0.12.0) One entry in the wiki's .claude/launch.json, so the owner's
+    Claude can open the thing in the desktop app's own preview pane and show
+    it working. An entry of this name is left alone; a file that does not read
+    as the expected shape is left alone and named."""
+    if not port:
+        return
+    path = vault / ".claude" / "launch.json"
+    entry = {"name": name, "runtimeExecutable": "python3",
+             "runtimeArgs": [str(app_dir.relative_to(vault) / "server.py"), "--port", str(port)],
+             "port": port}
+    data = {"version": "0.0.1", "configurations": []}
+    if path.exists():
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            loaded = None
+        if not isinstance(loaded, dict) or not isinstance(loaded.get("configurations"), list):
+            mk.skipped.append(f"{path} (not in the shape Claude's app expects; the preview entry was not added)")
+            return
+        data = loaded
+        if any(isinstance(c, dict) and c.get("name") == name for c in data["configurations"]):
+            mk.skipped.append(f"{path} (already has an entry for {name})")
+            return
+    data["configurations"].append(entry)
+    if mk.dry:
+        mk.made.append(f"{path} (would add the preview entry for {name})")
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    mk.made.append(f"{path} (preview entry for {name})")
+
+
 def make_launcher(mk: Maker, app_dir: Path, title: str) -> None:
     out = app_dir / f"Open {title}.app"
     if out.exists():
@@ -196,8 +235,11 @@ def main() -> int:
     ap.add_argument("--what", default="")
     ap.add_argument("--plan", default="the first, smallest version.")
     ap.add_argument("--job", action="store_true")
+    ap.add_argument("--think", action="store_true")
     ap.add_argument("--hour", type=int, default=7)
     ap.add_argument("--minute", type=int, default=30)
+    ap.add_argument("--weekday", type=int, help="run on one day a week: 0 Sunday to 6 Saturday")
+    ap.add_argument("--reach", action="store_true")
     ap.add_argument("--launcher", action="store_true")
     ap.add_argument("--outside")
     ap.add_argument("--port", type=int)
@@ -219,6 +261,14 @@ def main() -> int:
         fail("--port is a number between 1024 and 65535 that browsers accept (7400 to 7499 are safe)")
     if not (0 <= a.hour <= 23 and 0 <= a.minute <= 59):
         fail("--hour is 0 to 23 and --minute is 0 to 59")
+    if a.weekday is not None and not (0 <= a.weekday <= 6):
+        fail("--weekday is 0 (Sunday) to 6 (Saturday)")
+    if a.think:
+        a.job = True
+    if a.reach and a.outside:
+        fail("--reach is for a thing that runs on the wiki's own server; a thing outside the wiki has its own")
+    if a.job and a.outside:
+        fail("--job and --think are for a thing inside the wiki; a thing outside the wiki keeps its own schedule")
 
     today = datetime.datetime.now().strftime("%-d %B %Y")
     owner = owner_name(vault)
@@ -254,7 +304,10 @@ def main() -> int:
         "tier": 3 if outside else 2,
         "outside": str(outside) if outside else None,
         "port": a.port,
-        "job": {"every_hours": 24, "label": f"com.moblee.{a.name}"} if a.job else None,
+        "job": ({"every_hours": 24 * 7 if a.weekday is not None else 24, "label": f"com.moblee.{a.name}",
+                 "thinking": bool(a.think), "hour": a.hour, "minute": a.minute, "weekday": a.weekday} if a.job else None),
+        "reach": bool(a.reach),
+        "publish": None,
         "page": f"wiki/Projects/{a.title}.md",
     }
     mk.write(app_dir / "app.json", json.dumps(manifest, indent=2) + "\n")
@@ -272,26 +325,57 @@ def main() -> int:
                       f"or say \"open {a.title}\" to the assistant." if a.launcher else
                       f"Say \"open {a.title}\" to the assistant, or in a Terminal window of your own: "
                       f"`cd \"{app_dir}\"` and then `python3 server.py --open`.")
-        for part in ("index.html", "moblee-app.js", "server.py"):
+        for part in ("index.html", "moblee-app.js", "server.py", "notify.py"):
             mk.write(app_dir / part, fill((PARTS / part).read_text(encoding="utf-8"), subs))
         mk.folder(app_dir / "data")
         mk.folder(app_dir / "state")
         job_lines = ""
         if a.job:
-            mk.write(app_dir / "job.py", fill((PARTS / "job.py").read_text(encoding="utf-8"), subs))
             plist = f"com.moblee.{a.name}.plist"
             # The plist is XML, so a folder name holding & or < is written escaped,
             # or launchctl refuses the file.
             plist_subs = {k: xml_escape(v) for k, v in subs.items()}
-            mk.write(app_dir / plist, fill((PARTS / "launch-agent.plist").read_text(encoding="utf-8"), plist_subs))
+            plist_subs["__WEEKDAY_BLOCK__"] = (
+                f"\n        <key>Weekday</key>\n        <integer>{a.weekday}</integer>" if a.weekday is not None else "")
+            # The thinking job runs Moblee's own think-job.py from the skill's
+            # installed folder, whose path stays the same across versions; the
+            # pack's own copy is the fallback where the skill is not installed.
+            installed_think = Path.home() / ".claude" / "skills" / "build" / "parts" / "think-job.py"
+            think_path = installed_think if installed_think.is_file() else PARTS / "think-job.py"
+            plist_subs["__THINK_JOB__"] = xml_escape(str(think_path))
+            if a.think:
+                mk.write(app_dir / "prompt.md", fill((PARTS / "prompt.template.md").read_text(encoding="utf-8"), subs))
+                mk.write(app_dir / "fence.json", (PARTS / "fence.json").read_text(encoding="utf-8"))
+                mk.write(app_dir / plist, fill((PARTS / "think-agent.plist").read_text(encoding="utf-8"), plist_subs))
+                what_runs = (f"Moblee's `think-job.py` asks the assistant what `prompt.md` says, within the limits "
+                             f"written in `fence.json` (what it may read and write, and how long it may take), every "
+                             f"day at {a.hour:02d}:{a.minute:02d} once you have switched it on; the answer is kept at "
+                             f"`state/last-answer.md`")
+                by_hand = f"`python3 \"{think_path}\" --app \"{app_dir}\"`"
+            else:
+                mk.write(app_dir / "job.py", fill((PARTS / "job.py").read_text(encoding="utf-8"), subs))
+                mk.write(app_dir / plist, fill((PARTS / "launch-agent.plist").read_text(encoding="utf-8"), plist_subs))
+                what_runs = f"`job.py` runs every day at {a.hour:02d}:{a.minute:02d} once you have switched it on"
+                by_hand = f"`cd \"{app_dir}\"` and then `python3 job.py`"
             job_lines = (
                 f"\n## Its job, which runs on a schedule\n\n"
-                f"`job.py` runs every day at {a.hour:02d}:{a.minute:02d} once you have switched it on. "
-                f"It writes `state/last-run.json` and a line in `state/job-log.txt` every time, so the "
-                f"check-up can see if it stops. To switch it on, in a Terminal window of your own, one line at a time:\n\n"
+                f"{what_runs}. It writes `state/last-run.json` and a line in `state/job-log.txt` every time, so the "
+                f"check-up can see if it stops. If this Mac was asleep at that hour, the job runs once at the next "
+                f"wake, however many days were missed. **To switch it on,** say \"switch on {a.title}\" to the "
+                f"assistant and press the tile that appears in the Moblee app; the app copies the scheduler file "
+                f"into place and switches it on. Without the app, in a Terminal window of your own, one line at a time:\n\n"
                 f"```\ncp \"{app_dir / plist}\" ~/Library/LaunchAgents/\n```\n\n"
                 f"```\nlaunchctl load ~/Library/LaunchAgents/{plist}\n```\n\n"
-                f"To run it by hand: `cd \"{app_dir}\"` and then `python3 job.py`.\n"
+                f"To run it by hand: {by_hand}. If you have chosen alerts in Moblee, a line reaches your phone "
+                f"when it finishes or fails, naming the file to look at.\n"
+            )
+        if a.reach:
+            job_lines += (
+                f"\n## From your phone\n\n"
+                f"While this Mac is awake, {a.title} also opens from your phone, at an address your assistant will "
+                f"tell you, which ends in :{a.port}, over the route you chose in Moblee's item \"Reach your things "
+                f"from your phone\". When the Mac is asleep or shut, it is not "
+                f"reachable; a page that must always be reachable goes on the web instead (the assistant can offer that).\n"
             )
     subs["__OPEN_LINES__"] = open_lines
     subs["__JOB_LINES__"] = job_lines
@@ -322,6 +406,8 @@ def main() -> int:
         mk.write(app_dir / "README.md", fill((PARTS / "README.template.md").read_text(encoding="utf-8"), subs))
     if a.launcher and not outside:
         make_launcher(mk, app_dir, a.title)
+    if not outside:
+        add_launch_entry(mk, vault, a.name, app_dir, a.port)
 
     # --- the wiki's record --------------------------------------------------
     what = a.what or f"*(What {a.title} is, in {owner}'s words.)*"

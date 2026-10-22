@@ -14,7 +14,7 @@
     <key>WorkingDirectory</key>
     <string>__APP_DIR__</string>
     <key>StartCalendarInterval</key>
-    <dict>
+    <dict>__WEEKDAY_BLOCK__
         <key>Hour</key>
         <integer>__HOUR__</integer>
         <key>Minute</key>

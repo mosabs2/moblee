@@ -104,6 +104,26 @@ own files: ~/.claude/settings.json, settings.local.json, everything in
 chmod and kin, moves, copies onto them, links and writes from inline code.
 Reading them passes. Homebrew's GNU tools, which carry a g prefix (grm,
 gmv, gsed …), are read as the tools whose work they do.
+
+v5.2 (October 2026) knows a build folder from the wiki. A cold review of the
+first cut found six ways round it, each closed with a case in the suite: git
+pointed at the wiki by --work-tree, --git-dir, core.worktree or the
+environment while sitting in a build folder; the two files that tell the guard
+where the wiki and the build roots are, now protected like its own settings;
+.git, data and state spelt in another case on a disk that ignores case; mv of
+a build folder itself or of those three; a wiki that lives under ~/Apps, which
+is a wiki; and a `>` through a link into the wiki, which truncated a page. The build skill puts
+anything that needs installing outside the wiki at ~/Apps/<name>/, and the
+first owner to work there met refusals on every ordinary step and switched
+the guard off by hand. Now a path strictly inside a build folder (under
+~/Apps, or a root named in ~/.config/moblee/build-roots or
+MOBLEE_BUILD_ROOTS) may be deleted, found-and-deleted, written over or
+moved, and a build folder's own repository may restore, stash and check out
+paths. Never: the folder itself, its .git, its data/ and state/ folders,
+anything in any vault, history rewrites (reset --hard, rebase, clean,
+force-push, branch delete) anywhere, and the guard's own files. A session
+started inside a build folder sees no vault there; the recorded vault stays
+protected by its absolute path.
 """
 import ast
 import hashlib
@@ -114,7 +134,7 @@ import shlex
 import sys
 import unicodedata
 
-VERSION = "v5.1"
+VERSION = "v5.2"
 MAX_DEPTH = 6
 MAX_FILE_BYTES = 512 * 1024
 MAX_HASH_BYTES = 4 * 1024 * 1024
@@ -122,38 +142,48 @@ MAX_FILES_PER_CALL = 6
 
 # --- KNOWN_SAFE begin ---
 KNOWN_SAFE_SHA256 = {
-    "9f31dddc0b348023906a575cfa86991a539673eae0b7a5da21e6f84d6fd33e44": "dashboard/server.py",
+    "238f80a5feaf5f8cd64a61d90386640aa153290537f2bfe8bc1a1ee77b9e44ff": "dashboard/server.py",
+    "eaeb66d6d49dd061399f203945b330dd7ba88d86b61385592fff92473a46c57d": "extras/recall/install-recall.py",
+    "58d03e41cc158f36d736871c1e6b740c7706a748fbcb8f6b60f3856dcc73e1f2": "extras/recall/rebuild-index.sh",
+    "0da0d35e4131214cac6564771278bf44f726ac30f672fdf6d5882e8cc720be9a": "extras/recall/recall-inject.py",
+    "1f6251657d9ac39d61f342e2739ceab9268e88fe56a47f2327798454bad05f69": "extras/recall/recall.py",
     "a4294253dcd091c30997668bd55ce359076597de23e4bf341e690168373ea65c": "learning-path/moblee-tip.sh",
-    "1e77fda40d00e49e8d7a62a1d84317474a240ee542587006378d28509c310541": "safety/install-safety.py",
-    "d54a4f1c2a4ad2a4dc9b6ba1093e1fc70e5f54ca17fa497aabccbaf4f8261c86": "safety/test-guard.py",
+    "9b4500ffcbd523cc46bc40a4676ceb328c2272df6b3a210b3bb46828e20573ec": "safety/install-safety.py",
+    "839b16abae93385eceb46c30cbfa1fab1938020d591b266ccd613bb341f805e8": "safety/test-guard.py",
     "8a5524c075c8643ba9606bcf6243bd94523078dd504d76b52f0b629296be5ad0": "scripts/add-habits-page.py",
     "4b2f688c92a7b56fb2fc98c25a922ecf958b77b13659173e0b86cfa336aff211": "scripts/add-identity.py",
     "e0a74cf640a0a76f0bfedade668fe7cf65042e3c790c0c2e4b4ccbc6525b65ab": "scripts/add-reference-pages.py",
-    "749ed9603f05e1a633f9586383e86777289fb0eb78b8b7bd9c7e2e0706c6672d": "scripts/cadence/run-weekly-lint.sh",
-    "ccd320d41251a54c6ec367513de80a8ea2dcf2bdc1b0f47943b4adc26a07c7cb": "scripts/hooks/post-commit",
+    "12bee9b30a2d2f2498f2c110f5b57b9939941937c2a628ed775ebfd581550250": "scripts/cadence/run-weekly-lint.sh",
+    "0887660d33b9b383645a584aaf3aa2e16cc1448b850561a215f849fe135e7b78": "scripts/compact-rotate.py",
+    "f478877cc79bc5c60778f00e57717a433a2b1a768b663e799ca840fab55ae77e": "scripts/hooks/post-commit",
     "42bb3ae68fb171ff5670ac7e1fa8ec3e49bfc1e138c8727ee497158ab1c12c8e": "scripts/hooks/pre-commit",
     "41f250df9ce19f0b0118ea0775877732102b5da4864531e72321c7587678ba79": "scripts/install-learning-path.py",
     "e6526d9d84ff88e7c3c581064c67fbcd71c94ffeaf69b439e48b7413f40148ba": "scripts/install-schedule.sh",
     "e311dbe293d6d31dcbf4405e1083c18148cc11e68fc274a121272f37e1b01326": "scripts/install-skills.sh",
-    "a37618ac7157b0087a0d455c82eedcb7d3cbe5cd4be38f3e6313833b2d85cbc3": "scripts/install.sh",
+    "01f3aefa92b7bfc4b35ce773469230ca56d4813fec2403078f2b85728eaf8fa3": "scripts/install.sh",
+    "1b790b84e08e7f116346feed1201660d2cd6d15bbca7f12e7e0474e3bd8adcb4": "scripts/job-switch.py",
     "aea04e2f4b23d1fe669649f7b7847fec941de0dfa8ed54a799739c72b8dcdc73": "scripts/lint-v2.py",
     "3dc036a7fd72607eae7eb8adfdefd749858205ba6aac05d604373a1714a56f57": "scripts/log-append.py",
-    "f7c80b798ea91d4b1539b9a8bc4c2e530f6dc55b3dc95ac07e88fe9fa109c3da": "scripts/moblee-doctor.py",
-    "64ccde939ad4b9f9c1a8798d2b0a9883dae34ee63587d189c1bca31503af2793": "scripts/moblee-setup.py",
-    "de5ea223464ef4dc5f6bfd54a5b67b755a83e820e08f1c66457f7b2ebdfd639d": "scripts/patch-claude-md.py",
+    "ec6e30ab37f521406942ce12157e3e6ece278c3ea02e6afa515942e0499764ff": "scripts/moblee-doctor.py",
+    "f7d4682dbece9cfb06d810ed4791636acd2ad0ecd26c7b132ca9fba4e5654f30": "scripts/moblee-setup.py",
+    "9cb2b290a789ad0b80dec548f7517963d75276d8a1eac268367a01ebf2859090": "scripts/patch-claude-md.py",
     "8d1c998cdd9208de0909e6c4b4d68b5ac667466ce2acb3c1a9ba81fbef3febda": "scripts/seed-memory.py",
     "c6860063b170bd3019dd319081c0992a2401cd5aacf99b6e4b56b2c729734d21": "scripts/test-patch-claude-md.py",
     "631a9c1d17b75715643d07b0b9fdbaccd89ba6c5995f84065a5b0988cdec1d4f": "scripts/turn-end-commit.py",
-    "983c7e4778d06f4d87ff7331e0e5e482b92c125cf2db3c31fa6faefa36713cf2": "scripts/update.sh",
+    "6f2789d0510c35b61a64d8d0404a00a29fe142d927c35e48bdb2cea52e3bb0c8": "scripts/update.sh",
     "56f68e1a9c981abedca1d35bd06d1e20bdd0c60574ec79e04313a1806507d303": "scripts/vault-gate.py",
     "ebecd70937e2dc3b7f31e15877d0e718df2d4bf532146878c9f832e5a6998414": "scripts/vault-orient-preflight.sh",
     "5506f733bb7c75c57fb3f5cc534696bb5a0180719b7f1d060815bf035acf1eba": "scripts/vault.sh",
-    "30d8da43ba28f7f3c4afffea6afbae44692fdd2e7e6b5d1e99bb261dd2894430": "scripts/weekly-card.py",
+    "5b05a52f0e41d9b4e80ab2d5199d1a927d2fa9702ae16e538b9dd198d162be9e": "scripts/weekly-card.py",
     "32c7c39b37a9b90097158891e3f75df69110528f73e36b4a10157e6b787ea2d2": "scripts/wiki-galaxy/build.py",
     "55c3de294c860151146b82a41d161244fb8574ed781a8594a193b43f9c4b71cc": "skills/build/parts/keychain.py",
-    "5c580653a2e1ae093829a6b164f7fe77c6c2bb355fea4335371ffe0ce599e75f": "skills/build/parts/scaffold.py",
+    "ab49d9f8c7d95c1996ea1e6bc185a3b4ac4321bb168be20dad15f9c8c75d9fac": "skills/build/parts/publish.py",
+    "a6131913e86fdb8c67dbc9251fed721ec670905e944e8c5e5a1aff72b77ec741": "skills/build/parts/scaffold.py",
+    "452bfff60a78080f4987e9d71c62cfad769fd60445bdd1afc31023c97a96b65d": "skills/build/parts/share.py",
+    "90584cbb4c1f48899470712aa96f459dd2d927bd90f4143210d59077b6e341e0": "skills/build/parts/sweep.py",
+    "bd68a8eedbda1a8227e692661459cb3c963a6f8224ecd42f0998a98ccd7154c8": "skills/build/parts/think-job.py",
     "c6f8b5cb80264cf421df250ceb8f0c6fea1ec183ac7207ae7af7e485664d91f3": "skills/wiki-to-pdf/render.py",
-    "1da3d3ec351cd83dd2261da2116ec829b3399c34e5e4c32e301c8e24c2efb570": "tools/test-build.py",
+    "3b9bf0e7879138d40d31e06cbf2a1f997e60bc2fced09a48c70d116e7d2ea09a": "tools/test-build.py",
     "f646bbc2029f01cce0edbca5a93dc0404519aac869c916b3d78b02ea135695fe": "voice/install-voice.py",
 }
 # --- KNOWN_SAFE end ---
@@ -245,10 +275,16 @@ GNU_PREFIXED = {"rm", "rmdir", "unlink", "mv", "cp", "ln", "link", "install",
 PROTECTED_DIRS_REL = ((".claude", "hooks"), (".codex", "hooks"))
 PROTECTED_FILES_REL = ((".claude", "settings.json"),
                        (".claude", "settings.local.json"),
-                       (".codex", "hooks.json"))
+                       (".codex", "hooks.json"),
+                       # (v5.2) the two files that tell the guard where the
+                       # wiki is and where build folders live: a line written
+                       # into either widens or narrows what may be deleted
+                       (".config", "moblee", "vault-path"),
+                       (".config", "moblee", "build-roots"))
 SETTINGS_RE = re.compile(r"(?:^|/)\.claude/settings[^/]*\.json$")
 PROTECTED_SPELL_RE = re.compile(
-    r"\.claude/+(?:settings[^/\s'\"]*\.json|hooks(?:/|$|[\s'\"]))|\.codex/+hooks", re.I)
+    r"\.claude/+(?:settings[^/\s'\"]*\.json|hooks(?:/|$|[\s'\"]))|\.codex/+hooks"
+    r"|\.config/+moblee/+(?:vault-path|build-roots)(?:$|[\s'\"])", re.I)
 LOCAL_HOME = os.path.expanduser("~")
 CHMODS = {"chmod", "chown", "chgrp", "chflags", "setfacl", "chacl", "lchmod",
           "lchown"}
@@ -453,7 +489,17 @@ def find_vault(cwd):
         if parent == p:
             break
         p = parent
-    return git_root or os.path.abspath(cwd)
+    found = git_root or os.path.abspath(cwd)
+    # (v5.2) A folder under a build root with no wiki above it is a build
+    # folder, which the guard treats as no vault at all: the recorded vault
+    # stays protected by its absolute path wherever the command starts.
+    try:
+        folder = None if known_root_of(found) else build_folder_of(found)
+        if folder and not _wiki_between(_real(os.path.normpath(found)), folder):
+            return NO_VAULT
+    except Exception:
+        pass
+    return found
 
 
 def expand(path, assigns=None):
@@ -579,6 +625,192 @@ def throwaway_target(target, assigns=None, allow_root=False):
         if real.startswith(root + os.sep) or (allow_root and real == root):
             return True
     return False
+
+
+# (v5.2) Build folders. The build skill places anything that needs installing
+# outside the wiki, at ~/Apps/<name>/, with its own git history and nothing of
+# the owner's that is not also in git; the wiki keeps the thing's page, a
+# pointer folder and anything worth keeping under wiki/data/<name>/. Ordinary
+# work in such a folder means removing a dependencies or build folder, writing
+# over a generated file, checking out or stashing in its own repository. The
+# guard refused all of these, because its list of throwaway places stopped at
+# the temporary folders, and the first owner to meet that switched the guard
+# off by hand. So a path strictly inside a build folder is disposable, with
+# three exceptions that are never: the folder itself (the owner removes a
+# thing by hand), its .git, and its data/ and state/ folders. The wiki is
+# never a build folder, whatever folder it lives in, and nothing inside any
+# known vault is ever disposable.
+BUILD_KEEP = ("data", "state", ".git")
+
+
+def build_roots():
+    """The folders under which build folders live: ~/Apps, plus any named in
+    ~/.config/moblee/build-roots (one per line) or MOBLEE_BUILD_ROOTS
+    (colon-separated). Read at call time: the guard runs once per command."""
+    roots = [os.path.expanduser("~/Apps")]
+    try:
+        extra = os.environ.get("MOBLEE_BUILD_ROOTS", "")
+        for r in extra.split(":"):
+            if r.strip():
+                roots.append(os.path.expanduser(r.strip()))
+        cfg = os.path.join(os.path.expanduser("~"), ".config", "moblee", "build-roots")
+        with open(cfg, "r") as fh:
+            for line in fh.read(4096).splitlines():
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    roots.append(os.path.expanduser(line))
+    except OSError:
+        pass
+    except Exception:
+        pass
+    out = []
+    homes = {_fold(_real(h)) for h in _homes()}
+    for r in roots:
+        if not os.path.isabs(r):
+            continue
+        n = os.path.normpath(r)
+        # a root that would make the disk, a home or a wiki "build material"
+        # is no root at all
+        if n == "/" or _fold(_real(n)) in homes or known_root_of(n):
+            continue
+        out.append(n)
+    return out
+
+
+def _is_real_vault(v):
+    """True if v is a wiki (recorded, or holding an instruction file beside a
+    wiki/ folder) rather than the guard's fallback of "the folder the session
+    started in", which from ~ would otherwise swallow ~/Apps."""
+    if not v or v == NO_VAULT:
+        return False
+    if known_root_of(v):
+        return True
+    try:
+        return (any(os.path.isfile(os.path.join(v, f)) for f in INSTRUCTION_FILES)
+                and os.path.isdir(os.path.join(v, "wiki")))
+    except OSError:
+        return False
+
+
+def _wiki_between(real, folder):
+    """True if any folder from real up to and including the build folder is
+    a wiki (an instruction file beside wiki/): a wiki that lives under ~/Apps
+    is a wiki, never build material."""
+    try:
+        p = real if os.path.isdir(real) else os.path.dirname(real)
+        stop = _fold(folder)
+        for _ in range(64):
+            if (any(os.path.isfile(os.path.join(p, f)) for f in INSTRUCTION_FILES)
+                    and os.path.isdir(os.path.join(p, "wiki"))):
+                return True
+            if _fold(p) == stop:
+                break
+            parent = os.path.dirname(p)
+            if parent == p:
+                break
+            p = parent
+    except OSError:
+        return True
+    return False
+
+
+def build_keep_reason(target, assigns=None):
+    """A reason string if target is a build folder itself or one of the parts
+    of it that are never disposable (.git, data, state), else None."""
+    if not target or UNRESOLVABLE_RE.search(target):
+        return None
+    p = resolve(target, assigns)
+    if p is None:
+        return None
+    real = _real(os.path.normpath(p))
+    folder = build_folder_of(real)
+    if not folder:
+        return None
+    if _fold(real) == _fold(folder):
+        return "touches a build folder itself (%s), which only the owner removes or moves" % target
+    try:
+        first = os.path.relpath(real, folder).split(os.sep)[0]
+    except ValueError:
+        return None
+    if _fold(first) in BUILD_KEEP:
+        return "touches a build folder's %s (%s), which is never deleted or moved" % (first, target)
+    return None
+
+
+def build_folder_of(path):
+    """The build folder (<root>/<name>) a path is in or under, as a real path,
+    or None. The root itself (~/Apps) is not a build folder. Everything is
+    compared in real-path form, because a home under /var/folders or a
+    symlinked ~/Apps spells the same folder two ways."""
+    if not path or not os.path.isabs(path):
+        return None
+    real = _real(os.path.normpath(path))
+    for root in build_roots():
+        rb = _real(os.path.normpath(root))
+        if not in_root(real, rb):
+            continue
+        try:
+            rel = os.path.relpath(real, rb)
+        except ValueError:
+            continue
+        parts = [p for p in rel.split(os.sep) if p and p != "."]
+        if not parts or parts[0] == "..":
+            continue
+        return os.path.join(rb, parts[0])
+    return None
+
+
+def build_target(target, assigns=None):
+    """True iff target resolves to a path strictly inside a build folder,
+    outside every vault, and not the folder itself, its .git, data/ or state/."""
+    if not target or UNRESOLVABLE_RE.search(target):
+        return False
+    p = resolve(target, assigns)
+    if p is None:
+        return False
+    real = _real(os.path.normpath(p))
+    if _is_real_vault(STATE["vault"]) and inside(real, STATE["vault"]):
+        return False
+    if known_root_of(real) or known_root_of(p) or is_protected(target):
+        return False
+    folder = build_folder_of(real)
+    if not folder:
+        return False
+    if _fold(real) == _fold(folder):
+        return False  # the thing itself is the owner's to remove
+    try:
+        rel = os.path.relpath(real, folder)
+    except ValueError:
+        return False
+    first = rel.split(os.sep)[0]
+    if _fold(first) in BUILD_KEEP or first == "..":
+        return False
+    if _wiki_between(real, folder):
+        return False  # a wiki under ~/Apps is a wiki
+    return True
+
+
+def disposable_target(target, assigns=None, allow_root=False):
+    """A target that may be deleted: throwaway (under /tmp and kin) or build
+    material (strictly inside a build folder)."""
+    return throwaway_target(target, assigns, allow_root) or build_target(target, assigns)
+
+
+def in_build_repo():
+    """True iff the command runs inside a build folder (after any cd or
+    git -C), which is not a known vault."""
+    cwd = STATE.get("cwd")
+    if not cwd:
+        return False
+    real = _real(os.path.normpath(cwd))
+    if known_root_of(real) or known_root_of(cwd):
+        return False
+    if _is_real_vault(STATE["vault"]) and inside(real, STATE["vault"]):
+        return False
+    folder = build_folder_of(real)
+    if folder is None:
+        return False
+    return not _wiki_between(real, folder)
 
 
 def forbidden_destination(dest_raw):
@@ -773,7 +1005,10 @@ def _known_vault_content(resolved):
     if not k:
         return None
     try:
-        rel = os.path.relpath(resolved, k)
+        # (v5.2) both in real-path form: a link into the wiki from elsewhere
+        # resolved to the root but not to the page, so `> link/Page.md` read
+        # as a new file
+        rel = os.path.relpath(_real(resolved), _real(k))
     except ValueError:
         return False
     if rel.startswith(".."):
@@ -792,6 +1027,12 @@ def is_content_path(path_raw):
         known = _known_vault_content(resolved)
         if known is not None:
             return known
+        # (v5.2) a wiki that lives under a build root is a wiki: an existing
+        # file in it is content wherever the command starts
+        real = _real(os.path.normpath(resolved))
+        folder = build_folder_of(real)
+        if folder and _wiki_between(real, folder):
+            return os.path.isfile(real)
     if vault and resolved and vault != NO_VAULT:
         if not os.path.isfile(resolved):
             return False
@@ -1135,7 +1376,7 @@ def quoted_literals(text):
 # ---------------------------------------------------------------- keyword scan
 def drop_throwaway_py_calls(body, assigns):
     def rep(m):
-        return " " if throwaway_target(m.group(2), assigns) else m.group(0)
+        return " " if disposable_target(m.group(2), assigns) else m.group(0)
     return PY_DEL_CALL_RE.sub(rep, body)
 
 
@@ -2240,11 +2481,14 @@ def rule_deleters(b, head, rest, assigns, allow_root=False):
             if not after_dd and t.startswith("-") and len(t) > 1:
                 continue
             targets.append(t)
-        if targets and all(throwaway_target(t, assigns, allow_root) for t in targets):
-            return None  # every target is a throwaway file outside the vault
+        if targets and all(disposable_target(t, assigns, allow_root) for t in targets):
+            return None  # every target is throwaway, or build material
         return ("deletes files (`%s`; only throwaway targets under /tmp, "
-                "$TMPDIR, ~/.cache or ~/Library/Caches are allowed, and every "
-                "target must be a resolvable path)" % head)
+                "$TMPDIR, ~/.cache or ~/Library/Caches are allowed, or files "
+                "inside a build folder under ~/Apps/<name>/ (never the folder "
+                "itself, its .git, data or state), and every target must be a "
+                "resolvable path. Finished material in the wiki moves, and the "
+                "owner removes a thing by hand)" % head)
     if b in HARD_DELETERS:
         return "deletes or truncates files (`%s`)" % head
     if b == "mkfs" or b.startswith("mkfs."):
@@ -2281,9 +2525,10 @@ def rule_find(b, rest, depth, assigns):
             break
         start_paths.append(t)
     if "-delete" in low:
-        if start_paths and all(throwaway_target(p, assigns, True) for p in start_paths):
+        if start_paths and all(disposable_target(p, assigns, True) for p in start_paths):
             return None
-        return "find -delete removes files (only under throwaway roots is it allowed)"
+        return ("find -delete removes files (only under throwaway roots or inside "
+                "a build folder is it allowed)")
     i = 0
     while i < len(rest):
         t = low[i]
@@ -2427,6 +2672,13 @@ def _clobber_checks(cmd, args, vault_bound, dest_flag_t=True):
     r = _protected_move_copy(cmd, flags, sources, dest)
     if r:
         return r
+    # (v5.2) a build folder itself, its .git, data and state are never moved
+    # by the assistant, whatever the destination; copying them is fine
+    if cmd in ("mv", "git mv"):
+        for s in sources:
+            why = build_keep_reason(s)
+            if why:
+                return "%s %s" % (cmd, why)
     no_clobber = any((f.startswith("-") and not f.startswith("--") and "n" in f[1:])
                      or f == "--no-clobber" for f in flags)
     if cmd == "ln" and not any(f.startswith("-") and not f.startswith("--") and "f" in f[1:]
@@ -2450,7 +2702,10 @@ def _clobber_checks(cmd, args, vault_bound, dest_flag_t=True):
     resolved = resolve(dest)
     if resolved is None:
         return None
+    # (v5.2) a generated file inside a build folder may be written over
     if os.path.isfile(resolved):
+        if build_target(dest):
+            return None
         return "%s would silently overwrite the existing file %s" % (cmd, dest)
     if os.path.isdir(resolved):
         for s in sources:
@@ -2458,6 +2713,8 @@ def _clobber_checks(cmd, args, vault_bound, dest_flag_t=True):
                 continue
             cand = os.path.join(resolved, os.path.basename(s.rstrip("/")))
             if os.path.isfile(cand):
+                if build_target(cand):
+                    continue
                 return ("%s would silently overwrite the existing file %s"
                         % (cmd, os.path.join(dest, os.path.basename(s))))
     return None
@@ -2585,8 +2842,21 @@ def rule_git(b, rest, depth, assigns=None):
             worktree = t.split("=", 1)[1]
             i += 1
             continue
+        # (v5.2) --git-dir and core.worktree point git at another repository
+        # from wherever the command starts, so the folder is not where the
+        # command is judged; the build-folder freedoms never apply then
+        if t == "--git-dir" and i + 1 < n:
+            base_bad = True
+            i += 2
+            continue
+        if t.startswith("--git-dir="):
+            base_bad = True
+            i += 1
+            continue
         if t == "-c" and i + 1 < n:
             key, _sep, val = rest[i + 1].partition("=")
+            if key.lower() in ("core.worktree", "core.gitdir"):
+                base_bad = True
             if GIT_CMD_CONFIG_RE.match(key.lower()) and val:
                 r = _git_config_value(key, val, depth)
                 if r:
@@ -2605,6 +2875,8 @@ def rule_git(b, rest, depth, assigns=None):
                 return "%s runs a command that %s" % (name, r)
     if worktree is None and assigns:
         worktree = assigns.get("GIT_WORK_TREE")
+    if assigns and (assigns.get("GIT_DIR") or assigns.get("GIT_WORK_TREE")):
+        base_bad = True  # (v5.2) the same, set in the environment
     if i >= n:
         return None
     saved = STATE["cwd"]
@@ -2638,6 +2910,10 @@ def _git_sub(rest, i, depth, base_bad=False, worktree=None):
     if sub == "restore" and ("--staged" in low or "-S" in args) \
             and "--worktree" not in low and "-W" not in args:
         return None
+    # (v5.2) in a build folder's own repository, restoring a file, stashing
+    # and checking out paths are ordinary work; history rewrites stay refused
+    if sub == "restore" and worktree is None and not base_bad and in_build_repo():
+        return None
     if sub in ("clean", "rebase", "filter-branch", "filter-repo", "prune", "restore"):
         return "git %s rewrites or discards work" % sub
     if sub == "reset":
@@ -2656,6 +2932,10 @@ def _git_sub(rest, i, depth, base_bad=False, worktree=None):
             if a.startswith("+") or a.startswith(":"):
                 return "git push with a forcing or deleting refspec"
     if sub == "stash":
+        if "drop" in low or "clear" in low:
+            return "git stash %s discards stashed work" % ("drop" if "drop" in low else "clear")
+        if worktree is None and not base_bad and in_build_repo():
+            return None
         if not args or low[0] not in ("list", "show"):
             return "git stash hides uncommitted work"
     if sub in ("branch", "tag"):
@@ -2746,6 +3026,9 @@ def _git_checkout(args, base_bad=False, worktree=None):
         if a.startswith(":"):
             return ("git checkout %s uses pathspec magic, which reaches files that "
                     "exist anywhere in the repository" % a)
+    # (v5.2) a build folder's own repository: checking out a file is ordinary
+    if worktree is None and not base_bad and in_build_repo():
+        return None
     if paths is None:
         if not nonflag:
             return None

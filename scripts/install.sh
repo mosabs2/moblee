@@ -493,7 +493,7 @@ mkdir -p "$VAULT_LOCATION/scripts"
 # (v0.10.0) turn-end-commit.py is the end-of-reply save. It lives in the wiki
 # beside the commit gate, and the safety step below registers it as the
 # assistant's Stop hook once it is there.
-for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh log-append.py weekly-card.py turn-end-commit.py; do
+for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh log-append.py weekly-card.py turn-end-commit.py compact-rotate.py; do
   if [[ -f "$SCRIPT_DIR/$tool" ]]; then
     cp "$SCRIPT_DIR/$tool" "$VAULT_LOCATION/scripts/$tool"
   fi

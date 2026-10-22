@@ -683,7 +683,7 @@ def test_guard_version(doctor, work):
           bool(said) and re.fullmatch(r"v\d+(\.\d+)*", said or "") is not None, str(said))
     # Bump this with the guard: it is the one place that says, in a test, which
     # guard this release ships.
-    check("guardver", "and this release ships v5.1", said == "v5.1", str(said))
+    check("guardver", "and this release ships v5.2", said == "v5.2", str(said))
 
     # 2. A guard that is the pack's own copy: the version said once, beside the
     #    comparison and not instead of it.
@@ -1872,6 +1872,252 @@ def test_rules(doctor, work):
           and "None of its sections still match" in said)
 
 
+def test_permissions(doctor, work):
+    # (0.12.0) The builder's rules, the working mode and auto mode's exceptions,
+    # read from the wiki's settings and from Claude's own settings file.
+    import json as _json
+    was = doctor.SETTINGS
+    try:
+        home = work / "perm-home"
+        vault = home / "Wiki"
+        (vault / "wiki").mkdir(parents=True, exist_ok=True)
+        (vault / ".claude").mkdir(parents=True, exist_ok=True)
+        settings = home / "settings.json"
+        local = vault / ".claude" / "settings.local.json"
+        old_allow = ["Bash(git add:*)"] + ["Bash(tool%d:*)" % i for i in range(49)]
+        # 1. the set from before 0.12.0: wiki-only rules, no mode, no exceptions
+        local.write_text(_json.dumps({"permissions": {"allow": old_allow, "deny": ["Bash(rm:*)"]}}))
+        settings.write_text(_json.dumps({"permissions": {}}))
+        doctor.SETTINGS = settings
+        f = doctor.Findings()
+        doctor.check_settings(f, vault)
+        codes = [r.get("guide") for r in f.rows]
+        levels = {r.get("guide"): r["level"] for r in f.rows if r.get("guide")}
+        said = " ".join(r["text"] for r in f.rows)
+        check("perm", "the older rule set is named, at LOOK, as F55",
+              "F55" in codes and levels.get("F55") == doctor.LOOK, str(codes))
+        check("perm", "with no mode set, the line says so and names what each mode does, with no code",
+              "not set" in said and "Manual asks" in said and "F0" not in said.split("mode")[0][-5:], said[:120])
+        check("perm", "with no auto-mode exceptions, F56 at LOOK",
+              "F56" in codes and levels.get("F56") == doctor.LOOK, str(codes))
+        check("perm", "F01 is not raised when fifty rules are there",
+              "F01" not in codes, str(codes))
+        # 2. the 0.12.0 set: the builds' home, Accept edits, both exceptions
+        local.write_text(_json.dumps({"permissions": {
+            "allow": old_allow + ["Read(~/Apps/**)", "Edit(~/Apps/**)"],
+            "deny": ["Bash(trash:*)"],
+            "defaultMode": "acceptEdits",
+            "additionalDirectories": [str(home / "Apps")]}}))
+        settings.write_text(_json.dumps({"permissions": {}, "autoMode": {"allow": [
+            "$defaults",
+            "Moblee's check-up (scripts/moblee-doctor.py) may write its health card into raw/.",
+            "Moblee's end-of-reply save (scripts/turn-end-commit.py) may commit the wiki."]}}))
+        f = doctor.Findings()
+        doctor.check_settings(f, vault)
+        codes = [r.get("guide") for r in f.rows]
+        said = " ".join(r["text"] for r in f.rows)
+        check("perm", "with the 0.12.0 set, neither F55 nor F56 is raised",
+              "F55" not in codes and "F56" not in codes, str(codes))
+        check("perm", "building outside the wiki is reported covered",
+              "Building outside the wiki is covered" in said, said[:120])
+        check("perm", "the mode is reported in words an owner can read",
+              "Accept edits" in said and "does not ask" in said, said[:160])
+        check("perm", "auto mode's exceptions are reported known",
+              "knows Moblee's own check-up" in said, said[:120])
+        # 3. a mode the owner chose themselves is reported as theirs, not changed
+        local.write_text(_json.dumps({"permissions": {
+            "allow": old_allow + ["Edit(~/Apps/**)"], "defaultMode": "plan"}}))
+        f = doctor.Findings()
+        doctor.check_settings(f, vault)
+        said = " ".join(r["text"] for r in f.rows)
+        check("perm", "an owner's own mode is read back as set", "Plan (Claude reads" in said, said[:120])
+        # 4. a settings file whose autoMode is not a dict does not crash the check
+        settings.write_text(_json.dumps({"permissions": {}, "autoMode": "odd"}))
+        f = doctor.Findings()
+        doctor.check_settings(f, vault)
+        codes = [r.get("guide") for r in f.rows]
+        check("perm", "an odd autoMode value reads as no exceptions, not an error", "F56" in codes, str(codes))
+    finally:
+        doctor.SETTINGS = was
+
+
+def test_backup(doctor, work):
+    # (0.12.0) the weekly copy of the wiki's history, and Time Machine
+    import datetime as _dt
+    import os as _os
+    was_dir, was_tm = doctor.BACKUPS_DIR, doctor.tm_destination_count
+    try:
+        folder = work / "backups"
+        folder.mkdir(parents=True, exist_ok=True)
+        doctor.BACKUPS_DIR = folder
+        doctor.tm_destination_count = lambda: 1
+        f = doctor.Findings()
+        doctor.check_backup(f, None)
+        said = " ".join(r["text"] for r in f.rows)
+        codes = [r.get("guide") for r in f.rows]
+        check("backup", "with no copy and the weekly check not chosen, it is said at OK and no code is raised",
+              "F57" not in codes and "No copy of the wiki's history" in said, str(codes))
+        fresh = folder / "wiki-2026-10-17.bundle"
+        fresh.write_bytes(b"x")
+        f = doctor.Findings()
+        doctor.check_backup(f, None)
+        said = " ".join(r["text"] for r in f.rows)
+        check("backup", "a copy made this week is reported at OK with its age", "day(s) old" in said and "F57" not in
+              [r.get("guide") for r in f.rows], said[:120])
+        old = _dt.datetime.now() - _dt.timedelta(days=40)
+        _os.utime(fresh, (old.timestamp(), old.timestamp()))
+        f = doctor.Findings()
+        doctor.check_backup(f, None)
+        codes = [r.get("guide") for r in f.rows]
+        check("backup", "a copy older than three weeks is F57 at LOOK",
+              "F57" in codes and [r["level"] for r in f.rows if r.get("guide") == "F57"] == [doctor.LOOK], str(codes))
+        for i in range(30):
+            (folder / f"wiki-2026-{(i % 12) + 1:02d}-{(i % 27) + 1:02d}-{i}.bundle").write_bytes(b"x")
+        f = doctor.Findings()
+        doctor.check_backup(f, None)
+        said = " ".join(r["text"] for r in f.rows)
+        check("backup", "with many copies the oldest is named for the owner's own hand",
+              "may be removed by the owner's own hand" in said, said[:160])
+        doctor.tm_destination_count = lambda: 0
+        f = doctor.Findings()
+        doctor.check_backup(f, None)
+        check("backup", "Time Machine with nowhere to copy to is F58", "F58" in [r.get("guide") for r in f.rows])
+        doctor.tm_destination_count = lambda: None
+        f = doctor.Findings()
+        doctor.check_backup(f, None)
+        check("backup", "when Time Machine cannot be read, it is CANNOT SEE and no code",
+              any(r["level"] == doctor.UNSEEN for r in f.rows) and "F58" not in [r.get("guide") for r in f.rows])
+        check("backup", "the check-up has a real Time Machine reader that returns a number or None",
+              was_tm() is None or isinstance(was_tm(), int))
+    finally:
+        doctor.BACKUPS_DIR, doctor.tm_destination_count = was_dir, was_tm
+
+
+def test_trust(doctor, work):
+    # (0.12.0) the folder Claude trusts, read from Claude's own state file
+    import json as _json
+    was = doctor.CLAUDE_JSON
+    try:
+        vault = work / "trust-vault"
+        vault.mkdir(parents=True, exist_ok=True)
+        state = work / "claude-state.json"
+        doctor.CLAUDE_JSON = state
+
+        def run_it(assistant="claude"):
+            f = doctor.Findings()
+            doctor.check_trust(f, vault, assistant)
+            return [r.get("guide") for r in f.rows], [r["level"] for r in f.rows], " ".join(r["text"] for r in f.rows)
+
+        codes, levels, said = run_it()
+        check("trust", "no state file at all is CANNOT SEE, not a finding", levels == [doctor.UNSEEN] and "F60" not in codes, said)
+        state.write_text("{}")
+        codes, levels, said = run_it()
+        check("trust", "a wiki not in the state file is F60 at LOOK", codes == ["F60"] and levels == [doctor.LOOK], said[:120])
+        state.write_text(_json.dumps({"projects": {str(vault): {"hasTrustDialogAccepted": False}}}))
+        codes, levels, said = run_it()
+        check("trust", "trust answered no is F60", codes == ["F60"], said[:120])
+        state.write_text(_json.dumps({"projects": {str(vault): {"hasTrustDialogAccepted": True}}}))
+        codes, levels, said = run_it()
+        check("trust", "trust answered yes is OK", codes == [None] and levels == [doctor.OK], said[:120])
+        import os as _os
+        state.write_text(_json.dumps({"projects": {_os.path.realpath(str(vault)): {"hasTrustDialogAccepted": True}}}))
+        codes, levels, said = run_it()
+        check("trust", "trust under the folder's real path counts too", codes == [None], said[:120])
+        state.write_text("{}")
+        codes, levels, said = run_it("chatgpt")
+        check("trust", "a ChatGPT wiki is not asked", codes == [] and levels == [])
+        state.write_text("[]")
+        codes, levels, said = run_it()
+        check("trust", "a state file of the wrong shape is F60 rather than a crash", codes == ["F60"], said[:120])
+    finally:
+        doctor.CLAUDE_JSON = was
+
+
+def test_recall(doctor, work):
+    # (0.12.0) memory search: not chosen is OK; each half-set-up shape is F59
+    import datetime as _dt
+    import json as _json
+    import os as _os
+    was_settings, was_cache, was_ollama = doctor.SETTINGS, doctor.RECALL_CACHE, doctor.ollama_present
+    try:
+        vault = work / "recall-vault"
+        (vault / "wiki").mkdir(parents=True, exist_ok=True)
+        settings = work / "recall-settings.json"
+        settings.write_text("{}")
+        cache = work / "recall-cache"
+        doctor.SETTINGS, doctor.RECALL_CACHE = settings, cache
+        doctor.ollama_present = lambda: True
+
+        def codes_of(v):
+            f = doctor.Findings()
+            doctor.check_recall(f, v)
+            return [r.get("guide") for r in f.rows], " ".join(r["text"] for r in f.rows), f
+
+        codes, said, f = codes_of(vault)
+        check("recall", "not chosen is one OK line and no code", codes == [None] and "not chosen" in said, said[:100])
+        hook = {"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command",
+                                                           "command": f'python3 "{vault}/scripts/recall/recall-inject.py" 2>/dev/null || true'}]}]}}
+        settings.write_text(_json.dumps(hook))
+        codes, said, f = codes_of(vault)
+        check("recall", "a hook pointing at scripts that are not there is F59 at LOOK",
+              codes == ["F59"] and f.rows[0]["level"] == doctor.LOOK and "not in this wiki" in said, said[:120])
+        (vault / "scripts" / "recall").mkdir(parents=True, exist_ok=True)
+        (vault / "scripts" / "recall" / "recall.py").write_text("# stub\n")
+        settings.write_text("{}")
+        codes, said, f = codes_of(vault)
+        check("recall", "scripts present but no hook is F59", codes == ["F59"] and "has not been told" in said, said[:120])
+        settings.write_text(_json.dumps(hook))
+        codes, said, f = codes_of(vault)
+        check("recall", "a hook whose own file is missing (the wiki moved) is F59 and says so",
+              codes == ["F59"] and "no longer at" in said, said[:120])
+        (vault / "scripts" / "recall" / "recall-inject.py").write_text("# stub\n")
+        was_model = doctor.ollama_has_model
+        doctor.ollama_has_model = lambda name="x": None
+        doctor.ollama_present = lambda: False
+        codes, said, f = codes_of(vault)
+        check("recall", "Ollama missing is F59 and says so", codes == ["F59"] and "Ollama" in said, said[:120])
+        doctor.ollama_present = lambda: True
+        codes, said, f = codes_of(vault)
+        check("recall", "no index yet is F59", codes == ["F59"] and "not been built" in said, said[:120])
+        cache.mkdir(parents=True, exist_ok=True)
+        meta = cache / "meta.json"
+        meta.write_text(_json.dumps({"count": 42}))
+        codes, said, f = codes_of(vault)
+        check("recall", "all four parts in place is OK with the section count",
+              codes == [None] and "42 sections" in said, said[:120])
+        old = _dt.datetime.now() - _dt.timedelta(days=20)
+        _os.utime(meta, (old.timestamp(), old.timestamp()))
+        codes, said, f = codes_of(vault)
+        check("recall", "an index older than two weeks is F59 with its age", codes == ["F59"] and "20 days old" in said, said[:120])
+        now = _dt.datetime.now()
+        _os.utime(meta, (now.timestamp(), now.timestamp()))
+        doctor.ollama_has_model = lambda name="x": False
+        codes, said, f = codes_of(vault)
+        check("recall", "the model not fetched is F59", codes == ["F59"] and "not been fetched" in said, said[:120])
+        doctor.ollama_has_model = lambda name="x": None
+        meta.write_text(_json.dumps({"count": 42, "vault": str(work / "elsewhere")}))
+        codes, said, f = codes_of(vault)
+        check("recall", "an index built for another place of the wiki is F59", codes == ["F59"] and "another place" in said, said[:120])
+        meta.write_text(_json.dumps({"count": 42, "vault": str(vault)}))
+        (cache / "rebuild.log").write_text("2026-10-22 04:40 +0100 [launchd] FAILED (exit 1) after 3s: boom\n")
+        codes, said, f = codes_of(vault)
+        check("recall", "a last refresh that failed is F59", codes == ["F59"] and "last refresh failed" in said, said[:120])
+        (cache / "rebuild.log").write_text("2026-10-22 04:40 +0100 [launchd] ok in 2s: index built\n")
+        codes, said, f = codes_of(vault)
+        check("recall", "and a refresh that succeeded is OK again", codes == [None], said[:120])
+        doctor.ollama_has_model = was_model
+        settings.write_text("{not json")
+        codes, said, f = codes_of(vault)
+        check("recall", "an unreadable settings file does not crash the check", "F59" in codes, said[:120])
+        check("recall", "the check-up has a real Ollama reader", isinstance(was_ollama(), bool))
+        doctor.RECALL_CACHE = None
+        a, b = doctor.recall_cache_dir(vault), doctor.recall_cache_dir(work / "elsewhere")
+        check("recall", "the cache folder is one per wiki, under the shared folder",
+              a != b and a.parent == b.parent == doctor.HOME / ".cache" / "moblee-recall" and len(a.name) == 12, str(a))
+    finally:
+        doctor.SETTINGS, doctor.RECALL_CACHE, doctor.ollama_present = was_settings, was_cache, was_ollama
+
+
 def test_weights(doctor, work):
     # (v0.9.4) The rules file's size used to go out as an OK row saying the
     # figure and the cap, immediately above the PROBLEM row saying it was over
@@ -2213,6 +2459,10 @@ def main():
     test_files(doctor, work)
     test_accepted(doctor, work)
     test_rules(doctor, work)
+    test_permissions(doctor, work)
+    test_backup(doctor, work)
+    test_trust(doctor, work)
+    test_recall(doctor, work)
     test_weights(doctor, work)
     test_report_names(doctor, work)
     test_card(doctor, work)

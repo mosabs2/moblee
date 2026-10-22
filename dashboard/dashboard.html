@@ -953,5 +953,23 @@ setInterval(refresh,60000); setInterval(updateClock,1000);
   window.addEventListener('beforeunload', leaving);
 })();
 </script>
+<script>
+// (0.12.0) The owner's own settings, kept in dashboard/settings.json, which an
+// update never replaces. Today: whether replies are read aloud. The box reads
+// the file on load and writes it on every change, so the choice outlives the
+// page being refreshed by an update.
+(function(){
+  var box = document.getElementById('autoread');
+  if(!box) return;
+  fetch('/api/settings').then(function(r){return r.json();}).then(function(s){
+    if(s && s.read_aloud === false) box.checked = false;
+    if(s && s.read_aloud === true) box.checked = true;
+  }).catch(function(){});
+  box.addEventListener('change', function(){
+    fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({read_aloud: !!box.checked})}).catch(function(){});
+  });
+})();
+</script>
 </body>
 </html>

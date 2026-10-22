@@ -122,6 +122,8 @@ case_happy() {
   same  "$(cd "$SBX" && git status --porcelain | wc -l | tr -d ' ')" "0" "nothing is left staged"
   has   "$SBX/wiki/log.md" "the owner wrote this" "the owner's own content is untouched"
   has   "$SBX/wiki/Golf.md" "A page of the owner's own" "and so are their own pages"
+  # (0.12.0) an existing wiki is marked trusted by the update too
+  has   "$HOME_DIR/.claude.json" "hasTrustDialogAccepted" "the wiki's folder is marked trusted in Claude's state file"
   # (v0.9.4) This fixture's rules file is nothing the v0.9.4 engine recognises,
   # so the engine rewrites none of it and removes none of it. The rules that
   # stop harm must still reach it: they only ever ADD, and a file Moblee cannot
@@ -185,6 +187,49 @@ case_extras() {
   hasnt "$HOME_DIR/committed-files.txt" "scripts/orient-extras.sh" "and their check is not in it"
   ( cd "$SBX" && git status --porcelain -- scripts/orient-extras.sh ) > "$HOME_DIR/theirs-to-commit.txt" 2>/dev/null
   has "$HOME_DIR/theirs-to-commit.txt" "scripts/orient-extras.sh" "which is still theirs to commit"
+}
+
+# (0.12.0) The owner's own dashboard files: the chart list their assistant adds
+# to, and the settings the page writes. An update that replaced dashboard/
+# wholesale undid one owner's read-aloud choice.
+case_dashboard_kept() {
+  start dashboard_kept
+  make_wiki "$HOME_DIR" "$SBX"
+  run_update "$HOME_DIR" "$SBX"
+  isfile "$SBX/dashboard/dashboard-charts.json" "the dashboard's chart list is laid down"
+  printf '{"charts": [{"id": "mine", "title": "A chart of my own"}]}\n' > "$SBX/dashboard/dashboard-charts.json"
+  printf '{"read_aloud": false}\n' > "$SBX/dashboard/settings.json"
+  ( cd "$SBX" && git add -A -- dashboard && git commit -qm "my dashboard" ) >/dev/null 2>&1
+  cp "$FIXTURES/old-wiki/VERSION" "$SBX/VERSION"
+  ( cd "$SBX" && git add -- VERSION && git commit -qm "back to the old version" ) >/dev/null 2>&1
+  run_update "$HOME_DIR" "$SBX"
+  has "$SBX/dashboard/dashboard-charts.json" "A chart of my own" "the owner's chart list survives the refresh"
+  has "$SBX/dashboard/settings.json" "read_aloud" "and so does the dashboard's settings file"
+  has "$HOME_DIR/update-output.txt" "kept your own dashboard/dashboard-charts.json" "and the run says so"
+  isfile "$SBX/dashboard/server.py" "while the dashboard's own code is still refreshed"
+}
+
+# --------------------------------------------------------------------------
+# (0.12.0) A wiki that chose memory search carries copies of its scripts under
+# scripts/recall/. An update refreshes an older copy and keeps it; a wiki that
+# never chose the item is left without them.
+case_recall_refreshed() {
+  start recall_refreshed
+  make_wiki "$HOME_DIR" "$SBX"
+  run_update "$HOME_DIR" "$SBX"
+  if [[ -e "$SBX/scripts/recall" ]]; then bad "a wiki that never chose memory search gets no scripts/recall/"; else ok "a wiki that never chose memory search gets no scripts/recall/"; fi
+  mkdir -p "$SBX/scripts/recall"
+  printf '# an older recall.py\n' > "$SBX/scripts/recall/recall.py"
+  cp "$PACKAGE_ROOT/extras/recall/recall-inject.py" "$SBX/scripts/recall/recall-inject.py"
+  ( cd "$SBX" && git add -A -- scripts && git commit -qm "memory search chosen" ) >/dev/null 2>&1
+  cp "$FIXTURES/old-wiki/VERSION" "$SBX/VERSION"
+  ( cd "$SBX" && git add -- VERSION && git commit -qm "back to the old version" ) >/dev/null 2>&1
+  run_update "$HOME_DIR" "$SBX"
+  if cmp -s "$PACKAGE_ROOT/extras/recall/recall.py" "$SBX/scripts/recall/recall.py"; then ok "the older recall.py is refreshed to the pack's"; else bad "the older recall.py is refreshed to the pack's"; fi
+  has "$HOME_DIR/update-output.txt" "refreshed scripts/recall/recall.py" "and the run says so"
+  if [[ -x "$SBX/scripts/recall/rebuild-index.sh" ]]; then ok "the missing rebuild-index.sh is added, executable"; else bad "the missing rebuild-index.sh is added, executable"; fi
+  if grep -q "refreshed scripts/recall/recall-inject.py" "$HOME_DIR/update-output.txt"; then bad "a copy already current is left alone"; else ok "a copy already current is left alone"; fi
+  if ls "$HOME_DIR"/.config/moblee/backups/*/recall.py >/dev/null 2>&1 || find "$HOME_DIR" -name 'recall.py*' -path '*backup*' | grep -q .; then ok "the older copy is kept"; else bad "the older copy is kept"; fi
 }
 
 # --------------------------------------------------------------------------
@@ -699,7 +744,7 @@ case_saving() {
       "and gives the five steps again, because an entry was added"
 }
 
-for c in happy refused extras owners_pages partly backups index protected twice shrink owners_words gitignore name_clash owners_uncommitted staged_leftovers clash_keeps_safety second_mac chatgpt_memory saving; do
+for c in happy refused extras dashboard_kept recall_refreshed owners_pages partly backups index protected twice shrink owners_words gitignore name_clash owners_uncommitted staged_leftovers clash_keeps_safety second_mac chatgpt_memory saving; do
   wanted "$c" && "case_$c"
 done
 

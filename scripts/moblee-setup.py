@@ -957,6 +957,464 @@ def check_weekly():
     return True, "the health check runs by itself every Saturday"
 
 
+# --- (0.12.0) alerts on the phone, reach from the phone, thinking jobs ----------
+
+NTFY_TOPIC = CONFIG_DIR / "ntfy-topic"
+REACH_FILE = CONFIG_DIR / "reach.json"
+CLAUDE_TOKEN = CONFIG_DIR / "claude-token"
+TAILSCALE_CLI = Path("/Applications/Tailscale.app/Contents/MacOS/Tailscale")
+
+
+def check_alerts():
+    try:
+        t = NTFY_TOPIC.read_text(encoding="utf-8").strip()
+    except OSError:
+        return False, "not set up"
+    if not t:
+        return False, "not set up"
+    return True, "alerts reach the ntfy app on your phone"
+
+
+def install_alerts():
+    import secrets
+    rule("Alerts on your phone")
+    say("  A free app called ntfy on your phone shows a line when a job of yours")
+    say("  finishes or fails. Nothing but that line leaves this Mac: it names the")
+    say("  file to look at and never sends the file.")
+    say("")
+    try:
+        code = NTFY_TOPIC.read_text(encoding="utf-8").strip()
+    except OSError:
+        code = ""
+    if not code:
+        code = "moblee-" + secrets.token_urlsafe(12).replace("_", "x").replace("-", "y")
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        NTFY_TOPIC.write_text(code + "\n", encoding="utf-8")
+        os.chmod(NTFY_TOPIC, 0o600)
+    say("  1. On your phone, get the app called ntfy from the App Store (it is free).")
+    say("  2. Open it, press the + sign to add a channel, and type this code exactly:")
+    say("")
+    say(f"         {code}")
+    say("")
+    say("  3. Press Subscribe. That is all; the code is your private channel.")
+    say("")
+    if not wait_for_return("Press Return when the app shows the channel"):
+        return False
+    import urllib.request
+    try:
+        req = urllib.request.Request("https://ntfy.sh/" + code, data=b"Moblee: alerts are working. This is the test.", method="POST")
+        req.add_header("Title", "Moblee")
+        with urllib.request.urlopen(req, timeout=15) as r:
+            ok = 200 <= r.status < 300
+    except Exception:
+        ok = False
+    if ok:
+        say("  A test alert was sent; it should be on your phone now.")
+    else:
+        say("  The test could not be sent just now (no internet?). The channel is set up; ask your assistant to send a test alert when you are back online.")
+    return True
+
+
+def check_reach():
+    try:
+        cfg = json.loads(REACH_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False, "no route chosen"
+    addr = cfg.get("address") if isinstance(cfg, dict) else None
+    if not isinstance(addr, str) or not addr or len(addr) > 253 or not all(c.isalnum() or c in ".-:" for c in addr):
+        return False, "no route chosen"
+    route = "Tailscale" if cfg.get("route") == "tailscale" else "your own private network"
+    return True, f"things made to open from your phone do so over {route} while this Mac is awake"
+
+
+def tailscale_ip() -> str | None:
+    for cli in (TAILSCALE_CLI, Path(which("tailscale") or "/nonexistent")):
+        if cli.exists():
+            code, out = run([str(cli), "ip", "-4"], timeout=30)
+            if code == 0:
+                for line in out.splitlines():
+                    line = line.strip()
+                    if line.count(".") == 3 and all(p.isdigit() for p in line.split(".")):
+                        return line
+    return None
+
+
+def install_reach():
+    rule("Reach your things from your phone")
+    say("  A thing built for you runs on this Mac. To open it from your phone, your")
+    say("  phone needs a private way to reach this Mac. Two choices:")
+    say("")
+    say("  1. Tailscale (recommended): a free private network for your own devices.")
+    say("     Nothing is opened to the internet. An account, the app on this Mac and")
+    say("     on your phone, and a sign-in on each. About every six months Tailscale")
+    say("     asks you to sign in again on each device; that is normal and you can leave it so.")
+    say("  2. A private way home you already have: a VPN, or your router's remote access.")
+    say("     You give this Mac's address as your phone sees it. If you do not know it,")
+    say("     press 3 for now and ask your assistant, who can read it from this Mac and tell you.")
+    say("  3. Not now.")
+    say("")
+    try:
+        choice = input("  Which? Type 1, 2 or 3 and press Return: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return False
+    if choice == "3":
+        say("  Nothing was changed.")
+        return False
+    if choice == "2":
+        try:
+            addr = input("  This Mac's address on your network (for example 192.168.1.20): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            return False
+        if not addr or len(addr) > 253 or not all(c.isalnum() or c in ".-:" for c in addr):
+            say("  That does not read as an address; nothing was changed.")
+            return False
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        REACH_FILE.write_text(json.dumps({"route": "named", "address": addr,
+                                          "recorded": datetime.date.today().isoformat()}, indent=2) + "\n", encoding="utf-8")
+        say(f"  Recorded: your phone reaches this Mac at {addr}. Things made to open from your phone will open there while this Mac is awake.")
+        return True
+    if choice != "1":
+        say("  Nothing was changed.")
+        return False
+    if not TAILSCALE_CLI.exists():
+        if not brew_install(["tailscale"], cask=True):
+            say("  Tailscale could not be installed. You can get it from tailscale.com and run this again.")
+            return False
+    say("")
+    say("  Tailscale will open. Sign in (or make an account) in the window it shows, and")
+    say("  when the Mac shows a box saying Tailscale would like to add VPN configurations,")
+    say("  press Allow. Then come back here.")
+    run(["open", "-a", "Tailscale"], timeout=30)
+    if not wait_for_return("Press Return once you are signed in to Tailscale"):
+        return False
+    ip = tailscale_ip()
+    if not ip:
+        say("  Tailscale does not show an address yet. Finish signing in, then run this item again from Moblee.")
+        return False
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    REACH_FILE.write_text(json.dumps({"route": "tailscale", "address": ip,
+                                      "recorded": datetime.date.today().isoformat()}, indent=2) + "\n", encoding="utf-8")
+    say(f"  Recorded: this Mac is {ip} on your Tailscale network. Put Tailscale on your phone too, signed in to")
+    say("  the same account, and things made to open from your phone will open there while this Mac is awake.")
+    return True
+
+
+def claude_engine() -> str | None:
+    """Claude's engine: inside the Claude app, newest first, else on the path."""
+    import glob
+    found = sorted(glob.glob(str(Path.home() / "Library" / "Application Support" / "Claude" / "claude-code"
+                                 / "*" / "*" / "claude.app" / "Contents" / "MacOS" / "claude")))
+    if found:
+        return found[-1]
+    return which("claude")
+
+
+def check_thinking():
+    try:
+        tok = CLAUDE_TOKEN.read_text(encoding="utf-8").strip()
+    except OSError:
+        tok = ""
+    if not tok:
+        return False, "no long-lived sign-in yet"
+    if not claude_engine():
+        return False, "the sign-in is kept, but the Claude app was not found on this Mac"
+    return True, "jobs can ask Claude while you are away; the sign-in is kept in a file only you can read"
+
+
+def install_thinking():
+    import getpass
+    rule("Jobs that ask Claude while you are away")
+    say("  A job that runs on a schedule and asks Claude to think (a morning page, a")
+    say("  weekly tidy) needs a sign-in that works with nobody at the screen. Claude")
+    say("  makes one for you; it lasts about a year, and when it runs out the jobs stop")
+    say("  and tell your phone, and you do this once more. Each such run uses a little")
+    say("  of your Claude allowance, which the job's page says.")
+    say("")
+    engine = claude_engine()
+    if not engine:
+        say("  The Claude app was not found on this Mac. Open it once, then run this again.")
+        return False
+    say("  1. A web page opens; sign in there if it asks, and press Allow.")
+    say("  2. Back in this black window a long code starting sk-ant- appears. Drag across")
+    say("     the whole code to select it, then press Command and C.")
+    say("  3. Press Return here, then press Command and V to paste it when asked.")
+    say("     Nothing shows while you paste; that is normal.")
+    say("")
+    if not wait_for_return("Press Return to start"):
+        return False
+    run([engine, "setup-token"], interactive=True, timeout=600)
+    try:
+        tok = getpass.getpass("  Paste the code and press Return: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return False
+    if not tok.startswith("sk-ant-") or len(tok) < 40 or any(c.isspace() for c in tok):
+        say("  That does not read as the code. Nothing was kept; run this again when you have it.")
+        return False
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    CLAUDE_TOKEN.write_text(tok + "\n", encoding="utf-8")
+    os.chmod(CLAUDE_TOKEN, 0o600)
+    say("  Kept, in a file only you can read. Jobs that ask Claude can now run while you are away.")
+    return True
+
+
+# --- (0.12.0) the two jobs that ask Claude: the weekly tidy and the morning page --
+
+def thing_status(name: str) -> dict:
+    v = vault_path()
+    if not v:
+        return {}
+    code, out = run(["python3", str(PACKAGE_ROOT / "scripts" / "job-switch.py"), "--vault", str(v),
+                     "--name", name, "--status", "--json"], timeout=60)
+    try:
+        d = json.loads(out)
+        return d if isinstance(d, dict) else {}
+    except ValueError:
+        return {}
+
+
+def install_thinking_thing(name: str, title: str, prompt_file: Path, when: list, what: str) -> bool:
+    """Lay the thing down with the build skill's scaffold, give it Moblee's own
+    prompt, and switch its job on: the owner pressed this item, which is their
+    hand on the switch."""
+    v = vault_path()
+    if not v:
+        say("  The wiki could not be found, so nothing was set up.")
+        return False
+    if not CLAUDE_TOKEN.exists():
+        say("  This needs the item \"Jobs that ask Claude while you are away\" first, which keeps the")
+        say("  sign-in a job uses when nobody is at the screen. Choose that, then this again.")
+        return False
+    parts = PACKAGE_ROOT / "skills" / "build" / "parts"
+    code, out = run(["python3", str(parts / "scaffold.py"), "--vault", str(v), "--name", name, "--title", title,
+                     "--what", what, "--think", *when], timeout=120)
+    if code != 0:
+        say("  The thing could not be laid down: " + out.strip().splitlines()[-1][:200] if out.strip() else "  The thing could not be laid down.")
+        return False
+    prompt = v / "apps" / name / "prompt.md"
+    try:
+        current = prompt.read_text(encoding="utf-8") if prompt.exists() else ""
+    except OSError:
+        current = ""
+    if not current or "The assistant replaces this paragraph" in current:
+        # Moblee's own words go in only where the owner has not written their own
+        prompt.write_text(prompt_file.read_text(encoding="utf-8"), encoding="utf-8")
+    code, out = run(["python3", str(PACKAGE_ROOT / "scripts" / "job-switch.py"), "--vault", str(v),
+                     "--name", name, "--on", "--json"], timeout=60)
+    try:
+        d = json.loads(out)
+    except ValueError:
+        d = {}
+    if code != 0 or not d.get("loaded"):
+        say("  It was laid down but could not be switched on: " + str(d.get("why") or "the scheduler did not take it"))
+        return False
+    say(f"  {title} is switched on. It runs within limits written down for it, which your assistant can show or")
+    say("  change, and a missed hour runs at the next wake.")
+    return True
+
+
+def check_tidy():
+    s = thing_status("moblee-tidy")
+    if not s.get("file"):
+        return False, "not set up"
+    if not s.get("loaded"):
+        return False, "set up but not switched on (choose this item again)"
+    last = s.get("last_run")
+    return True, "runs after the Saturday check" + (f"; last ran {str(last)[:10]}" if last else "; has not run yet")
+
+
+def install_tidy():
+    rule("The weekly tidy")
+    say("  After the Saturday check, Claude puts right what can safely be put right and")
+    say("  lists the rest for you on one short page. One run a week of your allowance.")
+    return install_thinking_thing("moblee-tidy", "Weekly tidy", PACKAGE_ROOT / "scripts" / "cadence" / "tidy-prompt.md",
+                                  ["--weekday", "6", "--hour", "9", "--minute", "30"],
+                                  "The weekly tidy: what the Saturday check found, put right where it safely can be, and the rest listed for the owner.")
+
+
+def check_morning():
+    s = thing_status("moblee-morning")
+    if not s.get("file"):
+        return False, "not set up"
+    if not s.get("loaded"):
+        return False, "set up but not switched on (choose this item again)"
+    last = s.get("last_run")
+    return True, "a morning page each day" + (f"; last written {str(last)[:10]}" if last else "; not written yet")
+
+
+def install_morning():
+    rule("Your morning page")
+    say("  Each morning, at half past six or the first wake after it, Claude writes you a")
+    say("  page: what is on today, what moved, what is waiting, one thing worth doing.")
+    say("  One run a day of your allowance.")
+    return install_thinking_thing("moblee-morning", "Morning page", PACKAGE_ROOT / "scripts" / "cadence" / "morning-prompt.md",
+                                  ["--hour", "6", "--minute", "30"],
+                                  "The morning page: what matters today, from what the wiki holds, written before the owner is up.")
+
+
+# --- (0.12.0) memory search: the wiki searched by meaning, on this Mac only ----
+
+OLLAMA_URL = os.environ.get("MOBLEE_OLLAMA", "http://127.0.0.1:11434")
+EMBED_MODEL = "nomic-embed-text"
+
+
+def recall_cache_dir(v: Path) -> Path:
+    """One folder per wiki, the same formula as recall.py and the check-up."""
+    import hashlib
+    env = os.environ.get("MOBLEE_RECALL_CACHE")
+    if env:
+        return Path(os.path.expanduser(env))
+    key = hashlib.sha1(os.path.realpath(str(v)).encode("utf-8")).hexdigest()[:12]
+    return HOME / ".cache" / "moblee-recall" / key
+
+
+def ollama_present() -> bool:
+    """The app, the command, or a service already answering (Homebrew's
+    `brew services` runs it with neither on the path)."""
+    return Path("/Applications/Ollama.app").is_dir() or bool(which("ollama")) or ollama_up(2)
+
+
+def ollama_up(timeout: float = 4) -> bool:
+    import urllib.request
+    try:
+        with urllib.request.urlopen(OLLAMA_URL + "/api/tags", timeout=timeout) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def ollama_has_model() -> bool:
+    import urllib.request
+    try:
+        with urllib.request.urlopen(OLLAMA_URL + "/api/tags", timeout=4) as r:
+            names = [m.get("name", "") for m in json.loads(r.read()).get("models", [])]
+        return any(n.split(":")[0] == EMBED_MODEL for n in names)
+    except Exception:
+        return False
+
+
+def recall_hook_registered() -> bool:
+    try:
+        settings = json.loads(SETTINGS.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    hooks = settings.get("hooks") if isinstance(settings, dict) else None
+    ups = hooks.get("UserPromptSubmit") if isinstance(hooks, dict) else None
+    for g in ups or []:
+        for h in (g.get("hooks") or []) if isinstance(g, dict) else []:
+            if isinstance(h, dict) and "recall-inject.py" in str(h.get("command", "")):
+                return True
+    return False
+
+
+def check_recall():
+    v = vault_path()
+    if not v or not (v / "scripts" / "recall" / "recall.py").exists():
+        return False, "not set up"
+    if not recall_hook_registered():
+        return False, "set up, but Claude has not been told to use it (choose this item again)"
+    if not ollama_present():
+        return False, "set up, but the small model's program (Ollama) is not on this Mac (choose this item again)"
+    meta = recall_cache_dir(v) / "meta.json"
+    if not meta.exists():
+        return False, "set up, but the index has not been built yet (choose this item again)"
+    try:
+        built = json.loads(meta.read_text(encoding="utf-8")).get("count")
+    except (OSError, ValueError):
+        built = None
+    return True, f"questions find the closest pages by meaning ({built} sections indexed)" if built else \
+        "questions find the closest pages by meaning"
+
+
+def pull_model() -> bool:
+    """Fetch the embedding model through Ollama's own service, so no command
+    line tool and no password are needed; progress is shown as it comes."""
+    import urllib.request
+    try:
+        req = urllib.request.Request(OLLAMA_URL + "/api/pull", data=json.dumps({"name": EMBED_MODEL}).encode(),
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=1800) as r:
+            last = ""
+            for line in r:
+                try:
+                    d = json.loads(line)
+                except ValueError:
+                    continue
+                st = str(d.get("status", ""))
+                if d.get("total") and d.get("completed"):
+                    pct = int(100 * d["completed"] / d["total"])
+                    st = f"{st} {pct}%"
+                if st != last:
+                    sys.stdout.write(f"\r     {st[:70]:<70}")
+                    sys.stdout.flush()
+                    last = st
+                if d.get("error"):
+                    say("")
+                    say(f"  The model could not be fetched: {d['error']}")
+                    return False
+        say("")
+        return True
+    except Exception as exc:
+        say("")
+        say(f"  The model could not be fetched: {exc}")
+        return False
+
+
+def install_recall():
+    rule("Memory search")
+    say("  Your assistant finds pages by the words in them. Memory search adds finding")
+    say("  them by meaning: when you ask a question, the three or four sections of your")
+    say("  wiki closest to it are put in front of Claude before it reads your message,")
+    say("  as leads to check. A small model (Ollama, about 300 MB) runs on this Mac for")
+    say("  it; nothing leaves the Mac, and the index is a disposable copy outside the wiki.")
+    say("")
+    v = vault_path()
+    if not v:
+        say("  The wiki could not be found, so nothing was set up.")
+        return False
+    if not ollama_present():
+        say("  Installing Ollama with Homebrew (it may ask for your Mac password; nothing shows as you type).")
+        code, _ = run(["brew", "install", "--cask", "ollama"], interactive=True, timeout=1800)
+        if code != 0 or not ollama_present():
+            say("  Ollama could not be installed. Run this item again when you have a moment, or fetch it from ollama.com.")
+            return False
+    if not ollama_up():
+        say("  Opening Ollama. The first time, the Mac may ask whether to open a program fetched from the")
+        say("  internet: press Open. It may also offer to finish its own setup; that can be skipped.")
+        if Path("/Applications/Ollama.app").is_dir():
+            run(["open", "-gj", "/Applications/Ollama.app"], timeout=30)
+        else:
+            run(["open", "-gja", "Ollama"], timeout=30)
+        for _ in range(18):
+            time.sleep(5)
+            if ollama_up():
+                break
+    if not ollama_up():
+        say("  Ollama is installed but did not start. Open it once from Applications and answer what it asks,")
+        say("  then choose this item again.")
+        return False
+    if not ollama_has_model():
+        say("  Fetching the small model (about 300 MB, once)...")
+        if not pull_model():
+            return False
+    say("  Putting the scripts in your wiki and telling Claude about them...")
+    code, out = run(["python3", str(PACKAGE_ROOT / "extras" / "recall" / "install-recall.py"), "--vault", str(v)],
+                    timeout=300)
+    for line in out.strip().splitlines():
+        say("   " + line)
+    if code != 0:
+        return False
+    say("  Building the index: every section of your wiki is read once, which takes a minute")
+    say("  on a new wiki and longer on a large one. This window waits.")
+    code, out = run(["bash", str(v / "scripts" / "recall" / "rebuild-index.sh"), "setup"], timeout=3600)
+    if not (recall_cache_dir(v) / "meta.json").exists():
+        say("  The index was not built. Choose this item again; if it fails twice, ask your assistant why,")
+        say("  which can read the reason.")
+        return False
+    say("  Done. Ask your assistant a question and it has the closest pages in front of it.")
+    say("  The index refreshes by itself after each save and once a night, in seconds.")
+    return True
+
+
 def install_weekly():
     code, _ = run(["bash", str(PACKAGE_ROOT / "scripts" / "install-schedule.sh")], interactive=True, timeout=300)
     return code == 0
@@ -1109,9 +1567,31 @@ def build_items() -> list:
         Item("voice", paid, "Claude reads its replies aloud",
              "Spoken replies and a nudge when Claude is waiting on you. Mac voice free; ElevenLabs voice optional and paid.",
              3, 5, "free (paid voice optional)", install=install_voice, check=check_voice),
+        Item("alerts", connect, "Alerts on your phone",
+             "A line on your phone when a job of yours finishes or fails, through the free ntfy app. It names the file to look at and never sends it.",
+             3, 0, "free (the ntfy app on your phone)", signin="get the ntfy app on your phone and type one code",
+             install=install_alerts, check=check_alerts),
+        Item("reach", connect, "Reach your things from your phone",
+             "Open a thing built for you from your phone, over a private network of your own: Tailscale (recommended), or one you already have. Works while this Mac is awake.",
+             6, 100, "free (Tailscale's personal plan, or your own network)", needs=("homebrew",),
+             signin="sign in to Tailscale on this Mac and on your phone, or give this Mac's address",
+             install=install_reach, check=check_reach),
+        Item("thinking", habits, "Jobs that ask Claude while you are away",
+             "A scheduled job can ask Claude to think (a morning page, a weekly tidy). Needs a long-lived sign-in Claude makes for you; each run uses a little of your allowance.",
+             4, 0, "free (uses your Claude allowance)", signin="sign in once in the browser and paste a code",
+             install=install_thinking, check=check_thinking),
         Item("weekly", habits, "Weekly health check",
-             "The wiki checks itself every Saturday morning and tells you what needs attention.",
+             "The wiki checks itself every Saturday morning, makes a copy of its whole history outside the wiki, and tells you what needs attention.",
              1, 0, "free", install=install_weekly, check=check_weekly),
+        Item("tidy", habits, "The weekly tidy",
+             "After the Saturday check, Claude puts right what can safely be put right and lists the rest for you on one short page. Needs the item for jobs that ask Claude.",
+             1, 0, "free (one run a week of your Claude allowance)", install=install_tidy, check=check_tidy),
+        Item("morning", habits, "Your morning page",
+             "Each morning, or at the first wake after it, Claude writes you a page: what is on today, what moved, what is waiting, one thing worth doing. Needs the item for jobs that ask Claude.",
+             1, 0, "free (one run a day of your Claude allowance)", install=install_morning, check=check_morning),
+        Item("recall", habits, "Memory search",
+             "Your assistant finds pages by their words; this adds finding them by meaning. A question puts the closest sections in front of Claude first. A small model runs on this Mac; nothing leaves it.",
+             6, 400, "free (a 300 MB model on this Mac)", needs=("homebrew",), install=install_recall, check=check_recall),
         Item("lessons", habits, "The learning path",
              "Thirty-two short lessons, one an evening, with a 9 pm reminder.",
              1, 1, "free", install=install_lessons, check=check_lessons),
@@ -1209,7 +1689,7 @@ def choose(items: list, status: dict, preset: set | None, tick: set | None = Non
 # pictures. "hidden": only useful to someone who works in Terminal.
 HOW = {
     "news-brief": "silent", "trips": "silent", "x-capture": "silent",
-    "weekly": "silent", "lessons": "silent", "voice": "silent",
+    "weekly": "silent", "lessons": "silent", "voice": "silent", "tidy": "silent", "morning": "silent",
     "google": "clicks", "generation": "clicks",
     "vault-fn": "hidden",
 }

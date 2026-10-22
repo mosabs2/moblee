@@ -335,9 +335,12 @@ def vault_rules(vault: Path | None) -> tuple[list, list]:
         p = vault / ".claude" / name
         if p.exists():
             try:
-                perms = json.loads(p.read_text()).get("permissions", {})
-                allow += perms.get("allow", [])
-                deny += perms.get("deny", [])
+                data = json.loads(p.read_text())
+                perms = data.get("permissions") if isinstance(data, dict) else None
+                if isinstance(perms, dict):
+                    a, d = perms.get("allow"), perms.get("deny")
+                    allow += [r for r in a if isinstance(r, str)] if isinstance(a, list) else []
+                    deny += [r for r in d if isinstance(r, str)] if isinstance(d, list) else []
             except (OSError, ValueError):
                 pass
     return allow, deny
@@ -354,15 +357,67 @@ def check_settings(f: Findings, vault: Path | None) -> dict | None:
         return None
     f.add(OK, "Claude's settings file loads.")
     v_allow, v_deny = vault_rules(vault)
-    allow = data.get("permissions", {}).get("allow", []) + v_allow
-    deny = data.get("permissions", {}).get("deny", []) + v_deny
+    perms = data.get("permissions") if isinstance(data, dict) else None
+    perms = perms if isinstance(perms, dict) else {}
+    allow = (perms.get("allow") if isinstance(perms.get("allow"), list) else []) + v_allow
+    deny = (perms.get("deny") if isinstance(perms.get("deny"), list) else []) + v_deny
     # Moblee's starter rules number about fifty; a handful of the owner's own
     # rules does not mean the starter set is there.
     if len(v_allow) < 10:
         f.add(PROBLEM, "Moblee's permission rules are not in the wiki's settings, so Claude will ask before almost everything.", "F01")
     else:
         f.add(OK, f"Permission rules are in place ({len(allow)} allowed, {len(deny)} refused).")
+        # (0.12.0) The rules a build needs, and the builds' home as a folder
+        # Claude may edit in. An owner on the older set meets a prompt for
+        # every tool a build uses and for every file outside the wiki.
+        if not any(r.startswith("Edit(~/Apps/") for r in v_allow):
+            f.add(LOOK, "The permission rules are the set from before 0.12.0, so building something outside the wiki will ask before every file and every tool it needs.", "F55")
+        else:
+            f.add(OK, "Building outside the wiki is covered: Claude may edit in ~/Apps and run what a build needs without asking.")
+    # (0.12.0) The working mode for this wiki, read as Claude reads it.
+    mode = vault_mode(vault)
+    if mode:
+        f.add(OK, f"Claude's working mode for this wiki is set: {MODE_WORDS.get(mode, mode)}.")
+    else:
+        f.add(OK, "Claude's working mode for this wiki is not set in the wiki's settings; Claude's app decides it, and the mode switch beside the box where the owner types shows which (Manual asks before every edit; Accept edits asks for commands only).")
+    # (0.12.0) Auto mode's exceptions for Moblee's own two writes, which live
+    # only in Claude's own settings file. Without them an owner in Auto can
+    # see the check-up's card refused ("denied by auto mode").
+    auto_allow = data.get("autoMode", {}).get("allow", []) if isinstance(data.get("autoMode"), dict) else []
+    if any("moblee-doctor" in str(r) for r in auto_allow) and any("turn-end-commit" in str(r) for r in auto_allow):
+        f.add(OK, "Auto mode knows Moblee's own check-up and end-of-reply save.")
+    else:
+        f.add(LOOK, "Auto mode has not been told about Moblee's own check-up and end-of-reply save, so in Auto either can be refused with 'denied by auto mode'; Repair tells it.", "F56")
     return data
+
+
+MODE_WORDS = {
+    "acceptEdits": "Accept edits (an edit in the wiki or in ~/Apps does not ask; a command asks unless a rule covers it)",
+    "default": "Manual, called Default in some versions of the app (every edit and every command not covered by a rule asks)",
+    "manual": "Manual, called Default in some versions of the app (every edit and every command not covered by a rule asks)",
+    "plan": "Plan (Claude reads and proposes, changes nothing)",
+    "auto": "Auto (a separate check reviews each action a rule has not settled)",
+    "bypassPermissions": "Bypass (nothing asks; not what Moblee sets)",
+    "dontAsk": "Don't ask (anything that would ask is refused)",
+}
+
+
+def vault_mode(vault: Path | None) -> str | None:
+    """The working mode set in the wiki's own settings, if any."""
+    if vault is None:
+        return None
+    for name in ("settings.local.json", "settings.json"):
+        p = vault / ".claude" / name
+        if p.exists():
+            try:
+                data = json.loads(p.read_text())
+                perms = data.get("permissions") if isinstance(data, dict) else None
+                mode = perms.get("defaultMode") if isinstance(perms, dict) else None
+                if mode:
+                    return str(mode)
+            except (OSError, ValueError):
+                pass
+    return None
 
 
 # (v0.10.0) Which guard is on this Mac, in the guard's own words. The hash
@@ -591,7 +646,8 @@ def check_apps(f: Findings, vault: Path | None) -> None:
             last = app / "state" / "last-run.json"
             if not last.exists():
                 f.add(LOOK, f"{title}'s job has never run on this Mac. If it was meant to be switched on, the "
-                            f"README has the two lines; if not, nothing is wrong.", "F53",
+                            f"assistant can ask Moblee to show a Switch on tile (the README also has the two lines); "
+                            f"if not, nothing is wrong. A laptop asleep at the hour runs it at the next wake.", "F53",
                       sendable="One thing's scheduled job has never run on this Mac.")
             else:
                 try:
@@ -615,6 +671,204 @@ def check_apps(f: Findings, vault: Path | None) -> None:
     if names:
         f.add(OK, f"{things(len(names))} built beside the wiki, in apps/: {', '.join(names)}.",
               sendable=f"{things(len(names)).capitalize()} built beside the wiki, in apps/.")
+
+
+# (0.12.0) A second copy of the wiki's history, and whether Time Machine has
+# somewhere to copy to. The Saturday run makes one bundle a week under
+# Moblee's own folder and never removes one; the owner is told when there are
+# many, and which is the oldest.
+BACKUPS_DIR = Path.home() / "Library" / "Application Support" / "Moblee" / "backups"
+
+
+def tm_destination_count():
+    """How many places Time Machine copies to, or None when that cannot be read."""
+    try:
+        r = subprocess.run(["tmutil", "destinationinfo"], capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if r.returncode != 0:
+        if "No destinations" in (r.stdout + r.stderr):
+            return 0
+        return None
+    return sum(1 for line in r.stdout.splitlines() if line.strip().startswith("Name"))
+
+
+def check_backup(f: Findings, vault: Path | None) -> None:
+    weekly_on = (Path.home() / "Library" / "LaunchAgents" / "com.moblee.weekly-lint.plist").exists()
+    bundles = sorted(BACKUPS_DIR.glob("*.bundle"), key=lambda p: p.stat().st_mtime) if BACKUPS_DIR.is_dir() else []
+    if bundles:
+        newest = bundles[-1]
+        age = (datetime.datetime.now() - datetime.datetime.fromtimestamp(newest.stat().st_mtime)).days
+        if age > 21:
+            f.add(LOOK, f"The newest copy of the wiki's history outside the wiki is {age} days old ({newest.name}). "
+                        f"The Saturday check makes one each week when it runs; if the Mac has been shut on Saturdays, "
+                        f"it makes one at the next wake.", "F57",
+                  sendable=f"The newest copy of the wiki's history is {age} days old.")
+        else:
+            many = f" There are {len(bundles)}; the oldest, {bundles[0].name}, may be removed by the owner's own hand." \
+                if len(bundles) > 26 else ""
+            f.add(OK, f"A copy of the wiki's history outside the wiki is {age} day(s) old ({newest.name}).{many}")
+    elif weekly_on:
+        f.add(LOOK, "No copy of the wiki's history outside the wiki has been made yet; the Saturday check makes one "
+                    "each week when it runs (a laptop shut on Saturday makes it at the next wake).", "F57",
+              sendable="No copy of the wiki's history outside the wiki yet.")
+    else:
+        f.add(OK, "No copy of the wiki's history outside the wiki yet; the Weekly health check makes one each "
+                  "Saturday once chosen.")
+    tm = tm_destination_count()
+    if tm is None:
+        f.add(UNSEEN, "Whether Time Machine has somewhere to copy to could not be read from here.")
+    elif tm == 0:
+        f.add(LOOK, "Time Machine has nowhere to copy to, so this Mac's files, the wiki among them, exist only here. "
+                    "A drive, or a private copy on GitHub through the GitHub item, is the other place.", "F58",
+              sendable="Time Machine has nowhere to copy to.")
+    else:
+        f.add(OK, "Time Machine has somewhere to copy to.")
+
+
+CLAUDE_JSON = HOME / ".claude.json"
+
+
+def check_trust(f: Findings, vault: Path | None, assistant: str = "claude") -> None:
+    """(0.12.0) Claude reads a folder's own rules only once the folder is
+    trusted. Untrusted, every rule Moblee wrote is ignored without a word in
+    the app, and Claude asks before everything: the friends' warnings."""
+    if not vault or assistant == "chatgpt":
+        return
+    try:
+        data = json.loads(CLAUDE_JSON.read_text())
+    except (OSError, ValueError):
+        f.add(UNSEEN, "Whether Claude trusts the wiki's folder could not be read.")
+        return
+    projects = data.get("projects") if isinstance(data, dict) else None
+    keys = {str(vault), os.path.realpath(str(vault))}
+    trusted = isinstance(projects, dict) and any(
+        isinstance(projects.get(k), dict) and projects[k].get("hasTrustDialogAccepted") is True for k in keys)
+    if trusted:
+        f.add(OK, "Claude trusts the wiki's folder, so the rules in it apply.")
+    else:
+        f.add(LOOK, "Claude does not yet trust the wiki's folder, so every rule Moblee wrote for it is ignored and "
+                    "Claude asks before everything, including inside a build. Repair marks it trusted; so does "
+                    "opening Claude in the wiki once and answering yes to its question about the folder.", "F60",
+              sendable="Claude does not yet trust the wiki's folder, so its rules are ignored.")
+
+
+RECALL_CACHE = None   # the tests point this at a folder; otherwise one folder per wiki
+
+
+def recall_cache_dir(vault: Path | None) -> Path:
+    if RECALL_CACHE is not None:
+        return Path(RECALL_CACHE)
+    key = hashlib.sha1(os.path.realpath(str(vault or "")).encode("utf-8")).hexdigest()[:12]
+    return HOME / ".cache" / "moblee-recall" / key
+
+
+def ollama_has_model(name: str = "nomic-embed-text"):
+    """True, False, or None when the service is not answering."""
+    try:
+        import urllib.request
+        with urllib.request.urlopen(os.environ.get("MOBLEE_OLLAMA", "http://127.0.0.1:11434") + "/api/tags", timeout=2) as r:
+            models = json.loads(r.read()).get("models", [])
+        return any(str(m.get("name", "")).split(":")[0] == name for m in models)
+    except Exception:
+        return None
+
+
+def ollama_present() -> bool:
+    """The app, the command, or a service already answering on this Mac."""
+    if Path("/Applications/Ollama.app").is_dir() or shutil.which("ollama"):
+        return True
+    try:
+        import urllib.request
+        with urllib.request.urlopen(os.environ.get("MOBLEE_OLLAMA", "http://127.0.0.1:11434") + "/api/tags", timeout=2) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def check_recall(f: Findings, vault: Path | None) -> None:
+    """(0.12.0) Memory search, when the owner has chosen it: the scripts in the
+    wiki, the hook in Claude's settings, the model's program, and an index that
+    is not stale. Not chosen is one OK line; chosen and lame is one F59."""
+    scripts = (vault / "scripts" / "recall" / "recall.py") if vault else None
+    hook_cmd = None
+    try:
+        data = json.loads(SETTINGS.read_text())
+        hooks = data.get("hooks") if isinstance(data, dict) else None
+        ups = hooks.get("UserPromptSubmit") if isinstance(hooks, dict) else None
+        for g in ups or []:
+            for h in (g.get("hooks") or []) if isinstance(g, dict) else []:
+                if isinstance(h, dict) and "recall-inject.py" in str(h.get("command", "")):
+                    hook_cmd = str(h.get("command"))
+    except (OSError, ValueError):
+        pass
+    have_scripts = bool(scripts and scripts.exists())
+    if not have_scripts and not hook_cmd:
+        f.add(OK, "Memory search is not chosen (optional: the Memory search item in the Moblee app).")
+        return
+    if hook_cmd and not have_scripts:
+        f.add(LOOK, "Claude has been told to use memory search, but the scripts it points at are not in this wiki, "
+                    "so it never fires. Choosing the Memory search item again puts them back.", "F59",
+              sendable="Memory search: Claude's link to it points at scripts that are not there.")
+        return
+    if have_scripts and not hook_cmd:
+        f.add(LOOK, "Memory search's scripts are in the wiki but Claude has not been told to use them. "
+                    "Choosing the Memory search item again registers it.", "F59",
+              sendable="Memory search: Claude has not been told to use it.")
+        return
+    m = re.search(r"""python3 (?:"([^"]+)"|'([^']+)'|(\S+))""", hook_cmd or "")
+    hook_path = (m.group(1) or m.group(2) or m.group(3)) if m else None
+    if hook_path and not Path(hook_path).exists():
+        f.add(LOOK, "Claude's link to memory search points at a place the wiki is no longer at, so it never fires. "
+                    "Choosing the Memory search item again corrects it.", "F59",
+              sendable="Memory search: Claude's link to it points at an old place of the wiki.")
+        return
+    if not ollama_present():
+        f.add(LOOK, "Memory search is set up but the small model's program (Ollama) is not on this Mac, so the index "
+                    "cannot be built or refreshed. Choosing the Memory search item again installs it.", "F59",
+              sendable="Memory search: Ollama is not on this Mac.")
+        return
+    if ollama_has_model() is False:
+        f.add(LOOK, "Memory search is set up but its small model has not been fetched, so the index cannot be built "
+                    "or refreshed. Choosing the Memory search item again fetches it.", "F59",
+              sendable="Memory search: the small model is not fetched.")
+        return
+    cache = recall_cache_dir(vault)
+    meta = cache / "meta.json"
+    if not meta.exists():
+        f.add(LOOK, "Memory search is set up but its index has not been built yet, so questions get no leads. "
+                    "Choosing the Memory search item again builds it.",
+              "F59", sendable="Memory search: the index has not been built.")
+        return
+    age = (datetime.datetime.now() - datetime.datetime.fromtimestamp(meta.stat().st_mtime)).days
+    if age > 14:
+        f.add(LOOK, f"Memory search's index is {age} days old; it refreshes after each save and nightly, so the "
+                    "refresh is failing. The usual cause is that Ollama is not open: open it once from Applications "
+                    "and the next save refreshes it.",
+              "F59", sendable=f"Memory search's index is {age} days old.")
+        return
+    try:
+        info = json.loads(meta.read_text())
+        n = info.get("count")
+    except (OSError, ValueError):
+        info, n = {}, None
+    built_for = info.get("vault") if isinstance(info, dict) else None
+    if vault and built_for and os.path.realpath(str(built_for)) != os.path.realpath(str(vault)):
+        f.add(LOOK, "Memory search's index was built for a wiki at another place, so its leads point there. "
+                    "Choosing the Memory search item again rebuilds it for this one.", "F59",
+              sendable="Memory search: the index belongs to another place of the wiki.")
+        return
+    try:
+        last = (cache / "rebuild.log").read_text(encoding="utf-8").strip().splitlines()[-1]
+    except (OSError, IndexError):
+        last = ""
+    if "FAILED" in last:
+        f.add(LOOK, "Memory search's last refresh failed, so its leads are from before it. The assistant can read "
+                    "the reason; choosing the Memory search item again rebuilds it.", "F59",
+              sendable="Memory search: the last refresh failed.")
+        return
+    f.add(OK, f"Memory search is on: {n} sections indexed, refreshed {age} day(s) ago." if n
+          else f"Memory search is on, refreshed {age} day(s) ago.")
 
 
 def check_jobs(f: Findings) -> None:
@@ -3053,9 +3307,12 @@ def main() -> int:
     check_mods(f, vault, assistant)
     check_weights(f, vault)
     check_rules_sections(f, vault, pack)
+    check_trust(f, vault, assistant)
     check_privacy(f, vault, pack)
     check_jobs(f)
     check_apps(f, vault)
+    check_backup(f, vault)
+    check_recall(f, vault)
     check_diary(f)
     check_mac(f, assistant)
     check_leftovers(f, pack)

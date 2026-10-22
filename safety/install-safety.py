@@ -98,6 +98,11 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 GUARD_SRC = HERE / "bash-guard.py"
 RULES_SRC = HERE / "starter-permissions.json"
+# (0.12.0) Claude's own values for the working mode, in the words the owner
+# sees on the mode switch beside the box where they type.
+MODE_NAMES = {"acceptEdits": "Accept edits", "default": "Manual", "manual": "Manual",
+              "plan": "Plan", "auto": "Auto", "bypassPermissions": "Bypass",
+              "dontAsk": "Don't ask"}
 HOOKS_DIR = Path.home() / ".claude" / "hooks"
 GUARD_DST = HOOKS_DIR / "bash-guard.py"
 SETTINGS = Path.home() / ".claude" / "settings.json"
@@ -925,6 +930,13 @@ def main() -> int:
     elif not (vault / "CLAUDE.md").exists() or not (vault / "wiki").is_dir():
         sys.exit(f"{vault} does not look like a vault (no CLAUDE.md or wiki/).")
     stamp = time.strftime("%Y%m%d-%H%M%S")
+    # (0.12.0) The updater names one folder for everything a run replaced and
+    # exports it as MOBLEE_BACKUP; a copy kept here goes into that folder, not
+    # into one of its own a second apart, which an owner sent to the named
+    # folder would find half empty.
+    shared = os.environ.get("MOBLEE_BACKUP", "")
+    if shared and Path(shared).parent == BACKUP_ROOT and Path(shared).name:
+        stamp = Path(shared).name
 
     say(f"Vault: {short(vault)}")
     if wants_chatgpt:
@@ -993,7 +1005,9 @@ def main() -> int:
         say("    indirect ones. If something must go, Claude tells you what and you")
         say("    remove it yourself.")
         say("  - Routine work (reading, searching, editing inside the vault, committing)")
-        say("    runs without permission prompts. Anything outside that still asks.")
+        say("    runs without permission prompts, and so does a build outside the wiki,")
+        say("    in ~/Apps. Installing software, switching on a job and sending anything")
+        say("    to a website still ask.")
     if wants_chatgpt:
         say("")
         if code == 0:
@@ -1109,8 +1123,13 @@ def claude_branch(vault: Path, settings: dict, stamp: str, dry_run: bool) -> Non
     say("Permission rules in the vault")
     rules = json.loads(RULES_SRC.read_text())
     vault_str = str(vault)
+    home_str = str(Path.home())
     want_allow = [r.replace("__VAULT__", vault_str) for r in rules["allow"]]
     want_deny = [r.replace("__VAULT__", vault_str) for r in rules["deny"]]
+    retired = [r.replace("__VAULT__", vault_str) for r in rules.get("retired", [])]
+    want_dirs = [d.replace("__HOME__", home_str).replace("__VAULT__", vault_str)
+                 for d in rules.get("additionalDirectories", [])]
+    want_mode = rules.get("defaultMode")
     local = vault / ".claude" / "settings.local.json"
     data = load_json(local)
     perms = data.setdefault("permissions", {})
@@ -1118,19 +1137,152 @@ def claude_branch(vault: Path, settings: dict, stamp: str, dry_run: bool) -> Non
     deny = perms.setdefault("deny", [])
     add_allow = [r for r in want_allow if r not in allow]
     add_deny = [r for r in want_deny if r not in deny]
-    if not add_allow and not add_deny:
+    # (0.12.0) Moblee's own earlier rules that now stand in the guard's way:
+    # a deny rule refuses a command everywhere before the guard can look, and
+    # the guard is the one that knows a build folder from the wiki. Only
+    # Moblee's own wording is taken out; an owner's rule is never touched.
+    drop_deny = [r for r in retired if r in deny]
+    drop_allow = [r for r in retired if r in allow]
+    dirs = perms.setdefault("additionalDirectories", [])
+    add_dirs = [d for d in want_dirs if d not in dirs]
+    # The working mode is set only where the owner has not chosen one: a mode
+    # they set themselves is theirs. Accept edits means an edit inside the
+    # wiki, or inside the builds' home, no longer asks; a command still does
+    # unless a rule covers it, and the guard reads every command regardless.
+    set_mode = want_mode if (want_mode and not perms.get("defaultMode")) else None
+    changes = bool(add_allow or add_deny or drop_deny or drop_allow or add_dirs or set_mode)
+    if not changes:
         say("  already in place; nothing to change")
     elif dry_run:
         say(f"  would add {len(add_allow)} allow rules and {len(add_deny)} deny rules")
+        if drop_deny or drop_allow:
+            say(f"  would take out {len(drop_deny) + len(drop_allow)} rules matching Moblee's earlier "
+                "wording, since the delete guard decides those now")
+        if add_dirs:
+            say("  would add the builds' home as a folder Claude may edit in: " + ", ".join(add_dirs))
+        if set_mode:
+            say(f"  would set Claude's working mode for this wiki to {MODE_NAMES.get(set_mode, set_mode)}")
     else:
         b = backup(local, stamp)
         if b:
             say(f"  previous rules kept at {short(b)}")
         allow.extend(add_allow)
         deny.extend(add_deny)
+        for r in drop_deny:
+            deny.remove(r)
+        for r in drop_allow:
+            allow.remove(r)
+        dirs.extend(add_dirs)
+        if set_mode:
+            perms["defaultMode"] = set_mode
         write_json(local, data)
         say(f"  allow rules: {len(allow)} (added {len(add_allow)}); "
-            f"deny rules: {len(deny)} (added {len(add_deny)})")
+            f"deny rules: {len(deny)} (added {len(add_deny)}, "
+            f"{len(drop_deny) + len(drop_allow)} matching Moblee's earlier wording taken out, "
+            "since the delete guard decides those now)")
+        if add_dirs:
+            say("  Claude may now edit in the builds' home without asking: " + ", ".join(add_dirs))
+        if set_mode:
+            say(f"  Claude's working mode for this wiki: {MODE_NAMES.get(set_mode, set_mode)} "
+                "(an edit in the wiki or in ~/Apps no longer asks)")
+    for d in want_dirs:
+        # The builds' home must exist for Claude to count it; an empty folder
+        # is all that is made, and never inside the wiki.
+        p = Path(d)
+        if not p.exists() and not dry_run:
+            try:
+                p.mkdir(parents=True, exist_ok=True)
+                say(f"  made the builds' home {short(p)}")
+            except OSError as exc:
+                say(f"  could not make {short(p)} ({exc}); a build outside the wiki will ask first")
+
+    # 4. (0.12.0) Auto mode's exceptions for Moblee's own two writes. In auto
+    #    mode a separate check reads every action a rule has not settled, and
+    #    it has refused the check-up's card (a session that had just read the
+    #    owner's chats writing a file into the wiki) in the field. These two
+    #    sentences tell it what Moblee's own tools do. They are read only from
+    #    this file, never from the wiki's own settings, and "$defaults" keeps
+    #    Claude's own list in place.
+    say("Telling Auto mode about Moblee's own tools")
+    auto_rules = rules.get("autoModeAllow", [])
+    if auto_rules:
+        auto = settings.get("autoMode")
+        if not isinstance(auto, dict):
+            auto = {}
+        allow_auto = auto.get("allow")
+        fresh = not isinstance(allow_auto, list)
+        if fresh:
+            allow_auto = ["$defaults"]
+        add_auto = [r for r in auto_rules if r not in allow_auto]
+        if not add_auto:
+            say("  already in place; nothing to change")
+        elif dry_run:
+            say("  would tell Auto mode about Moblee's two tools, the check-up and the end-of-reply save")
+        else:
+            b = backup(SETTINGS, stamp)
+            if b:
+                say(f"  previous settings kept at {short(b)}")
+            allow_auto.extend(add_auto)
+            auto["allow"] = allow_auto
+            settings["autoMode"] = auto
+            write_json(SETTINGS, settings)
+            say("  told Auto mode about Moblee's two tools, the check-up and the end-of-reply save"
+                + (" (Claude's own list kept)" if fresh else ""))
+
+    # 5. (0.12.0) The wiki's folder marked as trusted. Claude reads a folder's
+    #    own rules (the file section 3 writes) only once the owner has answered
+    #    yes to its question on first opening the folder; until then every rule
+    #    above is ignored, silently in the app and with a warning only when run
+    #    with nobody watching, and Claude asks before everything. That is one
+    #    of the things the friends met. Moblee wrote those rules itself, so
+    #    marking the folder trusted is honest, and it spares the owner a
+    #    question whose wrong answer shows nothing.
+    say("Marking the wiki's folder as trusted, so Claude reads its rules")
+    mark_trusted(vault, stamp, dry_run)
+    return 0
+
+
+CLAUDE_JSON = Path.home() / ".claude.json"
+
+
+def mark_trusted(vault: Path, stamp: str, dry_run: bool) -> None:
+    keys = [str(vault)]
+    real = os.path.realpath(str(vault))
+    if real != str(vault):
+        keys.append(real)
+    try:
+        data = json.loads(CLAUDE_JSON.read_text()) if CLAUDE_JSON.exists() else {}
+    except (OSError, ValueError):
+        say("  Claude's own state file could not be read, so this was left; open Claude in the wiki once and answer yes")
+        return
+    if not isinstance(data, dict):
+        say("  Claude's own state file is not in the usual shape, so this was left; open Claude in the wiki once and answer yes")
+        return
+    projects = data.get("projects")
+    if projects is None:
+        projects = {}
+    if not isinstance(projects, dict):
+        say("  Claude's own state file is not in the usual shape, so this was left; open Claude in the wiki once and answer yes")
+        return
+    todo = [k for k in keys if not (isinstance(projects.get(k), dict) and projects[k].get("hasTrustDialogAccepted") is True)]
+    if not todo:
+        say("  already trusted; nothing to change")
+        return
+    if dry_run:
+        say("  would mark it trusted")
+        return
+    b = backup(CLAUDE_JSON, stamp)
+    if b:
+        say(f"  previous state kept at {short(b)}")
+    for k in todo:
+        entry = projects.get(k)
+        if not isinstance(entry, dict):
+            entry = {}
+        entry["hasTrustDialogAccepted"] = True
+        projects[k] = entry
+    data["projects"] = projects
+    write_json(CLAUDE_JSON, data)
+    say("  marked trusted: the rules in the wiki now apply from the first conversation")
 
 
 if __name__ == "__main__":

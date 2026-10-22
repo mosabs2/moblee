@@ -384,10 +384,28 @@ if [[ -f "$SCRIPT_DIR/orient-extras.sh.example" && ! -f "$VAULT/scripts/orient-e
   diary "added scripts/orient-extras.sh, the owner's own orientation checks"
 fi
 
+# (0.12.0) A wiki that has chosen memory search carries copies of its three
+# scripts under scripts/recall/; an update refreshes them the same way, each
+# old copy kept. A wiki without them is left without them: the item is the
+# owner's choice.
+if [[ -f "$VAULT/scripts/recall/recall.py" ]]; then
+  for tool in recall.py recall-inject.py rebuild-index.sh; do
+    if [[ -f "$SCRIPT_DIR/../extras/recall/$tool" ]] && ! cmp -s "$SCRIPT_DIR/../extras/recall/$tool" "$VAULT/scripts/recall/$tool"; then
+      [[ -f "$VAULT/scripts/recall/$tool" ]] && keep_copy "$VAULT/scripts/recall/$tool"
+      # whole or not at all: a refresh running in the background never reads a half-written script
+      cp "$SCRIPT_DIR/../extras/recall/$tool" "$VAULT/scripts/recall/$tool.new"
+      chmod +x "$VAULT/scripts/recall/$tool.new" 2>/dev/null || true
+      mv -f "$VAULT/scripts/recall/$tool.new" "$VAULT/scripts/recall/$tool"
+      echo "   refreshed scripts/recall/$tool (memory search) — if you had edited it, your copy is in ~${BACKUP#$HOME}"
+      diary "refreshed scripts/recall/$tool"
+    fi
+  done
+fi
+
 # (v0.10.0) turn-end-commit.py joins the list: the end-of-reply save lives in
 # the wiki beside the commit gate, and the safety step (step 4 below) registers
 # it as the assistant's Stop hook once it is there.
-for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh log-append.py weekly-card.py turn-end-commit.py; do
+for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh log-append.py weekly-card.py turn-end-commit.py compact-rotate.py; do
   if [[ -f "$SCRIPT_DIR/$tool" ]]; then
     if [[ -f "$VAULT/scripts/$tool" ]] && ! cmp -s "$SCRIPT_DIR/$tool" "$VAULT/scripts/$tool"; then
       keep_copy "$VAULT/scripts/$tool"
@@ -430,8 +448,29 @@ if [[ -d "$PACKAGE_ROOT/dashboard" ]]; then
     else
       echo "   added dashboard/"
     fi
+    # (0.12.0) The owner's own dashboard files survive the refresh: the chart
+    # list their assistant adds to, and the settings the page writes (read
+    # aloud on or off). One owner's read-aloud choice was undone by an update
+    # that replaced the page wholesale. Only a file that differs from what the
+    # pack ships is set aside, so a pack change to the shipped chart list
+    # still reaches an owner who never touched theirs.
+    dash_kept=()
+    mkdir -p "$BACKUP/dashboard-kept"
+    for f in dashboard-charts.json settings.json; do
+      if [[ -f "$VAULT/dashboard/$f" ]] && ! cmp -s "$VAULT/dashboard/$f" "$PACKAGE_ROOT/dashboard/$f" 2>/dev/null; then
+        cp "$VAULT/dashboard/$f" "$BACKUP/dashboard-kept/$f"
+        dash_kept+=("$f")
+      fi
+    done
     mkdir -p "$VAULT/dashboard"
     cp -R "$PACKAGE_ROOT/dashboard/." "$VAULT/dashboard/"
+    # (the ${arr[@]+"${arr[@]}"} form: an empty array under `set -u` is an
+    # error on the Mac's bash 3.2, and this loop is empty for most owners)
+    for f in ${dash_kept[@]+"${dash_kept[@]}"}; do
+      cp "$BACKUP/dashboard-kept/$f" "$VAULT/dashboard/$f"
+      echo "   kept your own dashboard/$f (the update never replaces it)"
+      diary "kept the owner's own dashboard/$f through the refresh"
+    done
   fi
 fi
 # ----- Claude's own additions (v0.10.0) ---------------------------------------
@@ -913,6 +952,23 @@ elif [[ -f "$VAULT/.gitignore" ]]; then
       '# IS kept: it says which starting notes the owner has taken out.' \
       '.moblee/requests.json' >> "$VAULT/.gitignore"
     GITIGNORE_ADDED+=(".moblee/requests.json, a queue for the app that was making the wiki look unsaved")
+  fi
+  # (0.12.0) What a built thing writes about itself as it runs, and its web
+  # copy, which is a small repository of its own: neither belongs in the
+  # wiki's history. Added only where the lines are missing, at the end.
+  if ! grep -qxF -- 'apps/*/site/' "$VAULT/.gitignore"; then
+    printf '%s\n' \
+      '' \
+      '# (0.12.0) Things built beside the wiki: what one writes about itself as it' \
+      '# runs, anything installed, and its web copy, which is a small repository' \
+      '# of its own, are not the wiki'"'"'s to keep.' \
+      'apps/*/state/' \
+      'apps/*/node_modules/' \
+      'apps/*/.venv/' \
+      'apps/*/venv/' \
+      'apps/*/__pycache__/' \
+      'apps/*/site/' >> "$VAULT/.gitignore"
+    GITIGNORE_ADDED+=("apps/*/site/ and the folders a built thing writes as it runs")
   fi
   # The weekly card is the only record that the owner was offered one that week.
   # Kept out of git it does not survive a restore, and the offer is made again.
