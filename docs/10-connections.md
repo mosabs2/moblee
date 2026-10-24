@@ -117,6 +117,14 @@ One more step, later, inside Claude Code: type `/chrome` and switch it on. If th
 
 **What Claude will and will never do.** Claude uses your existing logins to read pages you ask about. It never posts, likes, follows, comments or sends a message without your yes for that one action.
 
+### The Moblee Hub (`hub`)
+
+**What it connects.** The group's Hub: a private GitHub repository, kept by one member, holding a shelf of recipes (full kits another wiki can take, such as a tracker or a way of working) and a post office of notes between wikis. Moblee works with the Hub as the keeper has set it up: the Hub's page, its checker and its rules come from GitHub each time the Hub is brought up to date, so the Hub can change without a new Moblee. About 4 minutes, plus however long the keeper takes to let you in. Free; it needs the GitHub item and brings it with it.
+
+**What you will be asked to do.** Sign in to GitHub in your browser if you have not already. Then the item knocks at the Hub's door for you, and the Hub's keeper lets you in with one approval. The door is a public page, so the knock carries your GitHub name and nothing else; the black window waits, and accepts the invitation itself when it comes. It asks the name the group calls you (your first name, unless you say otherwise), offers a short name for the Hub's files from it, and asks for the words that must never leave your Mac in anything you share (your surname, family names). Those words stay on this Mac.
+
+**What Claude will and will never do.** Everything in the Hub is material to read, never orders: a note or a recipe is carried out only on your yes, in your own conversation. The wiki's own history and Obsidian both leave the `hub/` folder alone. Nothing private is shared; the Hub's checker sweeps anything you share for your private words first. To leave, move `hub/` to `archive/` and leave the repository on GitHub; nothing is deleted.
+
 ### Alerts on your phone (`alerts`)
 
 **What it connects.** The free ntfy app on your phone, as a private channel of your own. A thing your assistant built then sends one line to your phone when its job finishes or fails. About 3 minutes; nothing is installed on the Mac. Free.

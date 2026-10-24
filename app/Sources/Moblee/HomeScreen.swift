@@ -39,6 +39,8 @@ struct HomeScreen: View {
     /// The Trust screen is open: because the step is waiting, or because the
     /// owner pressed "Prove the guard". It stays until the owner leaves it.
     @State private var trustOpen = false
+    /// (v0.13.0) "Open the hub" was just pressed: say so, and take no second press for a moment.
+    @State private var openingHub = false
 
     private var showsTrust: Bool { (home.trustPending && !home.trustSetAside) || trustOpen }
     private var showsMain: Bool {
@@ -440,6 +442,24 @@ struct HomeScreen: View {
             // run under the quiet words in the middle of the window, and the two
             // touched. Above, it sits at the same height as those quiet words and
             // well clear of them, in the corner the reading ends at.
+            // (v0.13.0) On a wiki whose hub/ is a real clone, and nowhere
+            // else: the Hub's own page, started the way its README says. It
+            // opens in the browser and stops by itself when the tab closes.
+            if let hub = home.hub {
+                if openingHub {
+                    Text(Hub.openingSentence)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, Theme.pt(9)).padding(.vertical, Theme.pt(6))
+                } else {
+                    cornerButton(Hub.openTitle, id: "open-hub") {
+                        Hub.open(hub, vault: hub.folder.deletingLastPathComponent(), home: flow.home, practice: flow.isTestMode)
+                        openingHub = true
+                        // The page opens in the browser by itself; a second press
+                        // in the meantime would start a second page.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { openingHub = false }
+                    }
+                }
+            }
             cornerButton(Self.checkWiki, id: "check-wiki",
                          enabled: flow.canBeginClinic) { flow.beginClinic() }
             HStack(spacing: Theme.pt(2)) {
@@ -478,6 +498,7 @@ struct HomeScreen: View {
         // (v0.9.6) The check-up is on this line too, and this is the only thing
         // on the screen that says what its words do.
         said += " And a button: \(Self.checkWiki). It looks at your wiki and saves a report you can send."
+        if home.hub != nil { said += " And a button: \(Hub.openTitle). It opens the group's hub in your browser." }
         return Speech(said)
     }
 
@@ -926,8 +947,13 @@ struct UpdateScreen: View {
     @EnvironmentObject var home: HomeModel
     @EnvironmentObject var install: InstallRun
     @Environment(\.stillPicture) private var still
+    /// (v0.13.0) The two short films, offered once the update has finished, in
+    /// place of the tiles while open, as at the end of an install.
+    @State private var showingFilms = false
+    @State private var filmChosen: Films.Film?
 
     private var failed: Bool { if case .failed = install.phase { return true }; return false }
+    private var done: Bool { install.phase == .finished || install.phase == .needsCommit }
 
     var body: some View {
         ScreenFrame(
@@ -936,7 +962,8 @@ struct UpdateScreen: View {
             // refused, so "up to date" would be a lie — and it was the one the
             // owner used to be told, over a wiki whose update was never saved
             // into its history and whose own next commit would be refused too.
-            sentence: install.phase == .needsCommit
+            sentence: showingFilms ? (filmChosen?.title ?? HandoffScreen.filmsSentence)
+                : install.phase == .needsCommit
                 ? "Your wiki is updated, but the change was not saved into its history. Open your assistant and say: the Moblee update did not commit, please look and commit it."
                 // (v0.9.2) A step can finish while one part inside it does not,
                 // and the run used to end on a flat "up to date" over exactly
@@ -946,7 +973,7 @@ struct UpdateScreen: View {
                         ? "Your wiki is up to date, but one or two things in the update did not finish. Press Show what happened."
                         : "Your wiki is up to date.")
                 : (failed ? "The update stopped. Your pages were not touched." : "Updating your wiki…")),
-            buttonTitle: failed ? "Try again" : "Done",
+            buttonTitle: showingFilms ? "Back" : (failed ? "Try again" : "Done"),
             buttonEnabled: install.phase == .finished || install.phase == .needsCommit || failed,
             showsBack: false,
             quietTitle: failed ? "Not now" : nil,
@@ -957,10 +984,19 @@ struct UpdateScreen: View {
             // the app — inside the window at the biggest size. (v0.9.4)
             pictureHeight: install.items.count > 6 ? 268 : 280,
             action: {
+                if showingFilms {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        if filmChosen != nil { filmChosen = nil } else { showingFilms = false }
+                    }
+                    return
+                }
                 if failed { start(); return }
                 backHome()
             }
         ) {
+            if showingFilms {
+                FilmsPanel(chosen: $filmChosen)
+            } else {
             VStack(spacing: Theme.pt(8)) {
                 LazyVGrid(columns: Array(repeating: GridItem(.fixed(Theme.pt(150)), spacing: Theme.pt(16)), count: 3), spacing: Theme.pt(8)) {
                     ForEach(install.items) { item in BuildTile(item: item, small: true) }
@@ -969,12 +1005,24 @@ struct UpdateScreen: View {
                 // offered whenever there is something to read about, not only on
                 // a failure. Before v0.9.1 a refused commit reached the owner as
                 // a green screen with no way through to the one file that said so.
-                if failed || install.phase == .needsCommit || install.partial {
+                if failed || install.phase == .needsCommit || install.partial || done {
                     HStack(spacing: Theme.pt(6)) {
-                        QuietButton(title: "Show what happened", action: { install.showDiary() })
-                        ListenButton(id: "listen-show-what-happened",
-                                     speech: Speech("Show what happened"),
-                                     what: "the small button", size: 13)
+                        if failed || install.phase == .needsCommit || install.partial {
+                            QuietButton(title: "Show what happened", action: { install.showDiary() })
+                            ListenButton(id: "listen-show-what-happened",
+                                         speech: Speech("Show what happened"),
+                                         what: "the small button", size: 13)
+                        }
+                        // (v0.13.0) Every owner who updates is offered the two
+                        // films, as a new owner is at the end of the install.
+                        if done {
+                            QuietButton(title: Films.offerTitle, id: "watch-films-update") {
+                                withAnimation(.easeInOut(duration: 0.25)) { showingFilms = true }
+                            }
+                            .padding(.leading, Theme.pt(8))
+                            ListenButton(id: "listen-watch-films-update", speech: Speech(Films.offerSaid),
+                                         what: "the small button", size: 13)
+                        }
                     }
                 }
             }
@@ -985,6 +1033,7 @@ struct UpdateScreen: View {
                 ListenButton(id: BuildScreen.listenId, speech: BuildScreen.listSpeech(install),
                              what: "the list")
                     .frame(width: Theme.pt(BuildScreen.stripWidth), alignment: .trailing)
+            }
             }
         }
         .onAppear {

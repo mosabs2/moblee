@@ -95,6 +95,15 @@ final class Clinic: ObservableObject {
     }
 
     @Published var state: State = .idle
+    /// (v0.13.0) What became of the owner's press on "Send it to ...", or nil before it.
+    @Published var sendResult: Hub.SendResult?
+    @Published var sending = false
+    /// The report as saved, so the same words can go to the Hub's keeper.
+    private(set) var reportText: String?
+    /// Bumped by forget, so a send that ends after Done never lands on the next check-up.
+    private var sendRun = 0
+    /// The owner's name as the report spells it, so the Hub's copy can carry their Hub name instead.
+    private var reportOwner: String?
 
     /// Where the report went, for the screen and for the Finder window.
     private var reportURL: URL?
@@ -123,6 +132,8 @@ final class Clinic: ObservableObject {
         /// on the matter (it found no wiki), and then nothing is drawn: see
         /// `card_saving` in the check-up.
         var saving: String = ""
+        /// (v0.13.0) Which Hub the wiki is in and its page's version, or empty outside one.
+        var hub: String = ""
         var wrong: [Row] = []
         var wrongTotal: Int = 0
         var unchecked: [Row] = []
@@ -166,6 +177,7 @@ final class Clinic: ObservableObject {
             card.state = json["state"] as? String ?? "unwell"
             card.headline = json["headline"] as? String ?? ""
             card.saving = json["saving"] as? String ?? ""
+            card.hub = json["hub"] as? String ?? ""
             card.wrong = rows("wrong")
             card.wrongTotal = json["wrong_total"] as? Int ?? card.wrong.count
             card.unchecked = rows("unchecked")
@@ -939,6 +951,8 @@ final class Clinic: ObservableObject {
                                       place: Self.kindOfPlace(vault: vault, home: home),
                                       ends: ends, today: Date())
                     let body = Self.report(card: card, trouble: trouble, facts: facts)
+                    self.reportText = body
+                    self.reportOwner = facts.owner
                     let name = Self.reportName(ownerKey: Self.ownerKey(from: facts.owner), on: facts.today)
                     var savedAs: String?
                     let url = Self.freeReport(in: rawFolder, named: name)
@@ -989,10 +1003,46 @@ final class Clinic: ObservableObject {
         }
     }
 
+    /// (v0.13.0) The owner's press on "Send it to <keeper>": the saved report
+    /// goes into the Hub's post office as a note of kind `report`. Only after a
+    /// report was saved, only once, and only to the keeper `hub.json` names.
+    func sendToKeeper(hub: Hub.Linked) {
+        guard !sending, sendResult == nil, let saved = reportText,
+              let to = Hub.recipient(hub) else { return }
+        // Everyone in the Hub can read the post office, so the copy sent there
+        // names the owner by the name the group already knows them by.
+        let text = Hub.withHubName(saved, owner: reportOwner, hubName: hub.meName ?? hub.me ?? "")
+        sending = true
+        let home = self.home
+        let practice = home != FileManager.default.homeDirectoryForCurrentUser
+        let mine = sendRun
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Hub.send(report: text, hub: hub, to: to.id, home: home, practice: practice)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard mine == self.sendRun else { return }
+                    self.sending = false
+                    self.sendResult = result
+                    if let vault = self.vault {
+                        Diary.write("check-up: " + (result == .sent ? "sent to the Hub's keeper"
+                                                    : result == .savedNotSent ? "put in the Hub, not yet sent"
+                                                    : "could not be put in the Hub"),
+                                    home: home, vault: vault)
+                    }
+                }
+            }
+        }
+    }
+
     /// Set aside for a fresh run: pressing the button again starts a new
     /// check-up rather than showing the last one's answer.
     func forget() {
         state = .idle
+        sendRun += 1
+        sendResult = nil
+        sending = false
+        reportText = nil
+        reportOwner = nil
         reportURL = nil
         rawFolder = nil
     }

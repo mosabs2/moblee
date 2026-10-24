@@ -210,7 +210,7 @@ enum Practice {
                                         "--self-drive", "--dark", "--owner", "--step", "--fresh", "--icon",
                                         "--move-to", "--move-break", "--check-logic", "--fixtures",
                                         "--latest", "--release-url", "--live-release", "--ask-release",
-                                        "--text-scale", "--rtl"]
+                                        "--text-scale", "--rtl", "--films"]
 }
 
 /// Quitting half-way through a build, an update or a repair would leave it half
@@ -530,6 +530,13 @@ final class Flow: ObservableObject {
     /// without touching the real one.
     let home: URL
     let isTestMode: Bool
+
+    /// (v0.13.0) In a practice run, a folder holding the two films, so they play
+    /// with nothing fetched. Nil otherwise, and a practice run then fetches nothing.
+    var filmsSource: URL? {
+        guard isTestMode, let v = Self.value(after: "--films", in: Practice.args), !v.isEmpty else { return nil }
+        return URL(fileURLWithPath: v, isDirectory: true)
+    }
 
     /// The words that start the first conversation in Claude.
     static let openingWords = "get me started"

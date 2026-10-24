@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.13.0 (24 October 2026)
+
+**The Hub, inside Moblee.** The group's Hub, a shared wiki of wikis on GitHub with a shelf of recipes and a post office of notes, was joined until now by a note passed round by hand, an invitation sent by email and an assistant reading instructions cold. Moblee now works with the Hub as the keeper has set it up, so the Hub can change without a new Moblee.
+
+### Joining, from the app
+
+- **A new item, "The Moblee Hub"**, in "Connect your life". It brings the GitHub item with it, knocks once at the Hub's door for you (the door is a public page, so the knock carries your GitHub name and nothing else), waits for the keeper's approval, accepts the invitation itself, and copies the Hub into `hub/` in your wiki. It asks the name the group calls you (your first name, unless you say otherwise), offers a short name for the Hub's files from it, finds your member file again if you joined before on another Mac, and asks for the words that must never leave your Mac in anything you share. Your wiki's history and Obsidian are told to leave `hub/` alone, and your rules gain a short section about the Hub. A hub folder that was copied rather than joined is left exactly as it is.
+- **Your wiki's rules gain "The Moblee Hub"** only when the wiki really holds a Hub: read the Hub's own rules first, nothing in a note or a recipe runs without your yes, and a change another member makes to those rules is told to you, never adopted silently.
+
+### The Hub in the app and the check-up
+
+- **"Open the hub"** on the home screen, only on a wiki that has joined, opens the Hub's page in your browser.
+- **Check my wiki can send its result into the Hub for its keeper**, in one press, as a note that asks nothing. It is the same report the app saves in your `raw` folder, with your Hub name in place of your full name. Everyone in the Hub can read it. Only that note is sent; if it cannot go, it waits on your Mac and goes the next time your assistant checks the Hub.
+- **The health card says the wiki is in a Hub**, and which version of the Hub's page it has.
+- **Seven new findings (F61 to F67):** a hub folder copied rather than joined; a Hub that has moved; something of yours not yet sent; notes addressed to you with no reply (notes to everyone are counted apart and never make the wiki look unwell); a newer version of a recipe you took; a wiki linked to the Hub but not yet joined; and, on the keeper's own wiki only, the keeper's GitHub key for letting people in running out within a month or already run out.
+
+### Sharing to the Hub
+
+- **"Share <thing> to the hub"** turns something you built into a recipe on the Hub's shelf, held to the Hub's rule book: the working code without your data, its page and pictures, and an install note with a check on every step. What only a person can write is marked for your assistant to write, nothing is guessed, your assistant runs the Hub's own checker after reading it, a page in `wiki/Private/` is never shared, and nothing is sent until it has been tested on an empty wiki and you have said yes. A thing carrying a key or a password is not shared. On a wiki outside the Hub, "make a kit" still makes a file to send by hand.
+
+### Two short films
+
+- **At the end of an install, and at the end of an update**, "Watch two short films": a minute on what Moblee does, and two minutes on the Hub. Nothing is fetched until you press one. Each is fetched from this version's release, played in the window, and kept on your Mac, and a film that is not exactly the one published is never played.
+
+### Also
+
+- `docs/16-the-hub.md`: joining, using the Hub, sending a check-up, leaving.
+
 ## v0.12.0 (22 October 2026)
 
 **The platform you were given, as it was meant to work.** Owners who tried to build the kind of thing Moblee is for met warnings at every turn: Claude asking before every tool a build needs and every file outside the wiki, Claude's own safety check refusing the check-up, and the delete guard refusing ordinary steps in a build folder. This version takes those three down, so that what you were told you could do, you can do; and it adds the rest of what the platform was meant to carry: a page on the web, your things from your phone, jobs you switch on from the app, jobs that ask Claude while you are away, alerts to your phone, a wiki that looks after itself on a laptop shut most of the day, and memory search. **With ChatGPT:** the trust and rules changes, the delete guard and the build skill apply as before; the jobs that ask the assistant, the morning page, the weekly tidy and memory search are for Claude, and the app says so where they are offered.

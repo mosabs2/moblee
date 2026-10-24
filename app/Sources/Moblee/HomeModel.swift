@@ -58,6 +58,8 @@ final class HomeModel: ObservableObject {
 
     @Published var tiles: [Tile] = []
     @Published var wikiVersion: String = ""
+    /// (v0.13.0) The group's Hub, when the wiki holds a real clone of it.
+    @Published var hub: Hub.Linked?
     @Published var packVersion: String = ""
     @Published var needsRepair = false
     @Published var repairFailed = false
@@ -154,6 +156,7 @@ final class HomeModel: ObservableObject {
         guard let vault else { loaded = true; return }
 
         wikiVersion = Self.read(vault.appendingPathComponent("VERSION"))
+        hub = Hub.linked(vault: vault)
         if let bundledPack { packVersion = Self.read(bundledPack.appendingPathComponent("VERSION")) }
         checkSafety()
         lookForNewerRelease()

@@ -871,6 +871,181 @@ def check_recall(f: Findings, vault: Path | None) -> None:
           else f"Memory search is on, refreshed {age} day(s) ago.")
 
 
+HUB_ID_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789-")
+HUB_TOKEN_WARN_DAYS = 31
+
+
+def hub_norm(address: str) -> str:
+    a = (address or "").strip().rstrip("/")
+    return (a[:-4] if a.endswith(".git") else a).lower()
+
+
+def hub_frontmatter(path: Path) -> dict:
+    """The simple key: value lines between the opening and closing ---. Values
+    only; nothing of a note's text is ever read past its frontmatter."""
+    out: dict = {}
+    try:
+        with path.open(encoding="utf-8", errors="replace") as fh:
+            if fh.readline().strip() != "---":
+                return out
+            for _ in range(40):
+                line = fh.readline()
+                if not line or line.strip() == "---":
+                    break
+                if ":" in line:
+                    k, _, v = line.partition(":")
+                    out[k.strip()] = v.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return out
+
+
+def hub_version_tuple(v: str):
+    try:
+        return tuple(int(p) for p in str(v).strip().split("."))
+    except ValueError:
+        return None
+
+
+def check_hub(f: Findings, vault: Path | None, today=None) -> None:
+    """(0.13.0) The Moblee Hub, when this wiki has a hub/ folder. Read-only: the
+    clone's own files and refs are read, nothing is fetched, nothing is written,
+    and no note's text is quoted. Counts only, never a name or a title."""
+    if vault is None:
+        return
+    folder = vault / "hub"
+    if not folder.exists():
+        f.add(OK, "This wiki has not joined a Hub; the Hub item in the Moblee app joins one.")
+        return
+    # The address as configured. `git remote get-url` answers after any
+    # url.insteadOf rule, which is not the address the Hub's manifest names.
+    code, remote = run(["git", "-C", str(folder), "config", "--get", "remote.origin.url"])
+    remote = remote.strip()
+    if not (folder / ".git").exists() or code != 0 or not remote:
+        f.add(LOOK, "The wiki has a hub folder that is not linked to GitHub (it was copied, not joined), so "
+                    "nothing in it reaches the group or comes back. Choosing the Hub item in the Moblee app "
+                    "says what to do with it; nothing in it is moved or deleted.", "F61")
+        return
+    try:
+        manifest = json.loads((folder / "hub.json").read_text(encoding="utf-8"))
+        if not isinstance(manifest, dict):
+            manifest = None
+    except (OSError, ValueError):
+        manifest = None
+    if manifest is None:
+        f.add(LOOK, "The hub folder has no readable hub.json, so it is not a Hub this version of Moblee knows, "
+                    "or it has not been brought up to date since the Hub gained one.", "F62")
+        return
+    if hub_norm(remote) != hub_norm(str(manifest.get("address", ""))):
+        f.add(LOOK, "The hub folder points somewhere other than the address its own hub.json gives, so the Hub "
+                    "has moved or the folder is something else.", "F62")
+        return
+    name = manifest.get("name") if isinstance(manifest.get("name"), str) else "the Hub"
+    version = manifest.get("version") if isinstance(manifest.get("version"), str) else None
+    try:
+        me = json.loads((folder / "app" / "state" / "me.json").read_text(encoding="utf-8")).get("id")
+    except (OSError, ValueError, AttributeError):
+        me = None
+    if not (isinstance(me, str) and me and set(me) <= HUB_ID_CHARS):
+        f.add(LOOK, f"The wiki is linked to {name} but this Mac has not joined it as a member. Choosing the Hub "
+                    "item in the Moblee app finishes joining.", "F67")
+        return
+    f.add(OK, f"The wiki is in {name} as {me}" + (f"; the Hub's page is version {version}." if version else "."),
+          tag="hub-version",
+          sendable="The wiki is in a Hub" + (f"; its page is version {version}." if version else "."))
+
+    # F63: something of the owner's committed but not on GitHub
+    ahead = 0
+    code, out = run(["git", "-C", str(folder), "rev-list", "--count", "@{u}..HEAD"])
+    if code == 0 and out.strip().isdigit():
+        ahead = int(out.strip())
+    code, _ = run(["git", "-C", str(folder), "cat-file", "-e", f"@{{u}}:members/{me}.json"])
+    member_missing = code != 0
+    if ahead:
+        f.add(LOOK, f"{things(ahead, 'save', 'saves')} of yours in the Hub {'is' if ahead == 1 else 'are'} not on "
+                    "GitHub yet, so the group cannot see what is in "
+                    f"{'it' if ahead == 1 else 'them'}. Saying 'check the hub' to your assistant sends what is waiting.", "F63")
+    elif member_missing:
+        f.add(LOOK, "Your member file in the Hub is not on GitHub yet, so the group cannot see that you have joined. "
+                    "Choosing the Hub item in the Moblee app again sends it.", "F63")
+
+    # F64: notes for this member with no reply from them
+    post = folder / "post"
+    waiting = to_all = 0
+    replies = {p.name for p in post.glob(f"*--reply-{me}-*.md")} if post.is_dir() else set()
+    for note in (sorted(post.glob("*.md")) if post.is_dir() else []):
+        if "--reply-" in note.name:
+            continue
+        fm = hub_frontmatter(note)
+        if fm.get("type") != "Moblee hub note" or fm.get("kind") == "report" or fm.get("from") == me:
+            continue
+        if fm.get("to") not in (me, "all"):
+            continue
+        # A reply is named after the note's file, and the note's id is the same
+        # name by the Hub's format; either answers it.
+        keys = {note.stem, fm.get("id") or note.stem}
+        if any(r.startswith(f"{k}--reply-{me}-") for k in keys for r in replies):
+            continue
+        if fm.get("to") == me:
+            waiting += 1
+        else:
+            to_all += 1
+    if waiting:
+        f.add(LOOK, f"{things(waiting, 'note', 'notes')} in the Hub's post office {'is' if waiting == 1 else 'are'} "
+                    f"for you and {'has' if waiting == 1 else 'have'} no reply from you yet. Say 'check the hub' "
+                    "to your assistant; nothing is carried out without your yes.", "F64")
+    if to_all:
+        # Notes to everyone are the group talking; they never make the wiki unwell.
+        f.add(OK, f"{things(to_all, 'note', 'notes')} to everyone in the Hub {'has' if to_all == 1 else 'have'} "
+                  "no reply from you; 'check the hub' shows them.")
+
+    # F65: a recipe taken has a newer version on the shelf
+    try:
+        taken = json.loads((folder / "members" / f"{me}.json").read_text(encoding="utf-8")).get("taken") or []
+    except (OSError, ValueError, AttributeError):
+        taken = []
+    newer = 0
+    for entry in taken if isinstance(taken, list) else []:
+        if not isinstance(entry, str) or "@" not in entry:
+            continue
+        rid, _, had = entry.rpartition("@")
+        try:
+            shelf = json.loads((folder / "recipes" / rid / "recipe.json").read_text(encoding="utf-8")).get("version")
+        except (OSError, ValueError, AttributeError):
+            continue
+        a, b = hub_version_tuple(shelf), hub_version_tuple(had)
+        if a and b and a > b:
+            newer += 1
+    if newer:
+        f.add(LOOK, f"{things(newer, 'recipe', 'recipes')} you took from the Hub {'has' if newer == 1 else 'have'} "
+                    "a newer version on the shelf. Say 'check the hub' to your assistant to see what changed.", "F65")
+
+    # F66: the door's token, for the keeper alone, a month before it runs out
+    keeper = manifest.get("keeper")
+    expires = manifest.get("door_token_expires")
+    if me == keeper and isinstance(expires, str):
+        try:
+            when = datetime.date.fromisoformat(expires.strip()[:10])
+        except ValueError:
+            when = None
+        day = today or datetime.date.today()
+        if when is not None:
+            left = (when - day).days
+            if left < 0:
+                f.add(LOOK, f"The token the Hub's door uses ran out on {when.strftime('%-d %B %Y')}, so nobody new "
+                            "can be let in: an approved knock fails with an authentication error. Make a new one "
+                            "and put it in the lobby's secrets; your assistant walks you through it.", "F66")
+            elif left <= HUB_TOKEN_WARN_DAYS:
+                f.add(LOOK, f"The token the Hub's door uses runs out on {when.strftime('%-d %B %Y')}, in "
+                            f"{things(left, 'day', 'days')}. After that nobody new can be let in until you make "
+                            "another; your assistant walks you through it.", "F66")
+            else:
+                f.add(OK, f"The Hub's door token runs out on {when.strftime('%-d %B %Y')}; a warning comes a month before.")
+    elif me == keeper:
+        f.add(OK, "You keep this Hub. Its hub.json gives no date for the door's token, so the check-up cannot "
+                  "warn before it runs out; adding \"door_token_expires\" to hub.json lets it.")
+
+
 def check_jobs(f: Findings) -> None:
     plists = sorted(AGENTS.glob("com.moblee.*.plist")) if AGENTS.is_dir() else []
     if not plists:
@@ -3046,6 +3221,16 @@ def card_facts(rows: list) -> tuple[str, list, list]:
     return state, bad, unseen
 
 
+def card_hub(rows: list) -> str:
+    """(v0.13.0) The one line the card carries about the group's Hub: which Hub
+    and which version of its page, from the row check_hub tagged. Empty when the
+    wiki has not joined one, so a wiki outside any Hub is never told about it.
+    A Hub fault is a finding and is listed with the others, not here."""
+    tagged = [r for r in rows if r.get("tag") == "hub-version" and r["level"] == OK]
+    # The sendable wording: the card is what gets sent on, and carries no name.
+    return (tagged[0].get("sendable") or tagged[0]["text"]) if tagged else ""
+
+
 def card_saving(rows: list) -> str:
     """The one line the card and the app's check-up screen carry about the wiki
     saving itself after every reply.
@@ -3173,6 +3358,7 @@ def build_card(rows: list, vault: Path | None = None, today=None) -> dict:
         headline += f" {len(unseen)} more could not be checked."
     actions = card_actions(state, bad, unseen)
     saving = card_saving(rows)
+    hub_line = card_hub(rows)
     wrong_all = [{"level": r["level"], "guide": r["guide"], "line": card_line(r, anon)} for r in bad]
     unseen_all = [{"level": r["level"], "guide": r["guide"], "line": card_line(r, anon)} for r in unseen]
 
@@ -3185,6 +3371,8 @@ def build_card(rows: list, vault: Path | None = None, today=None) -> dict:
         # never reaches the lists below.
         if saving:
             out += textwrap.wrap(saving, CARD_WIDTH) or [saving]
+        if hub_line:
+            out += textwrap.wrap(hub_line, CARD_WIDTH) or [hub_line]
         if wrong_all:
             out += ["", CARD_WRONG_HEAD]
             for item in wrong_all[:n_wrong]:
@@ -3217,7 +3405,7 @@ def build_card(rows: list, vault: Path | None = None, today=None) -> dict:
             n_wrong -= 1
         lines = render(n_wrong, n_unseen)
     return {"date": day.isoformat(), "state": state, "healthy": state == "healthy",
-            "headline": headline, "saving": saving,
+            "headline": headline, "saving": saving, "hub": hub_line,
             "wrong": wrong_all[:n_wrong], "wrong_total": len(wrong_all),
             "wrong_not_shown": len(wrong_all) - n_wrong,
             "unchecked": unseen_all[:n_unseen], "unchecked_total": len(unseen_all),
@@ -3313,6 +3501,7 @@ def main() -> int:
     check_apps(f, vault)
     check_backup(f, vault)
     check_recall(f, vault)
+    check_hub(f, vault)
     check_diary(f)
     check_mac(f, assistant)
     check_leftovers(f, pack)
