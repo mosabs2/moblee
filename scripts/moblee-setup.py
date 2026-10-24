@@ -1505,6 +1505,469 @@ def install_vault_fn():
     return True
 
 
+# --- (0.13.0) the Moblee Hub ----------------------------------------------------
+#
+# The Hub is the group's shared wiki of wikis: a private GitHub repository kept
+# by one member (the keeper), with a shelf of recipes and a post office of notes.
+# Moblee is a client of it and copies none of its code: it reads the Hub's
+# manifest (hub.json) and the fixed layout beside it, knocks at the door the
+# manifest names, and clones. The page, the checker and the rules keep arriving
+# by pull. The defaults below are the group's own Hub; ~/.config/moblee/hub.json
+# names another, and the MOBLEE_HUB_* settings exist for the tests.
+
+HUB_DEFAULT = {
+    "name": "Moblee Hub",
+    "address": "https://github.com/mmamas40501/moblee-hub.git",
+    "join": "approve",
+    "lobby": "https://github.com/mmamas40501/moblee-hub-lobby",
+}
+HUB_CHOICE = CONFIG_DIR / "hub.json"
+HUB_POLICIES = ("invite", "approve", "open")
+HUB_ID_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789-")
+
+
+def hub_settings() -> dict:
+    """Which Hub, before the folder exists: the owner's choice on record, else the
+    group's own. Once hub/ is a clone, its own hub.json is the word on it."""
+    hub = dict(HUB_DEFAULT)
+    try:
+        chosen = json.loads(HUB_CHOICE.read_text(encoding="utf-8"))
+        if isinstance(chosen, dict):
+            hub.update({k: v for k, v in chosen.items() if isinstance(v, str) and k in hub})
+    except (OSError, ValueError):
+        pass
+    for key in ("address", "join", "lobby"):
+        env = os.environ.get("MOBLEE_HUB_" + key.upper())
+        if env:
+            hub[key] = env
+    if hub.get("join") not in HUB_POLICIES:
+        hub["join"] = "invite"
+    return hub
+
+
+def same_address(one: str, other: str) -> bool:
+    def norm(a: str) -> str:
+        a = (a or "").strip().rstrip("/")
+        if a.endswith(".git"):
+            a = a[:-4]
+        return a.lower()
+    return norm(one) == norm(other)
+
+
+def repo_slug(address: str) -> str | None:
+    """owner/name from a github.com address, or None for anything else."""
+    a = (address or "").strip().rstrip("/")
+    if a.endswith(".git"):
+        a = a[:-4]
+    for prefix in ("https://github.com/", "git@github.com:"):
+        if a.lower().startswith(prefix):
+            rest = a[len(prefix):]
+            if rest.count("/") == 1 and all(rest.split("/")):
+                return rest
+    return None
+
+
+def gh_tool() -> str | None:
+    return os.environ.get("MOBLEE_GH") or which("gh")
+
+
+def hub_git(args: list, timeout: int = 60) -> tuple[int, str]:
+    """git for the Hub, never stopping at a password question nobody can see:
+    a sign-in that is not set up fails at once and says so."""
+    os.environ["GIT_TERMINAL_PROMPT"] = "0"
+    return run(["git"] + args, timeout=timeout)
+
+
+def env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, str(default)))
+    except ValueError:
+        return default
+
+
+def hub_folder() -> Path | None:
+    v = vault_path()
+    return (v / "hub") if v else None
+
+
+def hub_manifest(folder: Path) -> dict | None:
+    try:
+        data = json.loads((folder / "hub.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def hub_remote(folder: Path) -> str | None:
+    if not (folder / ".git").exists():
+        return None
+    code, out = hub_git(["-C", str(folder), "config", "--get", "remote.origin.url"], timeout=30)
+    return out.strip() if code == 0 and out.strip() else None
+
+
+def hub_me(folder: Path) -> str | None:
+    try:
+        me = json.loads((folder / "app" / "state" / "me.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    mid = me.get("id") if isinstance(me, dict) else None
+    return mid if isinstance(mid, str) and mid and set(mid) <= HUB_ID_CHARS else None
+
+
+def check_hub():
+    folder = hub_folder()
+    if folder is None:
+        return False, "no wiki was found to join it from"
+    if not folder.exists():
+        return False, "this wiki has not joined the Hub"
+    remote = hub_remote(folder)
+    if remote is None:
+        return False, "a hub folder is there, but it is not linked to GitHub (it was copied, not joined)"
+    manifest = hub_manifest(folder)
+    if manifest is None:
+        return False, "the hub folder has no hub.json, so it is not a Hub this version of Moblee knows"
+    if not same_address(remote, str(manifest.get("address", ""))):
+        return False, "the hub folder points somewhere other than the address its own hub.json gives"
+    me = hub_me(folder)
+    if me is None:
+        return False, "linked, but this Mac has not joined as a member yet (run this item again)"
+    code, _ = hub_git(["-C", str(folder), "cat-file", "-e", f"@{{u}}:members/{me}.json"], timeout=30)
+    if code != 0:
+        return False, f"joined as {me}, but your member file has not reached GitHub yet (run this item again)"
+    gh = gh_tool()
+    if gh and repo_slug(remote) and run([gh, "auth", "status"], timeout=60)[0] != 0:
+        return False, f"joined as {me}, but GitHub's sign-in on this Mac has lapsed (run the GitHub item again)"
+    version = manifest.get("version")
+    page = f"; the Hub's page is version {version}" if isinstance(version, str) and version else ""
+    return True, f"in {manifest.get('name') or 'the Hub'} as {me}{page}"
+
+
+def hub_reachable(address: str) -> bool:
+    return hub_git(["ls-remote", "--heads", address], timeout=60)[0] == 0
+
+
+def hub_login(gh: str) -> str | None:
+    code, out = run([gh, "api", "user", "--jq", ".login"], timeout=60)
+    login = out.strip()
+    return login if code == 0 and login and " " not in login else None
+
+
+def hub_invitation(gh: str, slug: str) -> int | None:
+    code, out = run([gh, "api", "/user/repository_invitations"], timeout=60)
+    if code != 0:
+        return None
+    try:
+        for inv in json.loads(out or "[]"):
+            repo = (inv.get("repository") or {}).get("full_name", "")
+            if isinstance(repo, str) and repo.lower() == slug.lower():
+                return int(inv["id"])
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return None
+    return None
+
+
+def hub_knock(gh: str, hub: dict, login: str) -> bool:
+    """Open the one issue in the lobby that asks the door to invite this account.
+
+    The lobby is public, so the knock carries the GitHub name and nothing else:
+    never the owner's own name, which is the first of the words they are about
+    to be asked to keep off the Hub (cold read, 24 October 2026). An open issue
+    already asking for the same account is not opened twice, and when the
+    lobby's list cannot be read no new knock is made."""
+    lobby = repo_slug(hub.get("lobby", ""))
+    if not lobby:
+        return False
+    title = f"join: {login}"
+    code, out = run([gh, "issue", "list", "-R", lobby, "--state", "open", "--limit", "200",
+                     "--json", "title"], timeout=60)
+    if code != 0:
+        say("  The Hub's door could not be read just now (no internet?). Nothing was sent; choose")
+        say("  this item again in a while.")
+        return False
+    try:
+        mine = [i for i in json.loads(out or "[]")
+                if str(i.get("title", "")).strip().lower() in (title.lower(),)
+                or str(i.get("title", "")).lower().startswith(f"join: {login.lower()},")]
+    except (ValueError, AttributeError):
+        mine = []
+    if mine:
+        say("  The knock is already at the door from before; it is not sent twice.")
+        return True
+    say(f"  Knocking at the Hub's door. The door is a public page, so the knock carries only")
+    say(f"  your GitHub name, {login}, and nothing else of yours.")
+    body = ("Opened by Moblee on behalf of this account, to join the Hub. "
+            "The keeper adds the label `approved` and the door sends the invitation.")
+    code, out = run([gh, "issue", "create", "-R", lobby, "--title", title, "--body", body], timeout=60)
+    if code != 0:
+        say("  The knock could not be left at the door: " + (out.strip().splitlines() or ["no answer"])[-1])
+        return False
+    return True
+
+
+def hub_wait_for_invitation(gh: str, slug: str, address: str) -> bool:
+    """Wait for the keeper, accepting the invitation the moment it arrives. True
+    once this account can read the Hub."""
+    poll = max(1, env_int("MOBLEE_HUB_POLL", 15))
+    limit = max(poll, env_int("MOBLEE_HUB_WAIT", 1800))
+    waited = 0
+    told = False
+    while waited <= limit:
+        inv = hub_invitation(gh, slug)
+        if inv is not None:
+            code, out = run([gh, "api", "-X", "PATCH", f"/user/repository_invitations/{inv}"], timeout=60)
+            if code != 0:
+                say("  The invitation came, but accepting it failed: " + (out.strip().splitlines() or ["no answer"])[-1])
+                return False
+            say("  The invitation came and has been accepted.")
+            for _ in range(6):   # GitHub can take a moment to let a new member in
+                if hub_reachable(address):
+                    return True
+                time.sleep(poll)
+            say("  Accepted, but GitHub has not opened the Hub to you yet. Choose this item again")
+            say("  in a minute; it carries on from here.")
+            return False
+        if hub_reachable(address):
+            return True
+        if not told:
+            say("  Waiting for the Hub's keeper to let you in. You can leave this window open;")
+            say("  it carries on by itself the moment they do. If you close it, choosing this")
+            say("  item again picks up where it stopped.")
+            told = True
+        time.sleep(poll)
+        waited += poll
+    say("  The keeper has not let you in yet. Nothing is lost: choose this item again later.")
+    return False
+
+
+def hub_ignore(v: Path) -> None:
+    """The wiki's git and Obsidian both leave the Hub alone."""
+    gi = v / ".gitignore"
+    try:
+        text = gi.read_text(encoding="utf-8")
+    except OSError:
+        text = ""
+    if not any(line.strip() in ("hub/", "/hub/", "hub", "/hub") for line in text.splitlines()):
+        # "/hub" and not "hub/": a folder-only pattern lets git track a link called hub.
+        if gi.exists():
+            backup(gi)
+        add = ("" if not text or text.endswith("\n") else "\n") + \
+              "# The Moblee Hub keeps its own history (GitHub), so the wiki does not track it\n/hub\n"
+        gi.write_text(text + add, encoding="utf-8")
+    app = v / ".obsidian" / "app.json"
+    try:
+        data = json.loads(app.read_text(encoding="utf-8")) if app.exists() else {}
+    except ValueError:
+        say("  Obsidian's settings file could not be read, so it was left alone; the Hub's")
+        say("  notes may show in Obsidian until it is put right.")
+        return
+    if not isinstance(data, dict):
+        return
+    filters = data.get("userIgnoreFilters")
+    if not isinstance(filters, list):
+        filters = []
+    if "hub/" not in filters:
+        if app.exists():
+            backup(app)
+        data["userIgnoreFilters"] = filters + ["hub/"]
+        app.parent.mkdir(parents=True, exist_ok=True)
+        app.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def hub_owner_name(v: Path) -> str | None:
+    try:
+        text = (v / "CLAUDE.md").read_text(encoding="utf-8")
+    except OSError:
+        try:
+            text = (v / "AGENTS.md").read_text(encoding="utf-8")
+        except OSError:
+            return None
+    import re
+    m = re.search(r"knowledge base for ([^\n]{1,80}?) where (?:Claude|the assistant) is the maintainer", text)
+    name = m.group(1).strip() if m else None
+    return None if not name or name == "[Your Name]" else name
+
+
+def hub_suggest_id(name: str) -> str:
+    """The first word of the name, in small letters and digits only."""
+    first = name.split()[0].lower() if name.split() else ""
+    word = "".join(c for c in first if c in HUB_ID_CHARS and c != "-")
+    return word[:24] or "me"
+
+
+def hub_join(folder: Path, v: Path, name_hint: str | None) -> str | None:
+    """The member file, the Mac's own record of who it is, and the private words.
+    Returns the member id, or None when the owner stopped."""
+    me = hub_me(folder)
+    if me and (folder / "members" / f"{me}.json").exists():
+        return me
+    rule("The Hub: your name in the group")
+    # The first word only, by default: the surname is the first of the words
+    # the owner is about to be asked to keep off the Hub.
+    default = (name_hint or "").split()[0] if (name_hint or "").split() else ""
+    say("  The other members see this name beside everything you share.")
+    name = ask(f"  What does the group call you?{' [' + default + ']' if default else ''} ")
+    if name is None:
+        return None
+    name = name.strip() or default
+    if not name:
+        say("  A name is needed to join. Choose this item again when you have one.")
+        return None
+    taken = {p.stem for p in (folder / "members").glob("*.json")}
+    mid = hub_suggest_id(name)
+    # Joined before, on another Mac or before the folder was copied again: the
+    # member file is already there, and is this owner's, not someone else's.
+    if mid in taken:
+        try:
+            there = json.loads((folder / "members" / f"{mid}.json").read_text(encoding="utf-8")).get("name")
+        except (OSError, ValueError, AttributeError):
+            there = None
+        if isinstance(there, str) and there.strip().lower() == name.strip().lower() \
+                and yes(f"  The Hub already has a member called {there}, '{mid}'. Is that you?"):
+            state = folder / "app" / "state"
+            state.mkdir(parents=True, exist_ok=True)
+            (state / "me.json").write_text(json.dumps({"id": mid}) + "\n", encoding="utf-8")
+            return mid
+    while True:
+        if mid in taken:
+            say(f"  The short name '{mid}' is already someone else's.")
+            mid = ""
+        typed = ask(f"  A short name for you, used in the Hub's file names (small letters, digits, hyphens){' [' + mid + ']' if mid else ''} ")
+        if typed is None:
+            return None
+        typed = typed.strip().lower() or mid
+        if typed and set(typed) <= HUB_ID_CHARS and typed not in taken and len(typed) <= 24:
+            mid = typed
+            break
+        say("  That will not do: small letters, digits and hyphens only, and not one already taken.")
+        mid = ""
+    (folder / "members").mkdir(exist_ok=True)
+    member = {"id": mid, "name": name, "joined": datetime.date.today().isoformat(), "taken": []}
+    (folder / "members" / f"{mid}.json").write_text(json.dumps(member, indent=2) + "\n", encoding="utf-8")
+    state = folder / "app" / "state"
+    state.mkdir(parents=True, exist_ok=True)
+    (state / "me.json").write_text(json.dumps({"id": mid}) + "\n", encoding="utf-8")
+    words_file = folder / "tools" / "private-words.txt"
+    if not words_file.exists():
+        say("")
+        say("  Last, the words that must never leave this Mac in anything you share: your")
+        say("  surname, your family's names, the names of a coach, doctor or friend in your")
+        say("  wiki. Type them on one line with commas between them, or press Return to")
+        say("  add them later. They stay on this Mac; the Hub's checker sweeps for them.")
+        typed = ask("  Words: ") or ""
+        words = [w.strip() for w in typed.split(",") if w.strip()]
+        words += [w for w in name.split() if len(w) > 2 and w not in words]
+        words_file.parent.mkdir(parents=True, exist_ok=True)
+        words_file.write_text("".join(w + "\n" for w in words), encoding="utf-8")
+    return mid
+
+
+def install_hub():
+    v = vault_path()
+    if v is None:
+        say("  No wiki was found on this Mac to join the Hub from.")
+        return False
+    hub = hub_settings()
+    folder = v / "hub"
+    if folder.exists() and hub_remote(folder) is None:
+        say("  There is a folder called hub in your wiki that is not linked to GitHub. It is")
+        say("  left exactly as it is. Ask your assistant to look at it before trying again.")
+        return False
+    slug = repo_slug(hub["address"])
+    gh = gh_tool()
+    if slug:
+        ok, _ = check_github()
+        if not ok and not os.environ.get("MOBLEE_GH"):
+            say("  The Hub lives on GitHub, so GitHub comes first.")
+            if not install_github():
+                return False
+            gh = gh_tool()
+        if not gh:
+            say("  GitHub's tool is not on this Mac, so the Hub cannot be joined yet.")
+            return False
+        if run([gh, "auth", "setup-git"], timeout=60)[0] != 0:
+            say("  GitHub's sign-in could not be set up for git on this Mac. Choose the GitHub")
+            say("  item again, then this one.")
+            return False
+    rule("The Hub")
+    if not folder.exists():
+        if not hub_reachable(hub["address"]):
+            if not slug:
+                say("  The Hub's address does not answer: " + hub["address"])
+                return False
+            login = hub_login(gh)
+            if not login:
+                say("  Your GitHub name could not be read. Run the GitHub item again, then this one.")
+                return False
+            if hub_invitation(gh, slug) is None:
+                if hub["join"] == "invite":
+                    say(f"  This Hub's keeper lets members in by hand. Send them your GitHub name,")
+                    say(f"  {login}, and this window waits for the invitation.")
+                else:
+                    if not hub_knock(gh, hub, login):
+                        return False
+                    if hub["join"] == "approve":
+                        say("  Your request is at the door. The Hub's keeper approves it with one press.")
+            if not hub_wait_for_invitation(gh, slug, hub["address"]):
+                return False
+        code, out = run(["git", "clone", hub["address"], str(folder)], timeout=600)
+        if code != 0:
+            say("  The Hub could not be copied to this Mac: " + (out.strip().splitlines() or ["no answer"])[-1])
+            return False
+    else:
+        manifest = hub_manifest(folder) or {}
+        if not same_address(hub_remote(folder) or "", str(manifest.get("address") or hub["address"])):
+            say("  Your hub folder points somewhere other than the Hub it says it is. It is left")
+            say("  as it is; the check-up names it (field guide F62).")
+            return False
+        code, out = run(["git", "-C", str(folder), "pull", "--rebase", "--autostash"], timeout=300)
+        if code != 0:
+            say("  The Hub could not be brought up to date just now (no internet?). Carrying on.")
+    manifest = hub_manifest(folder)
+    if manifest is None:
+        say("  The Hub arrived without its hub.json, so this version of Moblee cannot use it.")
+        return False
+    hub_ignore(v)
+    mid = hub_join(folder, v, hub_owner_name(v))
+    if mid is None:
+        return False
+    member = f"members/{mid}.json"
+    if run(["git", "-C", str(folder), "config", "user.name"], timeout=30)[1].strip() == "":
+        # A fresh Mac may have no git identity, and a commit without one fails or
+        # prints git's long notice. The Hub's own folder gets one; nothing global.
+        login = hub_login(gh) if (gh and slug) else None
+        member_name = json.loads((folder / member).read_text(encoding="utf-8")).get("name") or mid
+        run(["git", "-C", str(folder), "config", "user.name", member_name], timeout=30)
+        run(["git", "-C", str(folder), "config", "user.email",
+             f"{login}@users.noreply.github.com" if login else f"{mid}@members.moblee.invalid"], timeout=30)
+    code, _ = hub_git(["-C", str(folder), "cat-file", "-e", f"@{{u}}:{member}"], timeout=30)
+    if code != 0:
+        if hub_git(["-C", str(folder), "rev-parse", "--abbrev-ref", "@{u}"], timeout=30)[0] != 0:
+            say("  The hub folder has no branch on GitHub to send to, so nothing was sent. Ask")
+            say("  your assistant to look at it (field guide F62).")
+            return False
+        code, out = hub_git(["-C", str(folder), "rev-list", "--count", "@{u}..HEAD"], timeout=30)
+        if code != 0 or out.strip() != "0":
+            # Other saves of the owner's are waiting to go. They are the
+            # assistant's to send with the owner's yes, not this item's.
+            say("  Other saves of yours in the Hub are waiting to be sent, so this item sends")
+            say("  nothing. Say 'check the hub' to your assistant, then choose this item again.")
+            return False
+        hub_git(["-C", str(folder), "add", "--", member], timeout=30)
+        hub_git(["-C", str(folder), "commit", "-q", "-m", f"hub: {mid} joined", "--", member], timeout=60)
+        code, out = hub_git(["-C", str(folder), "push", "-q"], timeout=300)
+        if code != 0:
+            hub_git(["-C", str(folder), "pull", "-q", "--rebase", "--autostash"], timeout=300)
+            code, out = hub_git(["-C", str(folder), "push", "-q"], timeout=300)
+        if code != 0:
+            say("  You are in, but your member file could not be sent to GitHub just now. Choose")
+            say("  this item again in a while; nothing is lost.")
+            return False
+    patcher = PACKAGE_ROOT / "scripts" / "patch-claude-md.py"
+    run([sys.executable, str(patcher), "--blocks-only", "--vault", str(v)], timeout=120)
+    say(f"  You are in the Hub as {mid}. Say 'open the hub' or 'check the hub' to your assistant.")
+    return True
+
+
 # --- the list, in the order it is shown ---------------------------------------
 
 def build_items() -> list:
@@ -1524,6 +1987,11 @@ def build_items() -> list:
              "Claude can read and work with your GitHub projects.",
              4, 40, "free (needs a free GitHub account)", needs=("homebrew",), signin="sign in to GitHub in your browser",
              install=install_github, check=check_github),
+        Item("hub", connect, "The Moblee Hub",
+             "The group's shared wiki of wikis: take what another member's wiki has (a tracker, a way of working) and share yours. Private, on GitHub; the Hub's keeper lets you in with one tap.",
+             4, 20, "free (needs the GitHub item, which this brings with it)", needs=("homebrew",),
+             signin="sign in to GitHub if you have not, then wait for the keeper's yes",
+             install=install_hub, check=check_hub),
         Item("chrome", connect, "Chrome, with your X, Instagram and YouTube",
              "Claude uses Chrome to read pages behind your own logins. It never posts without your yes.",
              5, 0, "free (installs Chrome if you do not have it)", needs=("homebrew",),

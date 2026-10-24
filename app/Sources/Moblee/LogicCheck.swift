@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import UniformTypeIdentifiers
 
 /// `--check-logic` (only with `--home <practice folder>`) checks the decisions
@@ -2704,6 +2705,180 @@ enum LogicCheck {
                       && !fm.fileExists(atPath: home.appendingPathComponent("Sam Wiki").path))
         } else {
             check("the example wiki is inside the app", false)
+        }
+
+        // --- (v0.13.0) the Hub: what counts as joined, who a check-up goes to, and the send ---
+        do {
+            let fm = FileManager.default
+            let yard = home.appendingPathComponent("logic-check/hub", isDirectory: true)
+            try? fm.createDirectory(at: yard, withIntermediateDirectories: true)
+            func gitRun(_ args: [String]) -> Bool {
+                let p = Process()
+                p.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+                p.arguments = args
+                var env = EngineTask.environment(home: home)
+                env["GIT_TERMINAL_PROMPT"] = "0"
+                p.environment = env
+                p.standardOutput = FileHandle.nullDevice
+                p.standardError = FileHandle.nullDevice
+                do { try p.run() } catch { return false }
+                p.waitUntilExit()
+                return p.terminationStatus == 0
+            }
+            func put(_ text: String, _ url: URL) {
+                try? fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try? text.write(to: url, atomically: true, encoding: .utf8)
+            }
+            let noHub = yard.appendingPathComponent("no-hub", isDirectory: true)
+            try? fm.createDirectory(at: noHub, withIntermediateDirectories: true)
+            check("hub: a wiki with no hub folder has no Hub", Hub.linked(vault: noHub) == nil)
+            let copied = yard.appendingPathComponent("copied", isDirectory: true)
+            put("{\"name\": \"Test Hub\", \"keeper\": \"keeper\"}", copied.appendingPathComponent("hub/hub.json"))
+            check("hub: a hub folder copied without its history is no Hub, so nothing is offered",
+                  Hub.linked(vault: copied) == nil)
+
+            // a stand-in for GitHub: a bare repository, and the keeper's seed in it
+            let seed = yard.appendingPathComponent("seed", isDirectory: true)
+            put("{\"name\": \"Test Hub\", \"keeper\": \"keeper\", \"version\": \"1.1.0\"}", seed.appendingPathComponent("hub.json"))
+            put("{\"id\": \"keeper\", \"name\": \"Kim\"}", seed.appendingPathComponent("members/keeper.json"))
+            put("app/state/\n", seed.appendingPathComponent(".gitignore"))
+            let bare = yard.appendingPathComponent("hub.git", isDirectory: true)
+            let ident = ["-c", "user.name=K", "-c", "user.email=k@x.invalid"]
+            let made = gitRun(["init", "-q", "-b", "main", seed.path])
+                && gitRun(["-C", seed.path] + ident + ["add", "-A"])
+                && gitRun(["-C", seed.path] + ident + ["commit", "-q", "-m", "seed"])
+                && gitRun(["clone", "-q", "--bare", seed.path, bare.path])
+            let wiki = yard.appendingPathComponent("wiki", isDirectory: true)
+            let clone = wiki.appendingPathComponent("hub").path
+            let cloned = made && gitRun(["clone", "-q", bare.path, clone])
+                && gitRun(["-C", clone, "config", "user.name", "Sam"])
+                && gitRun(["-C", clone, "config", "user.email", "sam@x.invalid"])
+            check("hub: the stand-in Hub was made and cloned", cloned)
+            let before = Hub.linked(vault: wiki)
+            check("hub: a real clone is the Hub, with its name and keeper read from hub.json",
+                  before?.name == "Test Hub" && before?.keeper == "keeper" && before?.keeperName == "Kim")
+            check("hub: before joining, no check-up can be sent (no member id on this Mac)",
+                  before != nil && before?.me == nil && Hub.recipient(before) == nil)
+            put("{\"id\": \"sam\"}", wiki.appendingPathComponent("hub/app/state/me.json"))
+            let joined = Hub.linked(vault: wiki)
+            check("hub: once joined, a check-up goes to the keeper, by the name the group calls them",
+                  Hub.recipient(joined)?.id == "keeper" && Hub.recipient(joined)?.name == "Kim"
+                      && Hub.sendTitle(to: "Kim") == "Send it to Kim")
+            if let j = joined {
+                let keeperSelf = Hub.Linked(folder: j.folder, name: j.name, me: "keeper", keeper: "keeper", keeperName: "Kim")
+                check("hub: the keeper's own Mac is not offered a note to itself", Hub.recipient(keeperSelf) == nil)
+                let noName = Hub.Linked(folder: j.folder, name: j.name, me: "sam", keeper: "keeper", keeperName: nil)
+                check("hub: a keeper with no member file is named by their id", Hub.recipient(noName)?.name == "keeper")
+            }
+            check("hub: an id with capitals, spaces or slashes is not an id",
+                  Hub.validId("Sam") == nil && Hub.validId("a b") == nil && Hub.validId("../x") == nil
+                      && Hub.validId("sam-2") == "sam-2")
+
+            let report = "---\ntype: Moblee clinic report\n---\n\n# Moblee check-up report\n\nThe wiki looks healthy.\n"
+            let when = Date(timeIntervalSince1970: 1_792_850_400)
+            let note = Hub.reportNote(report: report, me: "sam", to: "keeper", on: when)
+            check("hub: the note is a report from this member to the keeper, in the post office's format",
+                  note.text.hasPrefix("---\ntype: Moblee hub note\n") && note.text.contains("\nkind: report\n")
+                      && note.text.contains("\nfrom: sam\n") && note.text.contains("\nto: keeper\n")
+                      && note.text.contains("\ndo_not_ingest: true\n") && note.id.hasSuffix("-sam-checkup"))
+            check("hub: the note carries the saved report word for word", note.text.contains(report))
+
+            if let j = joined {
+                let first = Hub.send(report: report, hub: j, to: "keeper", home: home, on: when)
+                let second = Hub.send(report: report, hub: j, to: "keeper", home: home, on: when)
+                check("hub: the send reaches the stand-in GitHub", first == .sent && second == .sent)
+                let listed = Process()
+                listed.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+                listed.arguments = ["--git-dir", bare.path, "ls-tree", "-r", "--name-only", "main"]
+                let out = Pipe()
+                listed.standardOutput = out
+                listed.standardError = FileHandle.nullDevice
+                try? listed.run()
+                listed.waitUntilExit()
+                let names = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                check("hub: two sends in one minute are two notes, the second never over the first",
+                      names.contains("post/\(note.id).md") && names.contains("post/\(note.id)-2.md"))
+                check("hub: nothing else of the Hub was sent (the Mac's own member id stays on the Mac)",
+                      !names.contains("app/state"))
+                _ = gitRun(["-C", j.folder.path, "remote", "set-url", "origin",
+                            yard.appendingPathComponent("nowhere.git").path])
+                let offline = Hub.send(report: report, hub: j, to: "keeper", home: home, on: when)
+                check("hub: with GitHub out of reach, the note is kept on this Mac to go later, and the screen says so",
+                      offline == .savedNotSent
+                          && fm.fileExists(atPath: j.folder.appendingPathComponent("post/\(note.id)-3.md").path)
+                          && Hub.sentSentence(.savedNotSent, to: "Kim").contains("next time"))
+                check("hub: the sentence after a send names the keeper",
+                      Hub.sentSentence(.sent, to: "Kim") == "Sent to Kim through the Hub.")
+            }
+            let cardText = "{\"lines\": [\"Moblee health card\"], \"state\": \"healthy\", \"headline\": \"h\", \"saving\": \"\", \"hub\": \"The wiki is in Test Hub as sam; the Hub's page is version 1.1.0.\", \"wrong\": [], \"unchecked\": [], \"actions\": []}"
+            check("hub: the card's Hub line is read from the check-up",
+                  Clinic.Card.read(cardText)?.hub.contains("version 1.1.0") == true)
+            check("hub: and a card from an older check-up, with no Hub line, reads as none",
+                  Clinic.Card.read("{\"lines\": [\"x\"], \"state\": \"healthy\"}")?.hub == "")
+        }
+
+
+        // --- (v0.13.0) the two films offered at the end of the install ---
+        do {
+            let fm = FileManager.default
+            let hex = Set("0123456789abcdef")
+            check("films: two of them, each with a name, a size and a 64-character fingerprint",
+                  Films.all.count == 2 && Set(Films.all.map { $0.id }).count == 2
+                      && Films.all.allSatisfy { $0.sha256.count == 64 && $0.sha256.allSatisfy { hex.contains($0) }
+                          && $0.bytes > 1_000_000 && $0.id.hasSuffix(".mp4") })
+            check("films: each is fetched from the release of this app's own version",
+                  Films.url(for: Films.all[0], version: "0.13.0")?.absoluteString
+                      == "https://github.com/mosabs2/moblee/releases/download/v0.13.0/moblee-film-what-moblee-does.mp4")
+            check("films: no address is made from a version that is not a plain number",
+                  Films.url(for: Films.all[0], version: "") == nil && Films.url(for: Films.all[0], version: "0.13/../x") == nil)
+            check("films: the cards say how long and how big, in plain words",
+                  Films.length(Films.all[0]) == "1 minute" && Films.length(Films.all[1]) == "2 minutes"
+                      && Films.megabytes(Films.all[0]) == "27 MB" && Films.megabytes(Films.all[1]) == "85 MB")
+            check("films: the offer and the screen's sentence",
+                  Films.offerTitle == "Watch two short films"
+                      && HandoffScreen.filmsSentence == "Two short films about Moblee. Press one to watch it.")
+
+            let yard = home.appendingPathComponent("logic-check/films", isDirectory: true)
+            try? fm.createDirectory(at: yard, withIntermediateDirectories: true)
+            let bytes = Data("a film, for the check".utf8)
+            let sha = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+            let small = Films.Film(id: "check-film.mp4", title: "Check", what: "w", seconds: 5, bytes: bytes.count, sha256: sha)
+            try? bytes.write(to: yard.appendingPathComponent(small.id))
+            check("films: a file with the published bytes matches", Films.matches(yard.appendingPathComponent(small.id), small))
+            let other = yard.appendingPathComponent("other.mp4")
+            try? Data("a different film, same length!".utf8).write(to: other)
+            check("films: any other bytes do not", !Films.matches(other, small))
+
+            let practiceHome = yard.appendingPathComponent("home", isDirectory: true)
+            // The fingerprint is checked off the main thread, so each answer is waited for.
+            func settled(_ f: FilmFetch) -> FilmFetch.State {
+                let end = Date().addingTimeInterval(10)
+                while f.state == .checking && Date() < end { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+                return f.state
+            }
+            let f1 = FilmFetch()
+            f1.begin(small, home: practiceHome, version: "0.13.0", practice: true, source: nil)
+            check("films: a practice run with no films folder fetches nothing and says it could not",
+                  settled(f1) == .failed)
+            let f2 = FilmFetch()
+            f2.begin(small, home: practiceHome, version: "0.13.0", practice: true, source: yard)
+            check("films: a practice run plays the film from the folder it was given",
+                  settled(f2) == .ready(yard.appendingPathComponent(small.id)))
+            let wrong = yard.appendingPathComponent("wrong", isDirectory: true)
+            try? fm.createDirectory(at: wrong, withIntermediateDirectories: true)
+            try? Data("not the film".utf8).write(to: wrong.appendingPathComponent(small.id))
+            let f3 = FilmFetch()
+            f3.begin(small, home: practiceHome, version: "0.13.0", practice: true, source: wrong)
+            check("films: a film that differs from the published one is never played", settled(f3) == .failed)
+            let kept = Films.cache(home: practiceHome)
+            try? fm.createDirectory(at: kept, withIntermediateDirectories: true)
+            try? bytes.write(to: kept.appendingPathComponent(small.id))
+            let f4 = FilmFetch()
+            f4.begin(small, home: practiceHome, version: "0.13.0", practice: true, source: nil)
+            check("films: a film already fetched is played from the Mac's caches, with nothing fetched again",
+                  settled(f4) == .ready(kept.appendingPathComponent(small.id)))
+            check("films: the caches folder is the Mac's own, under Library/Caches",
+                  kept.path.hasSuffix("Library/Caches/moblee-films"))
         }
 
         print(failed == 0 ? "logic: every check held" : "logic: \(failed) check(s) FAILED")

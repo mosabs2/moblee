@@ -243,6 +243,13 @@ enum Snapshots {
         draw(homeScene { _ in }, "10-home-nothing-waiting", to: folder)
         draw(homeScene { $0.homeModel.tiles = sample; $0.homeModel.assistant = .both }, "08b-home-waiting-both", to: folder)
         draw(homeScene { $0.homeModel.assistant = .chatgpt }, "10b-home-chatgpt", to: folder)
+        // (v0.13.0) A wiki in the group's Hub: "Open the hub" in the corner,
+        // above "Check my wiki". Made up, as every scene here is.
+        let sampleHub = Hub.Linked(folder: URL(fileURLWithPath: "/tmp/moblee-gallery/Wiki/hub"), name: "Moblee Hub",
+                                   me: "sam", keeper: "kim", keeperName: "Kim")
+        draw(homeScene { f in
+            f.homeModel.hub = sampleHub
+        }, "10c-home-in-a-hub", to: folder)
         draw(homeScene { f in f.mode = .update; f.askingAssistant = true }, "15a-update-asks-assistant", to: folder)
         // a wiki that a newer Moblee made: no Change, and no Repair from this app
         draw(homeScene { f in
@@ -454,6 +461,19 @@ enum Snapshots {
                                          savedAs: "clinic-report-sam-checkup-2026-09-24.md"))),
              "24c-clinic-problems", to: folder)
         draw(clinicScene(.noWiki), "24d-clinic-no-wiki", to: folder)
+        // (v0.13.0) In a Hub: the card's Hub line, the send button under the
+        // card, and the two things the screen can say after the press.
+        var hubCard = healthyCard
+        hubCard.hub = "The wiki is in Moblee Hub as sam; the Hub's page is version 1.1.2."
+        func hubClinic(_ result: Hub.SendResult?) -> Flow {
+            let f = clinicScene(.finished(.init(card: hubCard, savedAs: "clinic-report-sam-checkup-2026-10-24.md")))
+            f.homeModel.hub = sampleHub
+            f.clinic.sendResult = result
+            return f
+        }
+        draw(hubClinic(nil), "24i-clinic-in-a-hub", to: folder)
+        draw(hubClinic(.sent), "24j-clinic-sent-to-keeper", to: folder)
+        draw(hubClinic(.savedNotSent), "24k-clinic-not-sent-yet", to: folder)
         draw(clinicScene(.couldNotCheck(.noCheckup, savedAs: "clinic-report-sam-checkup-2026-09-24.md")),
              "24e-clinic-no-checkup", to: folder)
         // And the home screen with a dropped file still copying, where "Check my
