@@ -1513,17 +1513,20 @@ def install_vault_fn():
 # manifest (hub.json) and the fixed layout beside it, knocks at the door the
 # manifest names, and clones. The page, the checker and the rules keep arriving
 # by pull. The defaults below are the group's own Hub; ~/.config/moblee/hub.json
-# names another, and the MOBLEE_HUB_* settings exist for the tests.
+# names another, and the MOBLEE_HUB_* settings exist for the tests. The Hub
+# moved into the group's own GitHub organisation on 26 October 2026; 0.13.1
+# carries the new addresses and follows a move instead of stalling on one.
 
 HUB_DEFAULT = {
     "name": "Moblee Hub",
-    "address": "https://github.com/mmamas40501/moblee-hub.git",
+    "address": "https://github.com/Moblee-Main-Devs/moblee-hub.git",
     "join": "approve",
-    "lobby": "https://github.com/mmamas40501/moblee-hub-lobby",
+    "lobby": "https://github.com/Moblee-Main-Devs/moblee-hub-lobby",
 }
 HUB_CHOICE = CONFIG_DIR / "hub.json"
 HUB_POLICIES = ("invite", "approve", "open")
 HUB_ID_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789-")
+HUB_SLUG_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_./")
 
 
 def hub_settings() -> dict:
@@ -1627,7 +1630,9 @@ def check_hub():
     if manifest is None:
         return False, "the hub folder has no hub.json, so it is not a Hub this version of Moblee knows"
     if not same_address(remote, str(manifest.get("address", ""))):
-        return False, "the hub folder points somewhere other than the address its own hub.json gives"
+        return False, ("the hub folder points somewhere other than the address the Hub itself gives; if GitHub "
+                       "confirms the Hub has moved, choosing this item again points your copy at "
+                       + str(manifest.get("address") or "it"))
     me = hub_me(folder)
     if me is None:
         return False, "linked, but this Mac has not joined as a member yet (run this item again)"
@@ -1648,22 +1653,106 @@ def hub_reachable(address: str) -> bool:
 
 def hub_login(gh: str) -> str | None:
     code, out = run([gh, "api", "user", "--jq", ".login"], timeout=60)
-    login = out.strip()
-    return login if code == 0 and login and " " not in login else None
+    if code != 0:
+        return None
+    # gh's own notices (a new release, say) can arrive beside the answer: the
+    # login is the one word on a line of its own.
+    for line in reversed(out.strip().splitlines()):
+        line = line.strip()
+        if line and " " not in line and set(line) <= HUB_SLUG_CHARS and "/" not in line:
+            return line
+    return None
 
 
-def hub_invitation(gh: str, slug: str) -> int | None:
+def gh_full_name(gh: str | None, slug: str | None) -> str | None:
+    """The name GitHub gives a repository today, asked by the name on record.
+    GitHub answers a moved repository's old name with its new one, so this is
+    GitHub's own word on a move. Only the line shaped like owner/name counts:
+    anything gh prints besides (a notice, a warning) is not an answer."""
+    if not gh or not slug:
+        return None
+    code, out = run([gh, "api", f"repos/{slug}", "--jq", ".full_name"], timeout=60)
+    if code != 0:
+        return None
+    for line in reversed(out.strip().splitlines()):
+        line = line.strip()
+        if line.count("/") == 1 and all(line.split("/")) and set(line) <= HUB_SLUG_CHARS:
+            return line
+    return None
+
+
+def hub_moved_owner(gh: str, slug: str, lobby: str | None) -> str | None:
+    """Where the Hub's keeper keeps it now, when the Hub has moved with its
+    lobby. The lobby is public, so GitHub tells anyone its new name; a private
+    Hub's new name is told only to members. Counted as a move only when the
+    lobby has really moved and the Hub and lobby on record had the same owner."""
+    if not lobby or lobby.split("/")[0].lower() != slug.split("/")[0].lower():
+        return None
+    now = gh_full_name(gh, lobby)
+    if not now or now.lower() == lobby.lower():
+        return None
+    return now.split("/")[0]
+
+
+def hub_invitation(gh: str, slug: str, lobby: str | None = None) -> int | None:
+    """The waiting invitation to this Hub, if there is one. GitHub names the
+    repository in an invitation as it is called now, so a Hub that has moved
+    with its lobby is matched by its own name under the lobby's new owner
+    (0.13.1: until then a moved Hub's invitation was never seen, and the join
+    waited for ever)."""
     code, out = run([gh, "api", "/user/repository_invitations"], timeout=60)
     if code != 0:
         return None
+    body = out[out.find("["):out.rfind("]") + 1] if "[" in out else "[]"   # gh's notices kept out
     try:
-        for inv in json.loads(out or "[]"):
-            repo = (inv.get("repository") or {}).get("full_name", "")
-            if isinstance(repo, str) and repo.lower() == slug.lower():
-                return int(inv["id"])
+        invitations = [(str((inv.get("repository") or {}).get("full_name", "")), int(inv["id"]))
+                       for inv in json.loads(body or "[]")]
     except (ValueError, KeyError, TypeError, AttributeError):
         return None
+    for repo, iid in invitations:
+        if repo.lower() == slug.lower():
+            return iid
+    name = slug.split("/")[1].lower()
+    if not any(repo.lower().endswith("/" + name) for repo, _ in invitations):
+        return None
+    owner = hub_moved_owner(gh, slug, lobby)
+    if owner:
+        for repo, iid in invitations:
+            if repo.lower() == f"{owner}/{name}".lower():
+                return iid
     return None
+
+
+def hub_same_hub(one: str, other: str) -> bool:
+    """Two addresses for one Hub: the same address, or, on GitHub, an old one
+    that GitHub itself says now leads to the other. Matching branches are not
+    enough (an up-to-date copy elsewhere has the same ones), and an address
+    outside GitHub is never taken for a move."""
+    if same_address(one, other):
+        return True
+    old, new = repo_slug(one), repo_slug(other)
+    if not old or not new:
+        return False
+    now = gh_full_name(gh_tool(), old)
+    return bool(now) and now.lower() == new.lower()
+
+
+def hub_follow_move(folder: Path) -> bool:
+    """When the Hub's own hub.json gives a new address and GitHub says the old
+    one the folder points at has moved there, point the folder at the new one.
+    True when the folder now points where its hub.json says."""
+    manifest = hub_manifest(folder) or {}
+    new = str(manifest.get("address") or "")
+    remote = hub_remote(folder) or ""
+    if not new or same_address(remote, new):
+        return bool(new)
+    if not hub_same_hub(remote, new):
+        return False
+    if hub_git(["-C", str(folder), "remote", "set-url", "origin", new], timeout=30)[0] != 0:
+        return False
+    say("  The Hub has moved, so your copy now points at its new address:")
+    say("  " + new)
+    return True
 
 
 def hub_knock(gh: str, hub: dict, login: str) -> bool:
@@ -1704,7 +1793,7 @@ def hub_knock(gh: str, hub: dict, login: str) -> bool:
     return True
 
 
-def hub_wait_for_invitation(gh: str, slug: str, address: str) -> bool:
+def hub_wait_for_invitation(gh: str, slug: str, address: str, lobby: str | None = None) -> bool:
     """Wait for the keeper, accepting the invitation the moment it arrives. True
     once this account can read the Hub."""
     poll = max(1, env_int("MOBLEE_HUB_POLL", 15))
@@ -1712,7 +1801,7 @@ def hub_wait_for_invitation(gh: str, slug: str, address: str) -> bool:
     waited = 0
     told = False
     while waited <= limit:
-        inv = hub_invitation(gh, slug)
+        inv = hub_invitation(gh, slug, lobby)
         if inv is not None:
             code, out = run([gh, "api", "-X", "PATCH", f"/user/repository_invitations/{inv}"], timeout=60)
             if code != 0:
@@ -1898,7 +1987,7 @@ def install_hub():
             if not login:
                 say("  Your GitHub name could not be read. Run the GitHub item again, then this one.")
                 return False
-            if hub_invitation(gh, slug) is None:
+            if hub_invitation(gh, slug, repo_slug(hub.get("lobby", ""))) is None:
                 if hub["join"] == "invite":
                     say(f"  This Hub's keeper lets members in by hand. Send them your GitHub name,")
                     say(f"  {login}, and this window waits for the invitation.")
@@ -1907,21 +1996,39 @@ def install_hub():
                         return False
                     if hub["join"] == "approve":
                         say("  Your request is at the door. The Hub's keeper approves it with one press.")
-            if not hub_wait_for_invitation(gh, slug, hub["address"]):
+            if not hub_wait_for_invitation(gh, slug, hub["address"], repo_slug(hub.get("lobby", ""))):
                 return False
         code, out = run(["git", "clone", hub["address"], str(folder)], timeout=600)
         if code != 0:
             say("  The Hub could not be copied to this Mac: " + (out.strip().splitlines() or ["no answer"])[-1])
             return False
+        # Copied from an old address GitHub forwards: point it at the Hub's own,
+        # and join nothing whose own address GitHub does not confirm.
+        claimed = str((hub_manifest(folder) or {}).get("address") or "")
+        if claimed and not same_address(hub_remote(folder) or "", claimed) and not hub_follow_move(folder):
+            say("  The Hub gives an address that GitHub could not confirm as its home just now,")
+            say("  so nothing was sent. Choose this item again in a while; if it still cannot,")
+            say("  the check-up names it (F62).")
+            return False
     else:
         manifest = hub_manifest(folder) or {}
-        if not same_address(hub_remote(folder) or "", str(manifest.get("address") or hub["address"])):
+        claimed = str(manifest.get("address") or "")
+        if claimed and not same_address(hub_remote(folder) or "", claimed) and not hub_follow_move(folder):
             say("  Your hub folder points somewhere other than the Hub it says it is. It is left")
             say("  as it is; the check-up names it (field guide F62).")
             return False
         code, out = run(["git", "-C", str(folder), "pull", "--rebase", "--autostash"], timeout=300)
         if code != 0:
             say("  The Hub could not be brought up to date just now (no internet?). Carrying on.")
+        # The pull may bring a hub.json that names a new address (the Hub moved
+        # since this copy was made): follow it now rather than at the next run,
+        # and stop, as before the pull, when GitHub does not confirm the move.
+        claimed = str((hub_manifest(folder) or {}).get("address") or "")
+        if claimed and not same_address(hub_remote(folder) or "", claimed) and not hub_follow_move(folder):
+            say("  The Hub now gives a new address, and GitHub could not confirm it as the")
+            say("  Hub's new home just now, so your hub folder is left as it is. Choose this")
+            say("  item again in a while; if it still cannot, the check-up names it (F62).")
+            return False
     manifest = hub_manifest(folder)
     if manifest is None:
         say("  The Hub arrived without its hub.json, so this version of Moblee cannot use it.")
