@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.13.1 (26 October 2026)
+
+**Joining the Hub after its move.** On 26 October 2026 the Hub and its lobby moved into the group's own GitHub organisation, Moblee-Main-Devs, so that more than one member can let people in. Moblee 0.13.0 still knew only the old address, and a newcomer's join waited for an invitation it could never recognise: GitHub names the Hub in an invitation by its new name.
+
+- **The new addresses are built in.** The Hub item joins `Moblee-Main-Devs/moblee-hub` and knocks at `Moblee-Main-Devs/moblee-hub-lobby`.
+- **A move no longer stalls a join.** When the Hub's public lobby has moved, GitHub says where, and an invitation to the Hub's own name under the lobby's new owner is accepted. So a Hub that moves again with its lobby, keeping its name, is still found. An invitation to a repository of the same name anywhere else is not accepted.
+- **A copy made before the move is pointed at the new address.** When the Hub's own `hub.json` gives a new address and GitHub itself says the old address now leads there, choosing the Hub item points the folder at the new address and says so, instead of reporting F62. A folder whose `hub.json` names a different repository, even an up-to-date copy of the Hub, is left exactly as it is for the keeper to confirm.
+- **F62 says what to do.** The check-up's finding, and the field guide's entry, now say that choosing the Hub item re-points a Hub that has moved.
+
 ## v0.13.0 (24 October 2026)
 
 **The Hub, inside Moblee.** The group's Hub, a shared wiki of wikis on GitHub with a shelf of recipes and a post office of notes, was joined until now by a note passed round by hand, an invitation sent by email and an assistant reading instructions cold. Moblee now works with the Hub as the keeper has set it up, so the Hub can change without a new Moblee.

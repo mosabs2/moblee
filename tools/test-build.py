@@ -31,6 +31,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import re
 import os
 import shutil
 import socket
@@ -142,7 +143,10 @@ def test_scaffold(root: Path) -> Path:
           "Index gains one line under Domains")
     leftovers = [p.name for p in app.rglob("*") if p.is_file() and "__APP_" in p.read_text(errors="replace")]
     check(not leftovers, f"no placeholder left in the copied parts {leftovers}")
-    check("__" not in page.read_text() and "__" not in (app / "README.md").read_text(),
+    # A placeholder is __LIKE_THIS__; a bare "__" can be in the folder's own path
+    # (a random scratch name), which the page and README name on purpose.
+    placeholder = re.compile(r"__[A-Z][A-Z_]*__")
+    check(not placeholder.search(page.read_text()) and not placeholder.search((app / "README.md").read_text()),
           "no placeholder left on the page or README")
     m = json.loads((app / "app.json").read_text())
     check(m["name"] == "demo-thing" and m["title"] == "Demo Thing" and m["tier"] == 2 and m["job"],

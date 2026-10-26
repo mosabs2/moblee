@@ -10,7 +10,7 @@ Three parts:
   2. the check-up's Hub findings (scripts/moblee-doctor.py, check_hub, F61-F66);
   3. the Hub item end to end (scripts/moblee-setup.py, install_hub and
      check_hub) for the approve and invite doors, a second run, and a copied
-     folder that must be left alone.
+     folder that must be left alone; and (0.13.1) a Hub that has moved.
 
 Run from the Moblee folder: python3 tools/test-hub.py
 """
@@ -267,11 +267,13 @@ with log.open("a") as fh: fh.write(" ".join(sys.argv[1:]) + "\n")
 a = sys.argv[1:]
 issues = state / "issues.json"
 def load(): return json.loads(issues.read_text()) if issues.exists() else []
+if os.environ.get("FAKEGH_NOISE") == "1" and a[:1] == ["api"]:
+    sys.stderr.write("A new release of gh is available: 9.9.9\n")
 if a[:2] in (["auth", "status"], ["auth", "setup-git"]): sys.exit(0)
 if a[:2] == ["api", "user"]: print("newmember"); sys.exit(0)
 if a[:2] == ["api", "/user/repository_invitations"]:
     if (state / "approved").exists() and not (state / "accepted").exists():
-        print(json.dumps([{"id": 7, "repository": {"full_name": "test-keeper/test-hub"}}]))
+        print(json.dumps([{"id": 7, "repository": {"full_name": os.environ.get("FAKEGH_INVITE_REPO", "test-keeper/test-hub")}}]))
     else: print("[]")
     sys.exit(0)
 if a[:3] == ["api", "-X", "PATCH"] and a[3] == "/user/repository_invitations/7":
@@ -279,6 +281,10 @@ if a[:3] == ["api", "-X", "PATCH"] and a[3] == "/user/repository_invitations/7":
     cfg = Path(os.environ["GIT_CONFIG_GLOBAL"])
     cfg.write_text('[url "' + os.environ["FAKEGH_BARE"] + '"]\n\tinsteadOf = ' + os.environ["MOBLEE_HUB_ADDRESS"] + "\n")
     sys.exit(0)
+if a[:2] == ["api", "repos/test-keeper/test-hub-lobby"]:
+    print(os.environ.get("FAKEGH_MOVED_OWNER", "test-keeper") + "/test-hub-lobby"); sys.exit(0)
+if a[:2] == ["api", "repos/test-keeper/test-hub"]:
+    print(os.environ.get("FAKEGH_HUB_NOW", "test-keeper/test-hub")); sys.exit(0)
 if a[:2] == ["issue", "list"]: print(json.dumps(load())); sys.exit(0)
 if a[:2] == ["issue", "create"]:
     title = a[a.index("--title") + 1]
@@ -418,6 +424,97 @@ def test_item(tmp: Path) -> None:
     check(res.get("check", [True])[0] is False and "copied" in res["check"][1], "and its check says so")
 
 
+def test_moved(tmp: Path) -> None:
+    print("\n3b. A Hub that has moved (0.13.1)")
+    moved = "https://github.com/new-keeper/test-hub.git"
+    k = ["-c", "user.name=K", "-c", "user.email=k@x.invalid"]
+
+    def keeper_moves(root: Path, source: Path, env: dict) -> None:
+        keeper = root / "keeper-copy"
+        git("clone", "-q", str(source), str(keeper), env=env)
+        m = json.loads((keeper / "hub.json").read_text()); m["address"] = moved
+        (keeper / "hub.json").write_text(json.dumps(m, indent=2))
+        git("-C", str(keeper), *k, "commit", "-q", "-am", "the Hub moved", env=env)
+        git("-C", str(keeper), "push", "-q", env=env)
+
+    def both_to(root: Path, bare: Path) -> None:
+        (root / "home" / ".gitconfig").write_text('[url "' + str(bare) + '"]\n\tinsteadOf = ' + ADDRESS
+                                                  + "\n\tinsteadOf = " + moved + "\n")
+
+    def origin(v: Path, env: dict) -> str:
+        return git("-C", str(v / "hub"), "config", "--get", "remote.origin.url", env=env).stdout.strip()
+
+    root, v, bare, env, driver = item_world(tmp, "m1")
+    env.update({"FAKEGH_INVITE_REPO": "new-keeper/test-hub", "FAKEGH_MOVED_OWNER": "new-keeper", "FAKEGH_NOISE": "1"})
+    res, out = run_item(env, driver, ["", "", ""])
+    calls = (root / "ghstate" / "calls.txt").read_text()
+    check("api -X PATCH /user/repository_invitations/7" in calls and res.get("installed") is True,
+          "the lobby has moved: an invitation to the Hub's name under its new owner is accepted, "
+          "even with gh printing a notice beside its answer" + ("" if res.get("installed") else "\n" + out[-1200:]))
+
+    root, v, bare, env, driver = item_world(tmp, "m2")
+    env.update({"FAKEGH_INVITE_REPO": "stranger/test-hub"})
+    res, out = run_item(env, driver, ["", "", ""])
+    calls = (root / "ghstate" / "calls.txt").read_text()
+    check("PATCH" not in calls and res.get("installed") is False and not (v / "hub").exists(),
+          "the lobby has not moved: an invitation to another owner's repository of the same name is not accepted")
+
+    root, v, bare, env, driver = item_world(tmp, "m2b")
+    env.update({"FAKEGH_INVITE_REPO": "stranger/test-hub", "FAKEGH_MOVED_OWNER": "new-keeper"})
+    res, out = run_item(env, driver, ["", "", ""])
+    calls = (root / "ghstate" / "calls.txt").read_text()
+    check("PATCH" not in calls and res.get("installed") is False,
+          "the lobby has moved, but the invitation is from a third owner: not accepted")
+
+    root, v, bare, env, driver = item_world(tmp, "m2c")
+    env.update({"FAKEGH_INVITE_REPO": "new-keeper/test-hub", "FAKEGH_MOVED_OWNER": "new-keeper",
+                "MOBLEE_HUB_LOBBY": "https://github.com/door-keeper/test-hub-lobby"})
+    res, out = run_item(env, driver, ["", "", ""])
+    calls = (root / "ghstate" / "calls.txt").read_text()
+    check("PATCH" not in calls and "repos/door-keeper" not in calls,
+          "a lobby kept under another owner than the Hub's is never read as a move")
+
+    root, v, bare, env, driver = item_world(tmp, "m3")
+    link_as_github(root, v, bare, env)
+    both_to(root, bare)
+    keeper_moves(root, bare, env)
+    env.update({"FAKEGH_HUB_NOW": "new-keeper/test-hub"})
+    doc = load(DOCTOR, "doctor_moved")
+    res, out = run_item(env, driver, ["", "", ""])
+    check(origin(v, env) == moved and res.get("installed") is True and "The Hub has moved" in out,
+          "GitHub says the old address leads to the new: the copy is pointed there after the pull, and the owner told"
+          + ("" if origin(v, env) == moved else "\n" + out[-1200:]))
+    check(res.get("check", [False])[0] is True, "and its check then says joined")
+
+    root, v, bare, env, driver = item_world(tmp, "m3b")
+    link_as_github(root, v, bare, env)
+    both_to(root, bare)
+    keeper_moves(root, bare, env)
+    git("-C", str(v / "hub"), "pull", "-q", env=env)
+    env.update({"FAKEGH_HUB_NOW": "new-keeper/test-hub"})
+    res, out = run_item(env, driver, ["", "", ""])
+    check(origin(v, env) == moved and res.get("installed") is True,
+          "a copy whose hub.json already names the new address is pointed there before the pull"
+          + ("" if origin(v, env) == moved else "\n" + out[-1200:]))
+
+    root, v, bare, env, driver = item_world(tmp, "m4")
+    link_as_github(root, v, bare, env)
+    fork = root / "fork.git"
+    git("clone", "-q", "--bare", str(bare), str(fork), env=env)
+    (root / "home" / ".gitconfig").write_text('[url "' + str(bare) + '"]\n\tinsteadOf = ' + ADDRESS + "\n"
+                                              + '[url "' + str(fork) + '"]\n\tinsteadOf = ' + moved + "\n")
+    keeper_moves(root, bare, env)
+    git("--git-dir", str(fork), "fetch", "-q", str(bare), "main:main", env=env)
+    same = git("ls-remote", "--heads", ADDRESS, env=env).stdout == git("ls-remote", "--heads", moved, env=env).stdout
+    res, out = run_item(env, driver, ["", "", ""])
+    check(same and origin(v, env) == ADDRESS and res.get("installed") is False and "F62" in out,
+          "an up-to-date copy elsewhere, with the very same branches, is not taken for a move: left as it was, F62 named"
+          + ("" if origin(v, env) == ADDRESS else "\n" + out[-1200:]))
+    rows = findings(doc, v)
+    check(codes(rows) == ["F62"] and "If GitHub confirms the Hub has moved" in " ".join(str(r) for r in rows),
+          "the check-up's F62 says a confirmed move is re-pointed by the Hub item, and otherwise left for the keeper")
+
+
 # --------------------------------------------------------------------------
 # 4. sharing a built thing to the Hub (skills/build/parts/share.py --to-hub)
 # --------------------------------------------------------------------------
@@ -545,6 +642,7 @@ def main() -> int:
     test_rules_block(tmp)
     test_doctor(tmp)
     test_item(tmp)
+    test_moved(tmp)
     test_share(tmp)
     print(f"\n{PASSED} passed, {len(FAILED)} failed")
     for what in FAILED:

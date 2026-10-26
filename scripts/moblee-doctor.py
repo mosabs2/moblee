@@ -938,7 +938,9 @@ def check_hub(f: Findings, vault: Path | None, today=None) -> None:
         return
     if hub_norm(remote) != hub_norm(str(manifest.get("address", ""))):
         f.add(LOOK, "The hub folder points somewhere other than the address its own hub.json gives, so the Hub "
-                    "has moved or the folder is something else.", "F62")
+                    "has moved or the folder is something else. If GitHub confirms the Hub has moved, choosing the Hub "
+                    "item in the Moblee app points the folder at its new address; otherwise it is left as it is "
+                    "for the Hub's keeper to say. Nothing in it is moved or deleted.", "F62")
         return
     name = manifest.get("name") if isinstance(manifest.get("name"), str) else "the Hub"
     version = manifest.get("version") if isinstance(manifest.get("version"), str) else None

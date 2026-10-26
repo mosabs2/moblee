@@ -164,8 +164,8 @@ KNOWN_SAFE_SHA256 = {
     "1b790b84e08e7f116346feed1201660d2cd6d15bbca7f12e7e0474e3bd8adcb4": "scripts/job-switch.py",
     "aea04e2f4b23d1fe669649f7b7847fec941de0dfa8ed54a799739c72b8dcdc73": "scripts/lint-v2.py",
     "3dc036a7fd72607eae7eb8adfdefd749858205ba6aac05d604373a1714a56f57": "scripts/log-append.py",
-    "e32eef51f6605999f2fc5fa0e55a6027a1851d84ed48aac6044380260ef12d7b": "scripts/moblee-doctor.py",
-    "c3bca06df65e8bf1edd691ec4a50e92c2a34388c8ba39ea4c8c33463f970fed3": "scripts/moblee-setup.py",
+    "c00a6089c7beaa4b3b3b1e707a685a24beb2c42514ba14f026fc970ec454067a": "scripts/moblee-doctor.py",
+    "e75114f15aaec5c0d6740f73e24911f2991258a2617ef7250579224022898ab7": "scripts/moblee-setup.py",
     "898106b72683e1387031535b1510a448bf38330ca9751258f66a0b748c5542f3": "scripts/patch-claude-md.py",
     "8d1c998cdd9208de0909e6c4b4d68b5ac667466ce2acb3c1a9ba81fbef3febda": "scripts/seed-memory.py",
     "c6860063b170bd3019dd319081c0992a2401cd5aacf99b6e4b56b2c729734d21": "scripts/test-patch-claude-md.py",
@@ -183,7 +183,7 @@ KNOWN_SAFE_SHA256 = {
     "90584cbb4c1f48899470712aa96f459dd2d927bd90f4143210d59077b6e341e0": "skills/build/parts/sweep.py",
     "bd68a8eedbda1a8227e692661459cb3c963a6f8224ecd42f0998a98ccd7154c8": "skills/build/parts/think-job.py",
     "c6f8b5cb80264cf421df250ceb8f0c6fea1ec183ac7207ae7af7e485664d91f3": "skills/wiki-to-pdf/render.py",
-    "3b9bf0e7879138d40d31e06cbf2a1f997e60bc2fced09a48c70d116e7d2ea09a": "tools/test-build.py",
+    "a04fb96bde7bbb482fe29f4c8f7f01aceaac7b5e7f8e5e2c37c3f19e5a2dc7ac": "tools/test-build.py",
     "f646bbc2029f01cce0edbca5a93dc0404519aac869c916b3d78b02ea135695fe": "voice/install-voice.py",
 }
 # --- KNOWN_SAFE end ---
