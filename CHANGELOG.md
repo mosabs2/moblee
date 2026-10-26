@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.14.0 (26 October 2026)
+
+**Everything your wiki can have, in one place.** Once a wiki was set up, there was no way back in the app to see what else Moblee could add, or whether something like phone reach or the Hub was already there: it took a conversation with the wiki, or the checklist in Terminal. Now the app shows it all.
+
+- **"Add more" is the home screen's second big button.** It opens one list. First, **what comes with every Moblee wiki**: the safety guard, saving after every reply, the companion, big questions to your wiki, saving a conversation, interviews, PDFs, your own look, the galaxy, the dashboard, keeping the wiki light, and building things. Each says what it is for, what to say to your assistant to use it where there are words for it, and whether it is in your wiki. Then **every extra** on the checklist, in its four groups, the Hub and phone reach (Tailscale) among them, each with what it is for, its time, room and cost, and whether it is set up.
+- **One press moves each on.** **Add** adds an extra the same way a tile Claude suggested does: on its own, in a Terminal window, or with a few clicks inside Claude, with the same explanation first and the same word when it can cost money. **Open** opens the galaxy (built afresh) or the dashboard in your browser. **Put back** runs the update, which puts back a part that is missing and leaves your pages alone. A copy you or your assistant changed is shown as "An older or changed copy" and left as it is. **Done** finishes an item made by clicks inside Claude.
+- **Plain about what it cannot see.** A connection made inside Claude's own app is marked "Moblee cannot see whether this is set up", with the steps one press away, never "not set up"; so is a guard or a save entered for ChatGPT, which runs them only once trusted. An item never looked at says so. The screen says when it last looked, looks first on a wiki the checklist has never looked at, and **Look again** runs the checklist's own check, which changes nothing you have set up and saves what it saw. It never runs while something is being added, and an item already being added from a suggested tile is not added twice.
+- **The example wiki moved into this screen**, from the home screen, where Add more took its place so that the busiest home screen keeps to twenty controls. A new owner still meets it on the welcome screen.
+- **At the end of an update in the app**, "See what else you can add" opens the same screen. (An update run from Terminal still offers the full checklist there, as before.)
+
+### For assistants and maintainers
+
+- `moblee-setup.py --parts` prints, as JSON and read only, the parts every wiki comes with and whether each is in place for the assistant (or both) the owner uses, and what the checklist's own record last saw of each extra. `--list --json` now carries each item's group.
+- The companion points an owner who asks what else there is to the Add more screen.
+- `--only --yes` (the app adding one item) no longer writes items it did not look at into the checklist's record as not working.
+- New tests: `tools/test-parts.py` (25), and twenty-four logic checks on the app.
+
 ## v0.13.1 (26 October 2026)
 
 **Joining the Hub after its move.** On 26 October 2026 the Hub and its lobby moved into the group's own GitHub organisation, Moblee-Main-Devs, so that more than one member can let people in. Moblee 0.13.0 still knew only the old address, and a newcomer's join waited for an invitation it could never recognise: GitHub names the Hub in an invitation by its new name.

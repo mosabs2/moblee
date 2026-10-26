@@ -2675,7 +2675,7 @@ enum LogicCheck {
             let wayIn = ring.firstIndex(of: "second-button") ?? -1
             let lastTile = ring.lastIndex { $0.hasPrefix("listen-tile-") } ?? -1
             let quietWords = ring.firstIndex(of: "quiet") ?? -1
-            check("on the home screen it is a second big button, which the keyboard reaches after the cards and before the quiet lines",
+            check("on the home screen the second big button (Add more, from 0.14.0) is reached after the cards and before the quiet lines",
                   wayIn > lastTile && lastTile >= 0 && wayIn < quietWords)
             let fromInstall = Flow()
             fromInstall.mode = .install
@@ -2879,6 +2879,104 @@ enum LogicCheck {
                   settled(f4) == .ready(kept.appendingPathComponent(small.id)))
             check("films: the caches folder is the Mac's own, under Library/Caches",
                   kept.path.hasSuffix("Library/Caches/moblee-films"))
+        }
+
+        // (0.14.0) The Add more screen: what it reads, what each row says, and
+        // which button each row carries. Read from the pack's real list.
+        do {
+            let report = Data("""
+            {"assistant": "claude", "vault": true, "checked": "20261026-1700",
+             "core": [{"key": "guard", "title": "The safety guard", "what": "w", "say": "", "open": "", "state": "in"},
+                      {"key": "galaxy", "title": "The wiki galaxy", "what": "w", "say": "galaxy", "open": "galaxy", "state": "missing"},
+                      {"key": "brain", "title": "Big questions", "what": "w", "say": "trace", "open": "", "state": "differs"},
+                      {"key": "odd", "title": "Odd", "what": "w", "say": "", "open": "", "state": "sideways"},
+                      {"title": "no key", "state": "in"}],
+             "extras": {"hub": "on", "reach": "off", "google": "unseen", "film": "unknown", "weird": 3}}
+            """.utf8)
+            let parts = Parts.parse(report)
+            check("add more: the parts report is read, a part with an unknown state or no name left out",
+                  parts?.core.map(\.key) == ["guard", "galaxy", "brain"] && parts?.checked == "20261026-1700")
+            check("add more: an extra whose state is not plain words is left out",
+                  parts?.extras["weird"] == nil && parts?.extras["hub"] == "on")
+            check("add more: a report that is not the expected shape is no report",
+                  Parts.parse(Data("[]".utf8)) == nil && Parts.parse(Data("{not json".utf8)) == nil)
+            check("add more: only the parts not in place count as missing",
+                  parts?.missing.map(\.key) == ["galaxy", "brain"])
+            check("add more: each part's state in plain words",
+                  parts.map { $0.core.map { AddMore.partWord($0) } } == ["In your wiki", "Missing", "An older or changed copy"])
+            if let p = parts {
+                check("add more: Open on a part the app opens, Put back on one that is missing, nothing on an older or changed copy",
+                      AddMore.partButton(p.core[0], newerWiki: false, busy: false) == nil
+                          && AddMore.partButton(Parts.Part(key: "dashboard", title: "", what: "", say: "", open: "dashboard", state: "in"),
+                                                newerWiki: false, busy: false) == "Open"
+                          && AddMore.partButton(p.core[1], newerWiki: false, busy: false) == "Put back"
+                          && AddMore.partButton(p.core[2], newerWiki: false, busy: false) == nil)
+                check("add more: no Put back while something is running, or on a wiki newer than this Moblee, which says what will",
+                      AddMore.partButton(p.core[1], newerWiki: false, busy: true) == nil
+                          && AddMore.partButton(p.core[1], newerWiki: true, busy: false) == nil
+                          && AddMore.partWord(p.core[1], newerWiki: true) == "Missing. A newer Moblee puts it back")
+            }
+            check("add more: a part entered for ChatGPT, which cannot be seen to run, is said so, with no button",
+                  Parts.parse(Data(#"{"core":[{"key":"guard","title":"t","state":"unseen"}],"extras":{}}"#.utf8))
+                      .map { AddMore.partWord($0.core[0]) } == "Moblee cannot see whether ChatGPT runs this")
+            check("add more: the last look is given as a day and a time, and an odd stamp gives nothing",
+                  AddMore.lastLooked("20261026-1700") == "Last looked: 26 October, 17:00."
+                      && AddMore.lastLooked("yesterday") == nil && AddMore.lastLooked(nil) == nil)
+            check("add more: a part says what to say to the assistant only where it has words for it",
+                  parts.map { AddMore.sayLine($0.core[1], talksTo: "Claude") } == "Say \u{201C}galaxy\u{201D} to Claude."
+                      && parts.map { AddMore.sayLine($0.core[0], talksTo: "Claude") } == .some(nil))
+
+            let model = HomeModel()
+            let list = Snapshots.packList()
+            model.useCatalogue(list)
+            model.parts = parts
+            check("add more: the pack's list is read in the pack's own order, the hub and phone reach in it",
+                  !list.isEmpty && model.catalogueOrder.first == (list.first?["key"] as? String)
+                      && model.catalogueOrder.contains("hub") && model.catalogueOrder.contains("reach"))
+            check("add more: an item the app cannot add (hidden) gets no row",
+                  model.itemTile("vault-fn", why: "") == nil && model.itemTile("hub", why: "") != nil)
+            check("add more: every item the app can add belongs to one of the checklist's four groups",
+                  model.catalogueOrder.filter { model.itemTile($0, why: "") != nil }
+                      .allSatisfy { ["Connect your life", "Read and make things", "Paid, or with a paid option",
+                                     "Looking after the wiki"].contains(model.itemGroup($0)) })
+            check("add more: each extra's state comes from the checklist's record",
+                  model.extraState("hub") == .on && model.extraState("reach") == .off
+                      && model.extraState("google") == .unseen && model.extraState("film") == .unknown)
+            check("add more: set up has no button; not set up has Add; cannot-be-seen offers the way, not an Add",
+                  AddMore.extraButton(.on) == nil && AddMore.extraButton(.off) == "Add"
+                      && AddMore.extraButton(.unseen) == "Show me how" && AddMore.extraButton(.adding) == nil
+                      && AddMore.extraButton(.failed("x")) == "Try again")
+            check("add more: an item finished by clicks inside Claude has a Done of its own here",
+                  AddMore.extraButton(.handedOver(.clicks)) == "Done" && AddMore.extraButton(.handedOver(.terminal)) == "Open it again")
+            check("add more: cannot be seen is never said as not set up",
+                  AddMore.extraWord(.unseen) == "Moblee cannot see whether this is set up" && AddMore.extraWord(.off) == "Not set up")
+            check("add more: an item the record never named is 'not looked at yet', even after a check",
+                  model.extraState("never-named") == .unknown)
+            model.parts = Parts(assistant: "claude", checked: nil, core: [], extras: [:])
+            check("add more: with no check on record an extra is 'not looked at yet', never 'not set up'",
+                  model.extraState("hub") == .unknown && AddMore.extraWord(.unknown) == "Not looked at yet")
+            var film = model.itemTile("film", why: "")
+            film?.state = .running
+            if let film { model.chosen = [film] }
+            check("add more: an item being added from the list says so, whatever the record says",
+                  model.extraState("film") == .adding)
+            check("add more: while anything is being added there is no Look again",
+                  !model.canLookAgain)
+            model.chosen = []
+            var tileVideos = model.itemTile("videos", why: "")
+            tileVideos?.state = .running
+            if let tileVideos { model.tiles = [tileVideos] }
+            model.addFromList("videos")
+            check("add more: an item already being added from a suggested tile shows as being added, and is not added twice",
+                  model.extraState("videos") == .adding && model.chosen.isEmpty)
+            model.tiles = []
+            check("add more: it is the home screen's second big button, and nothing was added to the keyboard's round for it",
+                  AddMore.wayIn == "Add more" && HomeScreen.busiest().contains("second-button")
+                      && !HomeScreen.busiest().contains("add-more"))
+            check("add more: the read-aloud says how many parts are in place and how many extras are set up",
+                  AddMore.speech(parts: parts, groups: [("Connect your life", ["hub", "reach"])],
+                                 word: { $0 == "hub" ? "Set up" : "Not set up" }, title: { $0 }).plain
+                      .contains("Connect your life: 1 of 2 set up."))
         }
 
         print(failed == 0 ? "logic: every check held" : "logic: \(failed) check(s) FAILED")
