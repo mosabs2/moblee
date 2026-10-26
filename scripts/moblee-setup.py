@@ -2396,6 +2396,198 @@ def save_state(status: dict, results: list, checked=None, **extra) -> None:
     STATE_FILE.write_text(json.dumps(state, indent=2) + "\n")
 
 
+# (0.14.0) What comes with every Moblee wiki, for the app's "Add more" screen:
+# the parts the installer always puts in, as the owner knows them. Each says what
+# it is for and, where there is one, what to say to the assistant to use it.
+# `open` names a part the app can open itself. These are not on the checklist:
+# a part that is missing is put back by the app's Repair, which runs the updater.
+CORE_PARTS = [
+    {"key": "guard", "title": "The safety guard",
+     "what": "Stops your assistant deleting or overwriting your files.", "say": "", "open": ""},
+    {"key": "save", "title": "Saving after every reply",
+     "what": "The wiki saves its own history after each answer, so any change can be undone.", "say": "", "open": ""},
+    {"key": "companion", "title": "The companion",
+     "what": "Sets things up with you and suggests what suits the way you work.", "say": "review my setup", "open": ""},
+    {"key": "brain", "title": "Big questions to your wiki",
+     "what": "Traces an idea through your pages, connects two subjects and tests a view against what you wrote.",
+     "say": "trace this idea across my wiki", "open": ""},
+    {"key": "wiki-capture", "title": "Saving a conversation",
+     "what": "Keeps a good answer or a passing thought in your wiki.", "say": "save this to the wiki", "open": ""},
+    {"key": "wiki-interview", "title": "Interviews",
+     "what": "Your assistant asks you questions and writes the page from your answers.", "say": "interview me about…", "open": ""},
+    {"key": "wiki-to-pdf", "title": "Pages as PDFs",
+     "what": "Turns a page of your wiki into a well-made PDF. It needs the \u201cPDF, Word, PowerPoint and Excel\u201d extra below.",
+     "say": "make a PDF of…", "open": ""},
+    {"key": "design-your-brand", "title": "Your own look",
+     "what": "Your colours, letters and monogram, used on your PDFs.", "say": "design my brand", "open": ""},
+    {"key": "galaxy", "title": "The wiki galaxy",
+     "what": "Every page a star and every link a line between them, in 3D in your browser.", "say": "galaxy", "open": "galaxy"},
+    {"key": "dashboard", "title": "The dashboard",
+     "what": "Your wiki at a glance in your browser, with charts and questions asked aloud.", "say": "", "open": "dashboard"},
+    {"key": "compact", "title": "Keeping the wiki light",
+     "what": "Trims the files your assistant reads at the start of every conversation.", "say": "compact the wiki", "open": ""},
+    {"key": "build", "title": "Building things for you",
+     "what": "Plans and builds small apps beside your wiki, from a wish in plain words.", "say": "build me…", "open": ""},
+]
+
+
+def _file_sha(path: Path) -> str | None:
+    import hashlib
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def _hook_commands(path: Path, event: str) -> list | None:
+    """The commands a settings or hooks file enters for one hook event, or None
+    when the file is there and cannot be read. Read as the check-up reads it:
+    the hook entries themselves, never the file as text, since a script's name
+    also appears in the permission rules beside them (cold read, 26 October
+    2026: the save looked switched on wherever those rules were)."""
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    hooks = data.get("hooks") if isinstance(data, dict) else None
+    entries = hooks.get(event) if isinstance(hooks, dict) else None
+    out = []
+    for entry in entries if isinstance(entries, list) else []:
+        for h in (entry.get("hooks") or []) if isinstance(entry, dict) else []:
+            if isinstance(h, dict):
+                out.append(str(h.get("command", "")))
+    return out
+
+
+def _names_file(command: str, wanted: Path) -> bool:
+    """Whether a hook's command runs this very file: the whole path, read back
+    the way a shell reads it, so a hook left pointing at a moved or renamed
+    wiki, or at a second wiki on the Mac, does not count."""
+    import shlex
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        words = [command]
+    for w in words:
+        try:
+            if os.path.realpath(Path(w).expanduser()) == os.path.realpath(wanted):
+                return True
+        except (OSError, ValueError):
+            continue
+    return False
+
+
+def parts_report() -> dict:
+    """(0.14.0) Read only, and quick: nothing is run, fetched or written. What
+    comes with every wiki and whether it is in place, and what the checklist
+    last saw of each extra. The app's "Add more" screen draws this."""
+    who = assistant_choice()
+    v = vault_path()
+    claude, chatgpt = who in ("claude", "both"), who in ("chatgpt", "both")
+    skill_dirs = ([HOME / ".claude" / "skills"] if claude else []) + ([HOME / ".agents" / "skills"] if chatgpt else [])
+
+    # A wiki on a different version from this Moblee is expected to hold
+    # different copies of the skills: present is all that can be said then.
+    try:
+        same_version = v is not None and (v / "VERSION").read_text().strip() == (PACKAGE_ROOT / "VERSION").read_text().strip()
+    except OSError:
+        same_version = False
+
+    def skill(name: str) -> str:
+        mine = PACKAGE_ROOT / "skills" / name / "SKILL.md"
+        states = []
+        for d in skill_dirs:
+            have = d / name / "SKILL.md"
+            if not have.is_file():
+                states.append("missing")
+            elif same_version and _file_sha(have) != _file_sha(mine):
+                states.append("differs")
+            else:
+                states.append("in")
+        for word in ("missing", "differs"):
+            if word in states:
+                return word
+        return "in" if states else "missing"
+
+    def combine(states: list) -> str:
+        """Every assistant the owner uses must have it. ChatGPT runs a hook only
+        once the owner has trusted it, which cannot be seen from here, so a hook
+        entered for ChatGPT is 'unseen', never 'in' (the check-up says the same)."""
+        for word in ("missing", "unseen"):
+            if word in states:
+                return word
+        return "in"
+
+    def guard() -> str:
+        states = []
+        for on, script, settings, trusted in (
+                (claude, HOME / ".claude" / "hooks" / "bash-guard.py", HOME / ".claude" / "settings.json", True),
+                (chatgpt, HOME / ".codex" / "hooks" / "bash-guard.py", HOME / ".codex" / "hooks.json", False)):
+            if not on:
+                continue
+            commands = _hook_commands(settings, "PreToolUse") or []
+            entered = script.is_file() and any(_names_file(c, script) for c in commands)
+            states.append(("in" if trusted else "unseen") if entered else "missing")
+        return combine(states)
+
+    def save() -> str:
+        if v is None or not (v / "scripts" / "turn-end-commit.py").is_file():
+            return "missing"
+        wanted = v / "scripts" / "turn-end-commit.py"
+        states = []
+        for on, settings, trusted in ((claude, HOME / ".claude" / "settings.json", True),
+                                      (chatgpt, HOME / ".codex" / "hooks.json", False)):
+            if not on:
+                continue
+            commands = _hook_commands(settings, "Stop") or []
+            entered = any(_names_file(c, wanted) for c in commands)
+            states.append(("in" if trusted else "unseen") if entered else "missing")
+        return combine(states)
+
+    core = []
+    for part in CORE_PARTS:
+        key = part["key"]
+        if key == "guard":
+            state = guard()
+        elif key == "save":
+            state = save()
+        elif key == "dashboard":
+            state = "in" if v is not None and (v / "dashboard" / "server.py").is_file() else "missing"
+        elif key == "galaxy":
+            state = skill("galaxy")
+            if state == "in" and (v is None or not (v / "scripts" / "wiki-galaxy" / "build.py").is_file()):
+                state = "missing"
+        elif (PACKAGE_ROOT / "skills" / key).is_dir():
+            state = skill(key)
+        else:
+            continue          # a part this Moblee does not carry is not listed
+        core.append(dict(part, state=state))
+
+    try:
+        record = json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else {}
+    except (OSError, ValueError):
+        record = {}
+    if not isinstance(record, dict):
+        record = {}
+    status = record.get("status") if isinstance(record.get("status"), dict) else {}
+    unseen = set(k for k in record.get("unseen", []) if isinstance(k, str)) if isinstance(record.get("unseen"), list) else set()
+    extras = {}
+    for it in build_items():
+        seen = status.get(it.key, "never")
+        if it.key in unseen or seen is None:
+            extras[it.key] = "unseen"
+        elif seen is True:
+            extras[it.key] = "on"
+        elif seen is False:
+            extras[it.key] = "off"
+        else:
+            extras[it.key] = "unknown"
+    checked = record.get("last_check") if isinstance(record.get("last_check"), str) else None
+    return {"assistant": who, "vault": bool(v), "checked": checked, "core": core, "extras": extras}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Connect a Moblee wiki to this Mac, its accounts and its tools.")
     ap.add_argument("--check", action="store_true", help="test everything and change nothing")
@@ -2405,6 +2597,7 @@ def main() -> int:
     ap.add_argument("--json", action="store_true", help="with --list: print the items as JSON, for the Moblee app")
     ap.add_argument("--yes", action="store_true", help="with --only: do not ask 'Start now?' (the Moblee app uses this after the owner presses an item's button)")
     ap.add_argument("--progress", action="store_true", help="also print one machine-readable line per item, for the Moblee app")
+    ap.add_argument("--parts", action="store_true", help="print, as JSON, what comes with the wiki and what was last seen of each extra; read only (0.14.0)")
     args = ap.parse_args()
 
     if platform.system() != "Darwin":
@@ -2421,9 +2614,12 @@ def main() -> int:
     global PROGRESS
     PROGRESS = args.progress
 
+    if args.parts:
+        print(json.dumps(parts_report(), indent=2))
+        return 0
     items = build_items()
     if args.list and args.json:
-        print(json.dumps([{"key": it.key, "title": it.title, "what": it.what, "minutes": it.minutes,
+        print(json.dumps([{"key": it.key, "group": it.group, "title": it.title, "what": it.what, "minutes": it.minutes,
                            "space_mb": it.space_mb, "cost": it.cost, "paid": it.cost.startswith("PAID"),
                            "needs": it.needs, "signin": it.signin, "how": how(it.key),
                            "steps": CLICKS.get(it.key, [])}
@@ -2476,7 +2672,10 @@ def main() -> int:
             saved = {}
         if not isinstance(saved, dict):
             saved = {}
-        status = {it.key: (it.check()[0] if it.key in preset else bool(saved.get(it.key, False))) for it in items}
+        # (0.14.0) An item the record has never named stays unnamed, rather than
+        # being written down as not working when nobody looked at it.
+        status = {it.key: (it.check()[0] if it.key in preset else bool(saved[it.key]))
+                  for it in items if it.key in preset or it.key in saved}
         checked = set(preset)
     else:
         say("Looking at what is already working (this can take a minute or two)...")
