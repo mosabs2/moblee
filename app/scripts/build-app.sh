@@ -24,13 +24,22 @@ bundle="$out/builds/$stamp/Moblee.app"
 
 mkdir -p "$out/swiftpm"
 
-if [ "${1:-}" = "universal" ]; then
-    swift build --package-path "$app_src" --scratch-path "$out/swiftpm" \
-        -c release --arch arm64 --arch x86_64
-    binary="$out/swiftpm/apple/Products/Release/Moblee"
-else
-    swift build --package-path "$app_src" --scratch-path "$out/swiftpm" -c release
-    binary="$out/swiftpm/release/Moblee"
+if [ "${1:-}" = "universal" ]; then arch=(--arch arm64 --arch x86_64); else arch=(); fi
+swift build --package-path "$app_src" --scratch-path "$out/swiftpm" -c release "${arch[@]}"
+# (v0.15.0) Where the program was built is asked of Swift, never assumed. Until
+# 27 October 2026 a universal build read swiftpm/apple/Products/Release, which
+# newer Swift no longer writes to: every release signed on the MacBook from then
+# on carried the program last built there, on 27 September 2026, under whatever
+# version number Info.plist gave it. Two checks stop it happening again.
+binary="$(swift build --package-path "$app_src" --scratch-path "$out/swiftpm" -c release "${arch[@]}" --show-bin-path)/Moblee"
+newest="$(find "$app_src/Sources" "$app_src/Package.swift" -type f -newer "$binary" | head -1)"
+if [ ! -x "$binary" ] || [ -n "$newest" ]; then
+    echo "The program at $binary is missing or older than its source (${newest:-no program}). Nothing was built."
+    exit 1
+fi
+if [ "${1:-}" = "universal" ] && [ "$(lipo -archs "$binary")" != "x86_64 arm64" ]; then
+    echo "The program at $binary is not built for both Apple silicon and Intel ($(lipo -archs "$binary")). Nothing was built."
+    exit 1
 fi
 
 mkdir -p "$bundle/Contents/MacOS" "$bundle/Contents/Resources/pack" "$bundle/Contents/Frameworks"

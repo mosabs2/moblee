@@ -78,6 +78,14 @@ bash "$here/build-app.sh" universal
 app="$(cat "$out/latest.txt")"
 version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
 build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist")"
+# (v0.15.0) The program must be the one this source makes: it must carry the
+# updater. Releases 0.10 to 0.14 shipped a program from 27 September under new
+# version numbers (see build-app.sh), and this is the check that would have
+# caught it.
+if ! otool -L "$app/Contents/MacOS/Moblee" | grep -q "Sparkle.framework"; then
+    echo "The program in the built app does not carry the updater, so it is not this version's program. Nothing was signed."
+    exit 1
+fi
 sparkle_bin="$(dirname "$(find "$out/swiftpm/artifacts" -name generate_keys -path '*/bin/*' -maxdepth 5 | head -1)")"
 if [ ! -x "$sparkle_bin/generate_appcast" ]; then echo "Sparkle's tools were not found under $out/swiftpm/artifacts. Nothing was signed."; exit 1; fi
 keychain_key="$("$sparkle_bin/generate_keys" -p 2>/dev/null || true)"
