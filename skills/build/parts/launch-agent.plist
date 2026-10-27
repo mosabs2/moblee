@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- The Mac's scheduler file for this thing's job. The owner loads it;
+         the assistant never does. The README gives the two lines. -->
+    <key>Label</key>
+    <string>com.moblee.__APP_NAME__</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>__APP_DIR__/job.py</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>__APP_DIR__</string>
+    <key>StartCalendarInterval</key>
+    <dict>__WEEKDAY_BLOCK__
+        <key>Hour</key>
+        <integer>__HOUR__</integer>
+        <key>Minute</key>
+        <integer>__MINUTE__</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>__APP_DIR__/state/launchd-out.txt</string>
+    <key>StandardErrorPath</key>
+    <string>__APP_DIR__/state/launchd-err.txt</string>
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>
