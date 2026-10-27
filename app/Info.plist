@@ -53,9 +53,9 @@
 		</dict>
 	</array>
 	<key>CFBundleShortVersionString</key>
-	<string>0.9.6</string>
+	<string>0.15.0</string>
 	<key>CFBundleVersion</key>
-	<string>11</string>
+	<string>18</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
 	<key>LSMinimumSystemVersion</key>
@@ -64,5 +64,30 @@
 	<true/>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<!-- (v0.15.0) The updater (Sparkle; see Updater.swift for the whole account).
+	     SUFeedURL: the signed list of releases, published beside each release's
+	       zip; GitHub's "latest" address always points at the newest release's
+	       copy, so withdrawing a release (marking it a pre-release) moves it back.
+	     SUPublicEDKey: the public half of the maintainer's update key, written
+	       by app/scripts/make-update-key.sh on 27 October 2026; the private half
+	       never leaves his keychain, and release-app.sh refuses to build if the
+	       two do not match.
+	     SUVerifyUpdateBeforeExtraction and SURequireSignedFeed: the zip is
+	       checked against that key before it is unpacked, and an unsigned or
+	       altered list is refused, so the key is what lets an update in.
+	     SUEnableAutomaticChecks and SUAllowsAutomaticUpdates off: Moblee never
+	       looks or installs by itself; the owner presses Install. -->
+	<key>SUFeedURL</key>
+	<string>https://github.com/mosabs2/moblee/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>1qo+KA28GsZ9rFcLABVlSJsSaJIHLM9U+IsrmB/VWPg=</string>
+	<key>SUVerifyUpdateBeforeExtraction</key>
+	<true/>
+	<key>SURequireSignedFeed</key>
+	<true/>
+	<key>SUEnableAutomaticChecks</key>
+	<false/>
+	<key>SUAllowsAutomaticUpdates</key>
+	<false/>
 </dict>
 </plist>

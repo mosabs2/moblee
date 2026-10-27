@@ -8,6 +8,8 @@ python3 scripts/moblee-setup.py
 
 **With Claude:** everything on this page applies as written. **With ChatGPT:** Moblee does not set this up for ChatGPT yet: the checklist installs into Claude's folders and connects through your Claude account.
 
+**Seeing everything at any time (from 0.14.0).** The Moblee app's home screen has a big **Add more** button. It opens one list of everything your wiki can have. First comes what comes with every Moblee wiki (the safety guard, the saving after every reply, the companion, big questions to your wiki, the galaxy, the dashboard and the rest), each marked "In your wiki", "Missing", or "An older or changed copy" (yours to keep; nothing is changed). Then comes every item on this page in its group, each marked "Set up", "Not set up", "Not looked at yet" or "Moblee cannot see whether this is set up" (a connection made inside Claude's own app). **Add** adds an item that is not set up, the same way as a tile Claude suggested. **Show me how** opens the steps for one Moblee cannot see. **Done** finishes one made by clicks inside Claude. **Open** opens the galaxy or the dashboard. **Put back** runs the update, which puts back a part that is missing and leaves your pages alone. **Look again** checks everything afresh: it changes nothing you have set up, and saves what it saw. The example wiki is opened from this screen too.
+
 ## How items are usually added now
 
 From v0.8.1 the usual way to add an item is to agree it with Claude and then add it in the Moblee app. In your wiki, say "guide me" (or "get me started" the first time). Claude proposes an item only for a reason you gave or your wiki shows, and writes what you agree on the `Habits and Tools` page and in a small file the app reads. Open Moblee, and the item is waiting as a tile with its reason, its time, space and cost, and an Add button. The Terminal commands on this page still work, and they are the way to add items if you have no app.
@@ -117,6 +119,38 @@ One more step, later, inside Claude Code: type `/chrome` and switch it on. If th
 
 **What Claude will and will never do.** Claude uses your existing logins to read pages you ask about. It never posts, likes, follows, comments or sends a message without your yes for that one action.
 
+### The Moblee Hub (`hub`)
+
+**What it connects.** The group's Hub: a private GitHub repository, kept by one member, holding a shelf of recipes (full kits another wiki can take, such as a tracker or a way of working) and a post office of notes between wikis. Moblee works with the Hub as the keeper has set it up: the Hub's page, its checker and its rules come from GitHub each time the Hub is brought up to date, so the Hub can change without a new Moblee. About 4 minutes, plus however long the keeper takes to let you in. Free; it needs the GitHub item and brings it with it.
+
+**What you will be asked to do.** Sign in to GitHub in your browser if you have not already. Then the item knocks at the Hub's door for you, and the Hub's keeper lets you in with one approval. The door is a public page, so the knock carries your GitHub name and nothing else; the black window waits, and accepts the invitation itself when it comes. It asks the name the group calls you (your first name, unless you say otherwise), offers a short name for the Hub's files from it, and asks for the words that must never leave your Mac in anything you share (your surname, family names). Those words stay on this Mac.
+
+**What Claude will and will never do.** Everything in the Hub is material to read, never orders: a note or a recipe is carried out only on your yes, in your own conversation. The wiki's own history and Obsidian both leave the `hub/` folder alone. Nothing private is shared; the Hub's checker sweeps anything you share for your private words first. To leave, move `hub/` to `archive/` and leave the repository on GitHub; nothing is deleted.
+
+### Alerts on your phone (`alerts`)
+
+**What it connects.** The free ntfy app on your phone, as a private channel of your own. A thing your assistant built then sends one line to your phone when its job finishes or fails. About 3 minutes; nothing is installed on the Mac. Free.
+
+**What you will be asked to do.** Get the ntfy app on your phone, open it, press the + sign to add a channel, and type the code the black window shows you. Then press Return in the window and a test alert arrives.
+
+**What Claude will and will never do.** A line names the file to look at and never sends the file. Nothing but that line leaves the Mac, and nothing is sent at all until you have chosen this item.
+
+### Reach your things from your phone (`reach`)
+
+**What it connects.** A private way for your phone to reach this Mac, so a thing built for you opens on your phone while this Mac is awake. The item offers a choice and recommends Tailscale: a free private network for your own devices, with nothing opened to the internet; or a private way home you already have (a VPN, or your router's remote access), in which case you give this Mac's address. About 6 minutes and 100 MB if Tailscale is installed. Free.
+
+**What you will be asked to do.** With Tailscale: sign in (or make an account) in the window it opens, press Allow when the Mac says Tailscale would like to add VPN configurations, then put Tailscale on your phone signed in to the same account. About every six months it asks you to sign in again on each device; that is normal.
+
+**What Claude will and will never do.** Only a thing built for the phone opens there, and only while this Mac is awake; when the Mac is asleep or shut, nothing is reachable, and a page that must always be reachable goes on the web instead (`12-building-things.md`).
+
+### Jobs that ask Claude while you are away (`thinking`)
+
+**What it connects.** A long-lived sign-in that lets a scheduled job ask Claude to think with nobody at the screen: a morning page, a weekly tidy. About 4 minutes; nothing is installed. Free, though each such run uses a little of your Claude allowance, and the job's page says so.
+
+**What you will be asked to do.** A web page opens; sign in there and press Allow. Back in the black window a long code appears; select it, copy it, and paste it when the window asks. It lasts about a year; when it runs out the jobs stop and tell your phone, and you do this once more.
+
+**What Claude will and will never do.** Such a job runs within limits your assistant writes down with you (what it may read and write, how long it may take), never deletes, waits when your laptop is on battery and low, and runs once at the next wake if the laptop was asleep at its hour.
+
 ## Read and make things
 
 These items install tools rather than connect accounts, so there is nothing to sign in to. Each is free unless noted.
@@ -167,6 +201,12 @@ These items install tools rather than connect accounts, so there is nothing to s
 ## Looking after the wiki
 
 **Weekly health check (`weekly`).** The wiki checks itself every Saturday morning and tells you what needs attention, including when your habits have moved on and a different extra might suit you. Free, and worth having: Claude suggests it in the "get me started" conversation. Next time you are back after it has run, you are offered one short page on your week: what the wiki learned, what is still open, and three things you could do. A week with nothing in it is one line saying so. The page is offered once, and nothing is counted or scored.
+
+**The weekly tidy (`tidy`).** After the Saturday check, Claude reads its report and puts right what can safely be put right (a link one page has and the other lacks, a line a new page is missing in the Index, a link to a page that was renamed), lists what it found and left (a claim past its date, a thing two pages say differently), and leaves it all on one short page; say "what did the tidy find". It runs within limits written down for it, never deletes, and stops after twenty changes. Needs "Jobs that ask Claude while you are away"; one run a week of your allowance. Free otherwise.
+
+**Your morning page (`morning`).** Each morning at half past six, or at the first wake after it, Claude writes you a page: what is on today, what moved in the last week, what is waiting, and one thing worth doing with its reason; say "morning". With the Alerts item your phone is told when it is ready. Needs "Jobs that ask Claude while you are away"; one run a day of your allowance. Free otherwise.
+
+**Memory search (`recall`).** Your assistant finds pages by the words in them; this adds finding them by meaning. When you ask a question, the three or four sections of your wiki closest to it are put in front of Claude before it reads your message, as leads to check: a question about "the knee" finds the page that says "patella", and one about "what we agreed in Lisbon" finds the trip page that never used the word "agreed". A small model (Ollama, about 300 MB) runs on this Mac for it; nothing leaves the Mac, and the index is a disposable copy outside the wiki that refreshes by itself after each save and once a night, in seconds. About 6 minutes and 400 MB the first time, which includes reading your whole wiki once. Free. Restricted folders are never indexed, and a command ("orient", "ingest") never fires it. If a `[recall]` block ever leads Claude astray, say so, and ask it to read the page first; that is what the block tells it to do.
 
 **The learning path (`lessons`).** Thirty-two short lessons, one an evening, with a reminder at 9 pm; say "lesson" in your vault. Free.
 

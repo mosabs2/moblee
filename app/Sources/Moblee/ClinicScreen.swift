@@ -22,7 +22,8 @@ struct ClinicScreen: View {
         ScreenFrame(
             sentence: Clinic.sentence(for: clinic.state),
             buttonTitle: "Done",
-            buttonEnabled: Clinic.canGoOn(clinic.state),
+            // (v0.13.0) Held while a check-up is being sent to the Hub's keeper.
+            buttonEnabled: Clinic.canGoOn(clinic.state) && !clinic.sending,
             showsBack: false,
             quietTitle: Clinic.quietWords(for: clinic.state),
             quietAction: Clinic.quietWords(for: clinic.state) == nil ? nil : { clinic.showTheFile() },
@@ -108,6 +109,25 @@ struct ClinicScreen: View {
                     .font(Theme.font(14))
                     .fixedSize(horizontal: false, vertical: true)
                     .lineLimit(2)
+                // (v0.10.0) One line, under the headline, in the check-up's own
+                // words: whether the wiki saves itself after every reply. Drawn
+                // here and not among the findings below because it is not a
+                // fault — it is as often "yes" — and because nothing that is
+                // right ever reaches that list.
+                if !card.saving.isEmpty {
+                    Text(card.saving)
+                        .font(Theme.font(13))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(2)
+                }
+                if !card.hub.isEmpty {
+                    Text(card.hub)
+                        .font(Theme.font(13))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
                 ForEach(Array(Self.rowsShown(card).enumerated()), id: \.offset) { _, row in line(row) }
                 if let more = Self.andMore(shown: Self.rowsShown(card).count, of: Self.rowsThereAre(card)) {
                     Text(more).font(Theme.font(13)).foregroundStyle(.secondary)
@@ -145,6 +165,24 @@ struct ClinicScreen: View {
                 Text(Clinic.sendIt)
                     .font(Theme.font(14, .medium))
                     .foregroundStyle(.secondary)
+                // (v0.13.0) On a wiki in a Hub, the same report can go to the
+                // Hub's keeper in one press, so a fault reaches whoever looks
+                // after Moblee without WhatsApp. Only ever on the owner's press.
+                if let to = Hub.recipient(home.hub) {
+                    if let result = clinic.sendResult {
+                        Text(Hub.sentSentence(result, to: to.name))
+                            .font(Theme.font(13, .medium))
+                            .foregroundStyle(result == .sent ? Theme.good : .secondary)
+                            .accessibilityIdentifier("hub-send-result")
+                    } else if let hub = home.hub {
+                        HStack(spacing: Theme.pt(6)) {
+                            QuietButton(title: clinic.sending ? Hub.sendingTitle : Hub.sendTitle(to: to.name),
+                                        id: "send-to-keeper") { clinic.sendToKeeper(hub: hub) }
+                            ListenButton(id: "listen-send-to-keeper", speech: Speech(Hub.sendSaid(to: to.name)),
+                                         what: "the small button", size: 13)
+                        }
+                    }
+                }
             }
         }
     }
@@ -186,6 +224,8 @@ struct ClinicScreen: View {
     /// drift apart, and static so a check can read it back.
     static func said(_ card: Clinic.Card, saved: Bool = true) -> String {
         var out = [cardTitle + ". " + card.headline]
+        if !card.saving.isEmpty { out.append(card.saving) }
+        if !card.hub.isEmpty { out.append(card.hub) }
         out += rowsShown(card).map { $0.line }
         if let more = andMore(shown: rowsShown(card).count, of: rowsThereAre(card)) { out.append(more) }
         if let first = card.actions.first { out.append("What to do next. " + first) }
