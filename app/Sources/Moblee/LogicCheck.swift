@@ -491,10 +491,24 @@ enum LogicCheck {
         check("anything but a plain version is refused, including addresses, paths and commands",
               hostile.allSatisfy { NewerRelease.version(fromTag: $0) == nil })
         func answer(_ o: [String: Any]) -> Data { (try? JSONSerialization.data(withJSONObject: o)) ?? Data() }
-        let app = [["name": "Moblee-0.9.3.zip"]]
+        let app = [["name": "Moblee-0.9.3.zip"], ["name": "appcast.xml"]]
         check("GitHub's answer for the latest release is read for its tag",
               NewerRelease.version(fromResponse: answer(["tag_name": "v0.9.3", "draft": false, "prerelease": false,
                                                          "assets": app])) == "0.9.3")
+        // (v0.15.0) The updater installs from the release's signed appcast, so a
+        // release carrying the zip without the appcast is not offered.
+        check("a release with the app but no appcast is not offered, since Install would find nothing",
+              NewerRelease.version(fromResponse: answer(["tag_name": "v0.9.3", "assets": [["name": "Moblee-0.9.3.zip"]]])) == nil)
+        // (v0.15.0) The updater's own rule, never backwards, checked with both numbers.
+        check("the updater takes only a version newer in both its build number and its version",
+              Updater.isNewer(build: 19, version: "0.15.1", than: 18, "0.15.0")
+              && Updater.isNewer(build: 20, version: "0.16.0", than: 18, "0.15.0")
+              && !Updater.isNewer(build: 18, version: "0.15.1", than: 18, "0.15.0")
+              && !Updater.isNewer(build: 19, version: "0.14.9", than: 18, "0.15.0")
+              && !Updater.isNewer(build: 19, version: "0.15.0", than: 18, "0.15.0")
+              && !Updater.isNewer(build: 17, version: "0.14.0", than: 18, "0.15.0")
+              && !Updater.isNewer(build: 19, version: "0.15.x", than: 18, "0.15.0")
+              && Updater.isNewer(build: 19, version: "0.10.0", than: 18, "0.9.9"))
         check("a draft or a pre-release is never offered",
               NewerRelease.version(fromResponse: answer(["tag_name": "v0.9.3", "draft": true, "assets": app])) == nil
               && NewerRelease.version(fromResponse: answer(["tag_name": "v0.9.3", "prerelease": true, "assets": app])) == nil)
