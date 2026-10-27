@@ -19,8 +19,9 @@ What it does for Claude, in order, stopping at the first failure:
   2. Proves the guard works by feeding it a delete command (must be
      refused, exit code 2) and a harmless command (must pass, exit code 0).
   3. Registers the guard in ~/.claude/settings.json as a PreToolUse hook on
-     Bash. The file is backed up first; existing hooks are kept; the result
-     is parsed again before it is accepted.
+     Bash, and the end-of-reply save (the wiki's own
+     scripts/turn-end-commit.py) as a Stop hook. The file is backed up first;
+     existing hooks are kept; the result is parsed again before it is accepted.
   4. Merges the starter permission rules into <vault>/.claude/settings.local.json:
      the allow list that stops the constant permission prompts, and the
      deny ring that refuses deletion, history rewriting and force pushes at
@@ -32,10 +33,11 @@ What it does for ChatGPT, in order, stopping at the first failure:
      proves it the same way, with one more test: a file-editing patch that
      deletes a page must be refused too.
   2. Registers the guard in ~/.codex/hooks.json as a PreToolUse hook on
-     Bash and apply_patch. The entry is only ever added at the end of the
-     list: ChatGPT remembers the owner's trust hook by hook, and a hook that
-     moves is switched off until it is trusted again. Nothing already in the
-     file is reordered, removed or rewritten.
+     Bash and apply_patch, and the end-of-reply save as a Stop hook. Each
+     entry is only ever added at the end of its own list: ChatGPT remembers
+     the owner's trust hook by hook, and a hook that moves is switched off
+     until it is trusted again. Nothing already in the file is reordered,
+     removed or rewritten.
   3. Makes sure ~/.codex/config.toml sets project_doc_max_bytes, so ChatGPT
      reads the whole instruction file. The line goes in at the top of the
      file; no existing line is altered.
@@ -50,10 +52,31 @@ written, and left alone if it changed in the meantime.
 ChatGPT runs a hook only after the owner trusts it, and it keeps that trust by
 the hook's entry in hooks.json (its command, matcher, timeout and place in the
 list). It takes no account of the contents of the guard file the entry runs.
-So the step is needed only when this run has added the entry; a run that only
+So the step is needed only when this run has added an entry; a run that only
 brings the guard file up to date leaves the trust as it was, and says so. When
 the step is needed the last line printed is "@@moblee-trust-needed chatgpt",
 which the app and the updater read; it is printed even when a later step fails.
+Two entries of Moblee's can be waiting there — the delete guard and the
+end-of-reply save — and each is trusted on its own.
+
+THE END-OF-REPLY SAVE (v0.10.0)
+    scripts/turn-end-commit.py is copied into the wiki by the installer and the
+    updater, and is registered here as a Stop hook: the hook that runs once a
+    reply has finished. It saves whatever the reply left unsaved, under the
+    conversation's own title, through the wiki's commit gate as on any other
+    save. For ChatGPT the Stop event was checked against OpenAI's current Codex
+    hooks documentation (https://learn.chatgpt.com/docs/hooks), which documents
+    Stop — "runs when a chat turn stops" — on the same hooks.json mechanism the
+    delete guard already uses, alongside PreToolUse, PermissionRequest,
+    PostToolUse, PreCompact, PostCompact, UserPromptSubmit, SubagentStart,
+    SubagentStop, SessionStart, SessionEnd and Interrupt. Its message carries
+    session_id, transcript_path (a string or null), cwd, hook_event_name,
+    turn_id, stop_hook_active, last_assistant_message and permission_mode,
+    which is what the script reads.
+
+    The hook is registered only when the script is really in the wiki. A hook
+    whose command cannot be found fails on every reply, and an owner would see
+    the failure and not the cause.
 
 Everything here is standard-library Python; nothing is downloaded.
 """
@@ -75,11 +98,30 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 GUARD_SRC = HERE / "bash-guard.py"
 RULES_SRC = HERE / "starter-permissions.json"
+# (0.12.0) Claude's own values for the working mode, in the words the owner
+# sees on the mode switch beside the box where they type.
+MODE_NAMES = {"acceptEdits": "Accept edits", "default": "Manual", "manual": "Manual",
+              "plan": "Plan", "auto": "Auto", "bypassPermissions": "Bypass",
+              "dontAsk": "Don't ask"}
 HOOKS_DIR = Path.home() / ".claude" / "hooks"
 GUARD_DST = HOOKS_DIR / "bash-guard.py"
 SETTINGS = Path.home() / ".claude" / "settings.json"
 GUARD_CMD = 'python3 "$HOME/.claude/hooks/bash-guard.py"'
 BACKUP_ROOT = Path.home() / ".config" / "moblee" / "backups"
+
+# The end-of-reply save. Unlike the guard it is not copied into an assistant's
+# folder: it lives in the wiki, at <wiki>/scripts/turn-end-commit.py, where the
+# installer and the updater put it beside the commit gate, and it takes the wiki
+# to be the folder its own folder sits in. So the hook command names it by its
+# full path. $HOME is not relied on here, as it is for the guard: the wiki is
+# usually not under $HOME at all, and a hook command that cannot be found fails
+# on every reply.
+TURN_END_NAME = "turn-end-commit.py"
+TURN_END_IN_VAULT = ("scripts", TURN_END_NAME)
+TURN_END_EVENT = "Stop"           # the hook that runs once a reply has finished
+# Stop takes no tool name, so there is nothing to match on; ChatGPT's hooks file
+# wants the key all the same, and "*" is its own word for "whatever this is".
+CODEX_STOP_MATCHER = "*"
 
 # ChatGPT (its agent, Codex, keeps its settings under ~/.codex, or under
 # CODEX_HOME when that is set)
@@ -292,6 +334,25 @@ def codex_entry() -> dict:
             "hooks": [{"type": "command", "command": codex_guard_cmd(), "timeout": 10}]}
 
 
+def turn_end_script(vault: Path) -> Path:
+    return vault.joinpath(*TURN_END_IN_VAULT)
+
+
+def turn_end_cmd(vault: Path) -> str:
+    """The command an assistant runs at the end of a reply. The path is quoted
+    as a shell needs it, so a wiki whose folder holds a space — or a quote mark
+    — is run correctly rather than in pieces."""
+    return f"python3 {shlex.quote(str(turn_end_script(vault)))}"
+
+
+def codex_stop_entry(vault: Path) -> dict:
+    """The end-of-reply save, in the shape ChatGPT's hooks file takes. Ninety
+    seconds: the script detaches at once and hands control straight back, so
+    this is a ceiling it never reaches rather than a wait anybody sits through."""
+    return {"matcher": CODEX_STOP_MATCHER,
+            "hooks": [{"type": "command", "command": turn_end_cmd(vault), "timeout": 90}]}
+
+
 def codex_entry_present(pre: list) -> bool:
     marks = [str(CODEX_GUARD_DST)]
     if CODEX_DIR == CODEX_DEFAULT_DIR:
@@ -305,23 +366,103 @@ def codex_entry_present(pre: list) -> bool:
     return False
 
 
-def plan_codex_hooks() -> tuple:
+def hook_script_paths(stop: list) -> list:
+    """Every path an entered end-of-reply save names, in the order found.
+
+    The command is written as `python3 <path>`, with the path quoted where it
+    holds a space, so it is read back the way a shell would read it. A command
+    that will not read that way is handed back whole, which then matches no
+    wiki and is reported as naming somewhere else — the safe way round."""
+    out = []
+    for g in stop:
+        if not isinstance(g, dict):
+            continue
+        for h in g.get("hooks") or []:
+            if not isinstance(h, dict):
+                continue
+            command = str(h.get("command", ""))
+            if TURN_END_NAME not in command:
+                continue
+            try:
+                words = shlex.split(command)
+            except ValueError:
+                words = [command]
+            named = [w for w in words if w.endswith(TURN_END_NAME)]
+            out += named or [command]
+    return out
+
+
+def stop_state(stop: list, vault: Path) -> tuple:
+    """(whether this wiki's own end-of-reply save is entered, the paths of any
+    entered for some other folder).
+
+    (v0.10.0) The WHOLE PATH is compared, and not the script's name. The
+    command carries the wiki's path as it stood when the hook was entered, so a
+    wiki that has been moved or renamed, and a second wiki on the same Mac,
+    both leave a hook pointing somewhere else — and a hook pointing somewhere
+    else saves somewhere else. Matching on the name alone made this say
+    "already registered, nothing to change" about both, so neither an update
+    nor the app's Repair could ever put it right, and a second wiki never saved
+    itself at all while its conversations committed the first one. Proved by
+    running it, 14 October 2026.
+
+    Nothing is taken out on the strength of this. The hook pointing elsewhere
+    may be another wiki's and perfectly good, and this script only ever adds at
+    the end of a list; so the correction is to enter this wiki's own beside it,
+    and to say plainly that the other one is there and was left alone."""
+    want = vault.joinpath(*TURN_END_IN_VAULT)
+    mine, others = False, []
+    for named in hook_script_paths(stop):
+        try:
+            same = os.path.realpath(Path(named).expanduser()) == os.path.realpath(want)
+        except (OSError, ValueError):
+            same = False
+        if same:
+            mine = True
+        else:
+            others.append(named)
+    return mine, others
+
+
+def codex_stop_present(stop: list, vault: Path) -> bool:
+    """Whether Moblee's end-of-reply save for THIS wiki is already entered."""
+    return stop_state(stop, vault)[0]
+
+
+def plan_codex_hooks(vault: Path) -> tuple:
     """(settings object, text on disk or None, text wanted or None, settings
-    wanted or None), worked out before anything on the machine is changed.
-    The last two are None when the guard is already registered. The entry is
+    wanted or None, what this run adds, whether the guard is already entered),
+    worked out before anything on the machine is changed.
+
+    The third and fourth are None when there is nothing to add. Each entry is
     added to the text as it stands; if that cannot be done the script stops
     rather than write the file out afresh, which could switch off hooks the
     owner has already trusted."""
     data, raw = load_codex_hooks()
-    if codex_entry_present(data.get("hooks", {}).get("PreToolUse", [])):
-        return data, raw, None, None
-    entry = codex_entry()
+    hooks = data.get("hooks", {})
+    guard_there = codex_entry_present(hooks.get("PreToolUse", []))
+    stop_mine, stop_others = stop_state(hooks.get(TURN_END_EVENT, []), vault)
+    wanted = []
+    if not guard_there:
+        wanted.append(("PreToolUse", codex_entry(), "the delete guard"))
+    if not stop_mine and turn_end_script(vault).is_file():
+        # Nothing is said here about a script that is not in the wiki yet:
+        # planning happens before a word of the ChatGPT step has been printed,
+        # and chatgpt_branch says it in its place.
+        wanted.append((TURN_END_EVENT, codex_stop_entry(vault), "the end-of-reply save"))
+    if not wanted:
+        return data, raw, None, None, [], guard_there, stop_others
     expected = copy.deepcopy(data)
-    expected.setdefault("hooks", {}).setdefault("PreToolUse", []).append(entry)
+    for event, entry, _ in wanted:
+        expected.setdefault("hooks", {}).setdefault(event, []).append(entry)
+    added = [what for _, _, what in wanted]
     if raw is None:
-        return data, raw, json.dumps(expected, indent=2) + "\n", expected
+        return (data, raw, json.dumps(expected, indent=2) + "\n", expected, added,
+                guard_there, stop_others)
+    candidate = raw
     try:
-        candidate = append_codex_entry_text(raw, entry)
+        for event, entry, _ in wanted:
+            candidate = append_codex_entry_text(candidate, entry, event)
         good = json.loads(candidate) == expected
     except Exception:  # noqa: BLE001
         good = False
@@ -329,9 +470,9 @@ def plan_codex_hooks() -> tuple:
         sys.exit(f"{short(CODEX_HOOKS_JSON)} is laid out in a way this script cannot add "
                  "a hook to without writing the whole file out again, and that could "
                  "switch off hooks you have already trusted. Nothing was changed; ask "
-                 "your assistant to add the guard's hook at the end of the PreToolUse "
-                 "list by hand, then re-run.")
-    return data, raw, candidate, expected
+                 "your assistant to add Moblee's hooks at the end of the PreToolUse and "
+                 "Stop lists by hand, then re-run.")
+    return data, raw, candidate, expected, added, guard_there, stop_others
 
 
 def load_codex_hooks() -> tuple:
@@ -349,7 +490,9 @@ def load_codex_hooks() -> tuple:
         sys.exit(f"{short(CODEX_HOOKS_JSON)} does not hold the expected settings object. "
                  "Nothing was changed; move it aside, then re-run.")
     hooks = data.get("hooks", {})
-    if not isinstance(hooks, dict) or not isinstance(hooks.get("PreToolUse", []), list):
+    shapely = isinstance(hooks, dict) and all(
+        isinstance(hooks.get(event, []), list) for event in ("PreToolUse", TURN_END_EVENT))
+    if not shapely:
         sys.exit(f"{short(CODEX_HOOKS_JSON)} has a 'hooks' section that is not the usual "
                  "shape. Nothing was changed; ask your assistant to look at that file "
                  "before re-running.")
@@ -431,19 +574,19 @@ def _indented(obj, pad: str, key: str | None = None) -> str:
     return "\n".join(pad + line for line in body.splitlines())
 
 
-def append_codex_entry_text(text: str, entry: dict) -> str:
-    """The hooks.json text with `entry` added at the end of hooks.PreToolUse
-    and not one other character touched, so the hooks the owner has already
-    trusted stay exactly as ChatGPT last saw them."""
+def append_codex_entry_text(text: str, entry: dict, event: str = "PreToolUse") -> str:
+    """The hooks.json text with `entry` added at the end of hooks.<event> and
+    not one other character touched, so the hooks the owner has already trusted
+    stay exactly as ChatGPT last saw them."""
     top = _skip_ws(text, 0)
     if text[top] != "{":
         raise ValueError("not an object")
     h = _member_value(text, top, "hooks")
     if h < 0:
-        return _append_in(text, top, _indented({"PreToolUse": [entry]}, "  ", "hooks"), "  ")
-    p = _member_value(text, h, "PreToolUse")
+        return _append_in(text, top, _indented({event: [entry]}, "  ", "hooks"), "  ")
+    p = _member_value(text, h, event)
     if p < 0:
-        return _append_in(text, h, _indented([entry], "    ", "PreToolUse"), "    ")
+        return _append_in(text, h, _indented([entry], "    ", event), "    ")
     return _append_in(text, p, _indented(entry, "      "), "      ")
 
 
@@ -637,7 +780,14 @@ PROVE_LINE = ("python3 scripts/moblee-doctor.py --prove-guard (run from the Mobl
               "allowance.")
 
 
-def say_trust(trust_needed: bool, guard_updated: bool = False) -> None:
+BOTH_HOOKS_LINE = (
+    "Moblee enters two hooks of its own: one whose command ends bash-guard.py, which is the delete "
+    "guard, and one whose command ends turn-end-commit.py, which saves your wiki at the end of every "
+    "reply. Do steps 4 and 5 for each Moblee hook the page lists; ChatGPT trusts them one at a time.")
+
+
+def say_trust(trust_needed: bool, guard_updated: bool = False,
+              added: list | None = None) -> None:
     """The step only the owner can take, and the line the app and the updater
     look for. The steps are the same five every time. The machine-readable
     line is printed only when trust is needed, which is only when this run
@@ -653,7 +803,8 @@ def say_trust(trust_needed: bool, guard_updated: bool = False) -> None:
         say("If the proof finds the guard not running, it gives the steps.")
         return
     if trust_needed:
-        say("One step is yours: ChatGPT will not run the guard until you trust it.")
+        waiting = " and ".join(added) if added else "the guard"
+        say(f"One step is yours: ChatGPT will not run {waiting} until you trust it.")
     else:
         say("The guard runs only while it is trusted in ChatGPT. To check that it is, or to "
             "trust it if you have not yet:")
@@ -663,8 +814,10 @@ def say_trust(trust_needed: bool, guard_updated: bool = False) -> None:
     say("  1. Open the ChatGPT menu and choose Settings.")
     say("  2. Choose Hooks, under the heading Coding.")
     say("  3. Open \"User config\".")
-    say("  4. Press Trust beside the hook that ends bash-guard.py.")
+    say("  4. Press Trust beside each hook Moblee has entered: one ends bash-guard.py, which is "
+        "the delete guard, and one ends turn-end-commit.py, which saves your wiki.")
     say("  5. Turn its switch on.")
+    say(BOTH_HOOKS_LINE)
     say("If ChatGPT was open during this, quit it and open it again so that it reads "
         "the whole rules file.")
     say("ChatGPT keeps its trust while Moblee's entry in its hooks list stays the same, so an "
@@ -682,7 +835,8 @@ def chatgpt_branch(vault: Path, hooks_plan: tuple, config_plan: tuple,
     the caller can still say so if a later step fails. A guard file that was
     only brought up to date sets progress["guard_updated"] and nothing more:
     ChatGPT's trust follows the entry, and takes no account of the file."""
-    data, raw, hooks_new, hooks_expected = hooks_plan
+    (data, raw, hooks_new, hooks_expected, hooks_added, _guard_there,
+     stop_others) = hooks_plan
     config_raw, config_new = config_plan
 
     # 1. guard file
@@ -710,20 +864,32 @@ def chatgpt_branch(vault: Path, hooks_plan: tuple, config_plan: tuple,
 
     # 2. hook registration: only ever added at the end of the list
     say(f"Hook registration in {short(CODEX_HOOKS_JSON)}")
+    if not turn_end_script(vault).is_file():
+        say(f"  {TURN_END_NAME} is not in the wiki yet, so the end-of-reply save was not entered; "
+            "the installer and the updater put it there, so run this again after one of them")
+    for named in stop_others:
+        # (v0.10.0) An end-of-reply save entered for some other folder. It is
+        # left exactly as it is: it may be a second wiki's and perfectly good,
+        # and this script only ever adds. This wiki's own goes in beside it.
+        say(f"  an end-of-reply save for another folder is already entered ({named}); it is left "
+            "as it is, and this wiki's own is entered beside it, so each wiki saves itself")
     if hooks_new is None:
         say("  already registered; nothing to change")
     elif dry_run:
-        say("  would add a PreToolUse hook on Bash and apply_patch, after any hooks already there")
+        for what in hooks_added:
+            say(f"  would add {what}, after any hooks already there")
     else:
         b = backup(CODEX_HOOKS_JSON, stamp)
         if b:
             say(f"  previous hooks file kept at {short(b)}")
         write_text_checked(CODEX_HOOKS_JSON, hooks_new, raw, hooks_expected)
         progress["trust"] = True
+        progress["added"] = list(hooks_added)
+        say("  registered: " + " and ".join(hooks_added))
         if raw is None:
-            say("  registered in a new hooks file")
+            say("  in a new hooks file")
         else:
-            say("  registered after any hooks already there; none of them was moved or changed")
+            say("  after any hooks already there; none of them was moved or changed")
 
     # 3. let ChatGPT read the whole instruction file
     say(f"Instruction file size limit in {short(CODEX_CONFIG)}")
@@ -764,6 +930,13 @@ def main() -> int:
     elif not (vault / "CLAUDE.md").exists() or not (vault / "wiki").is_dir():
         sys.exit(f"{vault} does not look like a vault (no CLAUDE.md or wiki/).")
     stamp = time.strftime("%Y%m%d-%H%M%S")
+    # (0.12.0) The updater names one folder for everything a run replaced and
+    # exports it as MOBLEE_BACKUP; a copy kept here goes into that folder, not
+    # into one of its own a second apart, which an owner sent to the named
+    # folder would find half empty.
+    shared = os.environ.get("MOBLEE_BACKUP", "")
+    if shared and Path(shared).parent == BACKUP_ROOT and Path(shared).name:
+        stamp = Path(shared).name
 
     say(f"Vault: {short(vault)}")
     if wants_chatgpt:
@@ -780,9 +953,13 @@ def main() -> int:
         check_hook_shape(settings)
     hooks_plan = config_plan = None
     if wants_chatgpt:
-        hooks_plan = plan_codex_hooks()
+        hooks_plan = plan_codex_hooks(vault)
         config_raw = read_utf8(CODEX_CONFIG)
-        check_codex_config(config_raw, registered=hooks_plan[2] is None)
+        # Whether the GUARD is already entered, and not whether there is
+        # nothing at all to add: an owner whose config.toml sets up hooks of
+        # its own, and whose guard went in before this version, must not be
+        # stopped now merely because the end-of-reply save is new.
+        check_codex_config(config_raw, registered=hooks_plan[5])
         config_plan = plan_codex_config(config_raw)
 
     if wants_claude:
@@ -793,7 +970,7 @@ def main() -> int:
         # and later refuses the pack's own newer tools, so its file is kept
         # level. Nothing else of Claude's is touched.
         keep_claude_guard_level(stamp, a.dry_run)
-    progress, code = {"trust": False, "guard_updated": False}, 0
+    progress, code = {"trust": False, "guard_updated": False, "added": []}, 0
     if wants_chatgpt:
         # Whatever stops a later step, the owner is still told when there is
         # something to trust: a guard that is registered but not trusted does
@@ -812,7 +989,7 @@ def main() -> int:
             if progress["trust"] and not a.dry_run:
                 say("")
                 say("Part of the ChatGPT step was done before it stopped.")
-                say_trust(True)
+                say_trust(True, added=progress["added"])
             return 1
     trust_needed = progress["trust"]
 
@@ -828,7 +1005,9 @@ def main() -> int:
         say("    indirect ones. If something must go, Claude tells you what and you")
         say("    remove it yourself.")
         say("  - Routine work (reading, searching, editing inside the vault, committing)")
-        say("    runs without permission prompts. Anything outside that still asks.")
+        say("    runs without permission prompts, and so does a build outside the wiki,")
+        say("    in ~/Apps. Installing software, switching on a job and sending anything")
+        say("    to a website still ask.")
     if wants_chatgpt:
         say("")
         if code == 0:
@@ -841,7 +1020,7 @@ def main() -> int:
             say("    or with its file-editing tool, in the forms the guard knows, including")
             say("    indirect ones. If something must go, ChatGPT tells you what and you")
             say("    remove it yourself.")
-        say_trust(trust_needed, progress["guard_updated"])
+        say_trust(trust_needed, progress["guard_updated"], progress["added"])
     return code
 
 
@@ -881,35 +1060,76 @@ def claude_branch(vault: Path, settings: dict, stamp: str, dry_run: bool) -> Non
         GUARD_DST.chmod(GUARD_DST.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         prove_guard(GUARD_DST)
 
-    # 2. hook registration
+    # 2. hook registration: the delete guard before a tool runs, and the
+    #    end-of-reply save once a reply has finished. Both are only ever added
+    #    to the end of their own list, and the file is written once, so a run
+    #    that has one of them already still puts the other in.
     say("Hook registration in ~/.claude/settings.json")
     hooks = settings.setdefault("hooks", {})
     before = hook_count(hooks)
     pre = hooks.setdefault("PreToolUse", [])
     present = any("bash-guard.py" in h.get("command", "")
                   for g in pre for h in g.get("hooks", []))
+    # Read without putting the key there: a settings file that gains an empty
+    # Stop list says a hook arrangement exists where none does.
+    # (v0.10.0) Matched on the whole path and not on the script's name; see
+    # stop_state() for what matching on the name alone cost.
+    stop_present, stop_others = stop_state(hooks.get(TURN_END_EVENT, []) or [], vault)
+    script_there = turn_end_script(vault).is_file()
+    adding = []
+    if not present:
+        adding.append("the delete guard, before a command runs")
+    if not stop_present and script_there:
+        adding.append("the end-of-reply save, once a reply has finished")
     if present:
-        say("  already registered; nothing to change")
+        say("  the delete guard is already registered; nothing to change")
+    for named in stop_others:
+        # Left exactly as it is: it may be a second wiki's and perfectly good,
+        # and this script only ever adds. This wiki's own goes in beside it.
+        say(f"  an end-of-reply save for another folder is already registered ({named}); it is "
+            "left as it is, and this wiki's own is registered beside it, so each wiki saves itself")
+    if stop_present:
+        say("  the end-of-reply save is already registered; nothing to change")
+    elif not script_there:
+        say(f"  {TURN_END_NAME} is not in the wiki yet, so the end-of-reply save was not "
+            "registered; the installer and the updater put it there, so run this again "
+            "after one of them")
+    if not adding:
+        pass
     elif dry_run:
-        say("  would add a PreToolUse hook on Bash")
+        for what in adding:
+            say(f"  would add {what}")
     else:
         b = backup(SETTINGS, stamp)
         if b:
             say(f"  previous settings kept at {short(b)}")
-        pre.append({"matcher": "Bash", "hooks": [{"type": "command", "command": GUARD_CMD}]})
+        if not present:
+            pre.append({"matcher": "Bash", "hooks": [{"type": "command", "command": GUARD_CMD}]})
+        if not stop_present and script_there:
+            # Stop carries no tool name, so there is nothing to match on and no
+            # matcher is written. The command is the wiki's own copy of the
+            # script, by its full path.
+            hooks.setdefault(TURN_END_EVENT, []).append(
+                {"hooks": [{"type": "command", "command": turn_end_cmd(vault)}]})
         after = hook_count(hooks)
         for k, n in before.items():
             if after.get(k, 0) < n:
                 sys.exit(f"Refusing to write: hooks under {k} would be lost.")
         write_json(SETTINGS, settings)
-        say(f"  registered; hook events now: {sorted(hooks.keys())}")
+        say("  registered: " + "; ".join(adding))
+        say(f"  hook events now: {sorted(hooks.keys())}")
 
     # 3. permission rules in the vault
     say("Permission rules in the vault")
     rules = json.loads(RULES_SRC.read_text())
     vault_str = str(vault)
+    home_str = str(Path.home())
     want_allow = [r.replace("__VAULT__", vault_str) for r in rules["allow"]]
     want_deny = [r.replace("__VAULT__", vault_str) for r in rules["deny"]]
+    retired = [r.replace("__VAULT__", vault_str) for r in rules.get("retired", [])]
+    want_dirs = [d.replace("__HOME__", home_str).replace("__VAULT__", vault_str)
+                 for d in rules.get("additionalDirectories", [])]
+    want_mode = rules.get("defaultMode")
     local = vault / ".claude" / "settings.local.json"
     data = load_json(local)
     perms = data.setdefault("permissions", {})
@@ -917,19 +1137,152 @@ def claude_branch(vault: Path, settings: dict, stamp: str, dry_run: bool) -> Non
     deny = perms.setdefault("deny", [])
     add_allow = [r for r in want_allow if r not in allow]
     add_deny = [r for r in want_deny if r not in deny]
-    if not add_allow and not add_deny:
+    # (0.12.0) Moblee's own earlier rules that now stand in the guard's way:
+    # a deny rule refuses a command everywhere before the guard can look, and
+    # the guard is the one that knows a build folder from the wiki. Only
+    # Moblee's own wording is taken out; an owner's rule is never touched.
+    drop_deny = [r for r in retired if r in deny]
+    drop_allow = [r for r in retired if r in allow]
+    dirs = perms.setdefault("additionalDirectories", [])
+    add_dirs = [d for d in want_dirs if d not in dirs]
+    # The working mode is set only where the owner has not chosen one: a mode
+    # they set themselves is theirs. Accept edits means an edit inside the
+    # wiki, or inside the builds' home, no longer asks; a command still does
+    # unless a rule covers it, and the guard reads every command regardless.
+    set_mode = want_mode if (want_mode and not perms.get("defaultMode")) else None
+    changes = bool(add_allow or add_deny or drop_deny or drop_allow or add_dirs or set_mode)
+    if not changes:
         say("  already in place; nothing to change")
     elif dry_run:
         say(f"  would add {len(add_allow)} allow rules and {len(add_deny)} deny rules")
+        if drop_deny or drop_allow:
+            say(f"  would take out {len(drop_deny) + len(drop_allow)} rules matching Moblee's earlier "
+                "wording, since the delete guard decides those now")
+        if add_dirs:
+            say("  would add the builds' home as a folder Claude may edit in: " + ", ".join(add_dirs))
+        if set_mode:
+            say(f"  would set Claude's working mode for this wiki to {MODE_NAMES.get(set_mode, set_mode)}")
     else:
         b = backup(local, stamp)
         if b:
             say(f"  previous rules kept at {short(b)}")
         allow.extend(add_allow)
         deny.extend(add_deny)
+        for r in drop_deny:
+            deny.remove(r)
+        for r in drop_allow:
+            allow.remove(r)
+        dirs.extend(add_dirs)
+        if set_mode:
+            perms["defaultMode"] = set_mode
         write_json(local, data)
         say(f"  allow rules: {len(allow)} (added {len(add_allow)}); "
-            f"deny rules: {len(deny)} (added {len(add_deny)})")
+            f"deny rules: {len(deny)} (added {len(add_deny)}, "
+            f"{len(drop_deny) + len(drop_allow)} matching Moblee's earlier wording taken out, "
+            "since the delete guard decides those now)")
+        if add_dirs:
+            say("  Claude may now edit in the builds' home without asking: " + ", ".join(add_dirs))
+        if set_mode:
+            say(f"  Claude's working mode for this wiki: {MODE_NAMES.get(set_mode, set_mode)} "
+                "(an edit in the wiki or in ~/Apps no longer asks)")
+    for d in want_dirs:
+        # The builds' home must exist for Claude to count it; an empty folder
+        # is all that is made, and never inside the wiki.
+        p = Path(d)
+        if not p.exists() and not dry_run:
+            try:
+                p.mkdir(parents=True, exist_ok=True)
+                say(f"  made the builds' home {short(p)}")
+            except OSError as exc:
+                say(f"  could not make {short(p)} ({exc}); a build outside the wiki will ask first")
+
+    # 4. (0.12.0) Auto mode's exceptions for Moblee's own two writes. In auto
+    #    mode a separate check reads every action a rule has not settled, and
+    #    it has refused the check-up's card (a session that had just read the
+    #    owner's chats writing a file into the wiki) in the field. These two
+    #    sentences tell it what Moblee's own tools do. They are read only from
+    #    this file, never from the wiki's own settings, and "$defaults" keeps
+    #    Claude's own list in place.
+    say("Telling Auto mode about Moblee's own tools")
+    auto_rules = rules.get("autoModeAllow", [])
+    if auto_rules:
+        auto = settings.get("autoMode")
+        if not isinstance(auto, dict):
+            auto = {}
+        allow_auto = auto.get("allow")
+        fresh = not isinstance(allow_auto, list)
+        if fresh:
+            allow_auto = ["$defaults"]
+        add_auto = [r for r in auto_rules if r not in allow_auto]
+        if not add_auto:
+            say("  already in place; nothing to change")
+        elif dry_run:
+            say("  would tell Auto mode about Moblee's two tools, the check-up and the end-of-reply save")
+        else:
+            b = backup(SETTINGS, stamp)
+            if b:
+                say(f"  previous settings kept at {short(b)}")
+            allow_auto.extend(add_auto)
+            auto["allow"] = allow_auto
+            settings["autoMode"] = auto
+            write_json(SETTINGS, settings)
+            say("  told Auto mode about Moblee's two tools, the check-up and the end-of-reply save"
+                + (" (Claude's own list kept)" if fresh else ""))
+
+    # 5. (0.12.0) The wiki's folder marked as trusted. Claude reads a folder's
+    #    own rules (the file section 3 writes) only once the owner has answered
+    #    yes to its question on first opening the folder; until then every rule
+    #    above is ignored, silently in the app and with a warning only when run
+    #    with nobody watching, and Claude asks before everything. That is one
+    #    of the things the friends met. Moblee wrote those rules itself, so
+    #    marking the folder trusted is honest, and it spares the owner a
+    #    question whose wrong answer shows nothing.
+    say("Marking the wiki's folder as trusted, so Claude reads its rules")
+    mark_trusted(vault, stamp, dry_run)
+    return 0
+
+
+CLAUDE_JSON = Path.home() / ".claude.json"
+
+
+def mark_trusted(vault: Path, stamp: str, dry_run: bool) -> None:
+    keys = [str(vault)]
+    real = os.path.realpath(str(vault))
+    if real != str(vault):
+        keys.append(real)
+    try:
+        data = json.loads(CLAUDE_JSON.read_text()) if CLAUDE_JSON.exists() else {}
+    except (OSError, ValueError):
+        say("  Claude's own state file could not be read, so this was left; open Claude in the wiki once and answer yes")
+        return
+    if not isinstance(data, dict):
+        say("  Claude's own state file is not in the usual shape, so this was left; open Claude in the wiki once and answer yes")
+        return
+    projects = data.get("projects")
+    if projects is None:
+        projects = {}
+    if not isinstance(projects, dict):
+        say("  Claude's own state file is not in the usual shape, so this was left; open Claude in the wiki once and answer yes")
+        return
+    todo = [k for k in keys if not (isinstance(projects.get(k), dict) and projects[k].get("hasTrustDialogAccepted") is True)]
+    if not todo:
+        say("  already trusted; nothing to change")
+        return
+    if dry_run:
+        say("  would mark it trusted")
+        return
+    b = backup(CLAUDE_JSON, stamp)
+    if b:
+        say(f"  previous state kept at {short(b)}")
+    for k in todo:
+        entry = projects.get(k)
+        if not isinstance(entry, dict):
+            entry = {}
+        entry["hasTrustDialogAccepted"] = True
+        projects[k] = entry
+    data["projects"] = projects
+    write_json(CLAUDE_JSON, data)
+    say("  marked trusted: the rules in the wiki now apply from the first conversation")
 
 
 if __name__ == "__main__":

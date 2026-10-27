@@ -18,6 +18,14 @@ guard (always-loaded files and the skills layer), and a handful of advisory
 sweeps (superlatives, prose boilerplate, correction rate), and (v0.7) a
 habits-and-tools check that asks whether the owner's setup still fits.
 
+(v0.10.0) A file that is loaded at every session is reported once it has
+reached 95 per cent of its size limit, so the owner hears about it while
+there is still room, rather than only when the limit is crossed. One of
+those files going missing, or turning out not to be readable, is reported
+too instead of being passed over. And if one check fails with an error of
+its own, that is written into the report as an issue and the other checks
+still run, so a report is always produced.
+
 Vault detection, in order of precedence:
   1. the MOBLEE_VAULT environment variable (absolute path to the vault);
   2. ~/.config/moblee/vault-path (a single line holding the absolute
@@ -36,6 +44,7 @@ import datetime
 import os
 import re
 import sys
+import traceback
 from pathlib import Path
 
 try:
@@ -742,6 +751,13 @@ def est_tokens(path: Path) -> int:
         return 0
 
 
+# (v0.10.0) The warning band. A file that is loaded at every session gets its
+# own size limit above. Waiting for a file to cross that limit means the owner
+# only hears about it once it is already a problem, so anything that has
+# reached this share of its limit is reported too — as a nudge, not a fault.
+CAP_WARN_FRACTION = 0.95
+
+
 def check_vault_weight(vault: Path, findings: list[str]) -> tuple[int, int]:
     """Token-budget guard.
 
@@ -768,19 +784,46 @@ def check_vault_weight(vault: Path, findings: list[str]) -> tuple[int, int]:
     total = 0
     for rel, cap, note in capped:
         p = vault / rel
-        if not p.is_file():
-            findings.append(f"- `{rel}`: skipped — file missing.")
-            continue
+        # (v0.10.0) Every one of these files counts, there or not. None of them
+        # is an optional part of a wiki, so one of them going astray is
+        # something the owner needs to be told about. It used to be marked
+        # "skipped" and left out of the count, which meant a wiki with one of
+        # them missing could still come back all-clean.
         total += 1
+        if not p.is_file():
+            findings.append(
+                f"- `{rel}`: **this file is missing** ({note}). Every session expects it to be "
+                "there. Its size could not be measured, so this part of the report is incomplete."
+            )
+            continue
+        # A file that is there but cannot be opened is a different fault, and
+        # is reported differently. It lands in the read-failure list at the end
+        # of the report; what it must not do is count here as a file that
+        # passed, because an unopened file measures as no weight at all and so
+        # reads as comfortably inside its limit.
+        failures_before = len(READ_FAILURES)
         tok = est_tokens(p)
-        if tok <= cap:
-            passed += 1
-            findings.append(f"- `{rel}`: ~{tok:,} tok, under the {cap:,} cap ({note}). ✓")
-        else:
+        if len(READ_FAILURES) > failures_before:
+            findings.append(
+                f"- `{rel}`: **this file could not be read** ({note}). Its size is unknown — "
+                "see READ FAILURES at the end of this report."
+            )
+            continue
+        if tok > cap:
             findings.append(
                 f"- `{rel}`: **~{tok:,} tok, over the {cap:,} cap** ({note}). "
                 "Compaction candidate — run the `compact` skill."
             )
+        elif tok >= cap * CAP_WARN_FRACTION:
+            findings.append(
+                f"- `{rel}`: **~{tok:,} tok, getting close to its {cap:,} limit** "
+                f"({tok / cap:.0%} of it; this warning starts at {CAP_WARN_FRACTION:.0%}) ({note}). "
+                "Nothing is broken and the file still loads normally. Trimming it soon — run the "
+                "`compact` skill — keeps it from going over."
+            )
+        else:
+            passed += 1
+            findings.append(f"- `{rel}`: ~{tok:,} tok, under the {cap:,} cap ({note}). ✓")
 
     wiki = vault / "wiki"
     big: list[tuple[str, int]] = []
@@ -2140,6 +2183,50 @@ def check_duplicate_frontmatter(vault: Path, findings: list[str]) -> tuple[int, 
 # ---------------------------------------------------------------------------
 
 
+def record_crash(
+    scorecard: list[tuple[str, int, int]],
+    findings: list[str],
+    name: str,
+    e: BaseException,
+) -> None:
+    """Write one check's own failure into the report, in plain words, and say so
+    on the error stream as well. The run carries on."""
+    tb = traceback.extract_tb(e.__traceback__)
+    where = f" at {Path(tb[-1].filename).name}:{tb[-1].lineno}" if tb else ""
+    msg = f"{e.__class__.__name__}: {e}".replace("\n", " ")[:300]
+    findings.append("")
+    findings.append(
+        f"- **{name}**: **this check could not finish — {msg}**{where}. Whatever it would have "
+        "found is missing from this report. Every other check ran, so the rest of the report "
+        "still stands. This is a fault in Moblee, not in the wiki."
+    )
+    scorecard.append((name, 0, 1))
+    sys.stderr.write(f"lint-v2: a check could not finish: {name}: {msg}{where}\n")
+
+
+def run_check(
+    scorecard: list[tuple[str, int, int]],
+    findings: list[str],
+    name: str,
+    fn,
+    *args,
+    **kwargs,
+) -> None:
+    """Run one check and record its (passed, total) row.
+
+    (v0.10.0) Every check goes through here. If one of them fails with an error
+    of its own, that becomes a reported issue and the lint keeps going. Before,
+    a single unreadable file or impossible date ended the whole run and no
+    report was written at all, which left the owner with nothing.
+    """
+    try:
+        pass_, tot = fn(*args, **kwargs)
+    except Exception as e:  # noqa: BLE001 — reported, never raised
+        record_crash(scorecard, findings, name, e)
+        return
+    scorecard.append((name, pass_, tot))
+
+
 def main() -> int:
     # Asking for help, or a mistyped switch, must never run a lint and write a
     # report: only no arguments, or --out <path>, does that.
@@ -2169,83 +2256,47 @@ def main() -> int:
 
     scorecard: list[tuple[str, int, int]] = []
 
-    pass_, tot = check_cluster_note_coverage(vault, findings)
-    scorecard.append(("Cluster-note index coverage", pass_, tot))
+    # (v0.10.0) Every check below is started by run_check. If any one of them
+    # fails with an error of its own, that is written into the report as an
+    # issue and the remaining checks still run, so the owner always gets a
+    # report rather than a bare error message.
+    run_check(scorecard, findings, "Cluster-note index coverage",
+              check_cluster_note_coverage, vault, findings)
 
-    pass_, tot = check_cluster_note_frontmatter(vault, findings)
-    scorecard.append(("Cluster-note frontmatter", pass_, tot))
+    run_check(scorecard, findings, "Cluster-note frontmatter",
+              check_cluster_note_frontmatter, vault, findings)
 
     # Typed folders with a fixed frontmatter schema. Daily notes carry at
     # least a `date` (the template sets it). Add a line per folder the vault
     # owner adopts; a missing folder skips silently.
-    pass_, tot = check_frontmatter_schema(vault, findings, "Daily Notes", ["date"], "Daily note")
-    scorecard.append(("Daily-note frontmatter", pass_, tot))
+    run_check(scorecard, findings, "Daily-note frontmatter",
+              check_frontmatter_schema, vault, findings, "Daily Notes", ["date"], "Daily note")
 
-    pass_, tot = check_index_domains_coverage(vault, findings)
-    scorecard.append(("Index.md Domains coverage", pass_, tot))
-
-    pass_, tot = check_log_timestamps(vault, findings)
-    scorecard.append(("Log header format and timestamp ordering", pass_, tot))
-
-    pass_, tot = check_log_session_metadata(vault, findings)
-    scorecard.append(("Housekeeping session-metadata footers", pass_, tot))
-
-    pass_, tot = check_outputs_size(vault, findings)
-    scorecard.append(("outputs/ size guard (advisory, never removes files)", pass_, tot))
-
-    pass_, tot = check_vault_weight(vault, findings)
-    scorecard.append(("Vault weight (token caps, advisory, never trims)", pass_, tot))
-
-    pass_, tot = check_skill_weight(vault, findings)
-    scorecard.append(("Skills-layer weight (informational)", pass_, tot))
-
-    pass_, tot = check_dangling_links(vault, findings)
-    scorecard.append(("Dangling wikilinks", pass_, tot))
-
-    pass_, tot = check_broken_anchors(vault, findings)
-    scorecard.append(("Broken section anchors", pass_, tot))
-
-    pass_, tot = check_orphan_pages(vault, findings)
-    scorecard.append(("Orphan pages", pass_, tot))
-
-    pass_, tot = check_self_cancelling_items(vault, findings)
-    scorecard.append(("Self-cancelling items (advisory; verify vs log)", pass_, tot))
-
-    pass_, tot = check_dated_state_drift(vault, findings)
-    scorecard.append(("Dated state drift and tombstones on _context.md (advisory)", pass_, tot))
-
-    pass_, tot = check_restricted_invariants(vault, findings)
-    scorecard.append(("Restricted-folder invariants (marker + one-way links)", pass_, tot))
-
-    pass_, tot = check_future_dates(vault, findings)
-    scorecard.append(("Future-dated stamps", pass_, tot))
-
-    pass_, tot = check_attribution_lines(vault, findings)
-    scorecard.append(("Cluster-note source attribution", pass_, tot))
-
-    pass_, tot = check_refresh_note_retention(vault, findings)
-    scorecard.append(("_context refresh-note retention", pass_, tot))
-
-    pass_, tot = check_reciprocal_backlinks(vault, findings)
-    scorecard.append(("Reciprocal backlinks (sampled, informational)", pass_, tot))
-
-    pass_, tot = check_superlative_phrasing(vault, findings)
-    scorecard.append(("Superlative phrasing sweep (informational)", pass_, tot))
-
-    pass_, tot = check_prose_boilerplate(vault, findings)
-    scorecard.append(("Prose boilerplate sweep (informational)", pass_, tot))
-
-    pass_, tot = check_ai_writing_tells(vault, findings)
-    scorecard.append(("AI-writing tells sweep (informational)", pass_, tot))
-
-    pass_, tot = check_correction_rate(vault, findings)
-    scorecard.append(("Correction rate (informational)", pass_, tot))
-
-    pass_, tot = check_duplicate_frontmatter(vault, findings)
-    scorecard.append(("Duplicate frontmatter blocks (advisory)", pass_, tot))
-
-    pass_, tot = check_habits(vault, findings)
-    scorecard.append(("Habits and tools (informational)", pass_, tot))
+    for name, fn in [
+        ("Index.md Domains coverage", check_index_domains_coverage),
+        ("Log header format and timestamp ordering", check_log_timestamps),
+        ("Housekeeping session-metadata footers", check_log_session_metadata),
+        ("outputs/ size guard (advisory, never removes files)", check_outputs_size),
+        ("Vault weight (token caps, advisory, never trims)", check_vault_weight),
+        ("Skills-layer weight (informational)", check_skill_weight),
+        ("Dangling wikilinks", check_dangling_links),
+        ("Broken section anchors", check_broken_anchors),
+        ("Orphan pages", check_orphan_pages),
+        ("Self-cancelling items (advisory; verify vs log)", check_self_cancelling_items),
+        ("Dated state drift and tombstones on _context.md (advisory)", check_dated_state_drift),
+        ("Restricted-folder invariants (marker + one-way links)", check_restricted_invariants),
+        ("Future-dated stamps", check_future_dates),
+        ("Cluster-note source attribution", check_attribution_lines),
+        ("_context refresh-note retention", check_refresh_note_retention),
+        ("Reciprocal backlinks (sampled, informational)", check_reciprocal_backlinks),
+        ("Superlative phrasing sweep (informational)", check_superlative_phrasing),
+        ("Prose boilerplate sweep (informational)", check_prose_boilerplate),
+        ("AI-writing tells sweep (informational)", check_ai_writing_tells),
+        ("Correction rate (informational)", check_correction_rate),
+        ("Duplicate frontmatter blocks (advisory)", check_duplicate_frontmatter),
+        ("Habits and tools (informational)", check_habits),
+    ]:
+        run_check(scorecard, findings, name, fn, vault, findings)
 
     # Read-failure surfacing: a file that exists but could not be read makes
     # every check that touched it silently clean. Count each failure as a

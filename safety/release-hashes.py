@@ -44,6 +44,10 @@ FILES = [
     "scripts/vault-gate.py",
     "scripts/log-append.py",
     "scripts/weekly-card.py",
+    # (v0.10.0) The end-of-reply save. It is copied into the wiki and run by the
+    # assistant's Stop hook, and it stages, commits and rewrites its own record
+    # file, which the guard reads as clobbering.
+    "scripts/turn-end-commit.py",
     "scripts/vault-orient-preflight.sh",
     "scripts/patch-claude-md.py",
     "scripts/moblee-setup.py",
@@ -69,6 +73,30 @@ FILES = [
     "safety/test-guard.py",
     "voice/install-voice.py",
     "skills/wiki-to-pdf/render.py",
+    # (v0.11.0) The build skill's two helpers run in place from the skill's
+    # folder, so their bytes are fixed and can be pinned. scaffold.py shells
+    # out to osacompile for the launcher and keychain.py to `security`; the
+    # parts it copies into an owner's app folder carry no such call, because
+    # their bytes change with the name filled in and could not be pinned.
+    "skills/build/parts/scaffold.py",
+    "skills/build/parts/keychain.py",
+    # (0.12.0) Four more helpers that run in place from the skill's folder:
+    # the one that puts a page on the web (git, gh), the one that packs a kit,
+    # the sweep they share, and the scheduled job that asks the assistant.
+    # And the switch the Moblee app presses for a built thing's job.
+    "skills/build/parts/publish.py",
+    "skills/build/parts/share.py",
+    "skills/build/parts/sweep.py",
+    "skills/build/parts/think-job.py",
+    "scripts/job-switch.py",
+    # (0.12.0) the one compaction move done by a script, run by the weekly tidy
+    "scripts/compact-rotate.py",
+    # (0.12.0) memory search: copied into a wiki by the item, run from there
+    "extras/recall/recall.py",
+    "extras/recall/recall-inject.py",
+    "extras/recall/rebuild-index.sh",
+    "extras/recall/install-recall.py",
+    "tools/test-build.py",
 ]
 ENTRY_RE = re.compile(r'"([0-9a-f]{64})":\s*"([^"]*)"')
 

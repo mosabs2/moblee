@@ -488,9 +488,12 @@ step_ok folder
 
 # ----- copy the vault tooling (v0.4, extended v0.5) ---------------------------
 step_start tools
-echo "Copying vault tooling (lint, commit gate, preflight, log appender, galaxy, dashboard)..."
+echo "Copying vault tooling (lint, commit gate, preflight, log appender, end-of-reply save, galaxy, dashboard)..."
 mkdir -p "$VAULT_LOCATION/scripts"
-for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh log-append.py weekly-card.py; do
+# (v0.10.0) turn-end-commit.py is the end-of-reply save. It lives in the wiki
+# beside the commit gate, and the safety step below registers it as the
+# assistant's Stop hook once it is there.
+for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh log-append.py weekly-card.py turn-end-commit.py compact-rotate.py; do
   if [[ -f "$SCRIPT_DIR/$tool" ]]; then
     cp "$SCRIPT_DIR/$tool" "$VAULT_LOCATION/scripts/$tool"
   fi
@@ -504,6 +507,27 @@ if [[ -d "$SCRIPT_DIR/wiki-galaxy" ]]; then
 fi
 if [[ -d "$PACKAGE_ROOT/dashboard" ]]; then
   cp -R "$PACKAGE_ROOT/dashboard" "$VAULT_LOCATION/dashboard"
+fi
+
+# ----- Claude's own additions (v0.10.0) ---------------------------------------
+# mods/ sits at the pack root, beside dashboard/ and not inside scripts/, and
+# goes into the wiki at scripts/claude-mods/. Claude is then pointed at that
+# folder and the band above the prompt is installed at user scope. Finding a
+# Claude new enough to take a mod, and the plugin commands themselves, are in
+# scripts/claude-mods.sh, which the updater sources too: one copy of that work,
+# not two, because the two drifting apart is how an owner comes to have the band
+# after an install and not after an update.
+#
+# None of this can stop the install. The band is an addition to Claude's own
+# screen; no part of the wiki depends on it, and an owner whose Claude is too
+# old simply gets it later, which is said on the screen and in the diary.
+if [[ -f "$SCRIPT_DIR/claude-mods.sh" ]]; then
+  # shellcheck source=claude-mods.sh
+  . "$SCRIPT_DIR/claude-mods.sh"
+  if [[ "$ASSISTANT" != "chatgpt" ]]; then
+    echo "Adding Claude's own additions (the band above the prompt)..."
+  fi
+  mods_do "$PACKAGE_ROOT" "$VAULT_LOCATION" "$ASSISTANT" install "  "
 fi
 
 step_ok tools
@@ -588,8 +612,11 @@ print_trust_steps() {
   echo "${pad}1. Open the ChatGPT menu and choose Settings."
   echo "${pad}2. Choose Hooks, under the heading Coding."
   echo "${pad}3. Open \"User config\"."
-  echo "${pad}4. Press Trust beside the hook that ends bash-guard.py."
+  echo "${pad}4. Press Trust beside each hook Moblee has entered: one ends bash-guard.py, which is the delete guard, and one ends turn-end-commit.py, which saves your wiki."
   echo "${pad}5. Turn its switch on."
+  # (v0.10.0) Moblee now enters two hooks, and ChatGPT trusts them one at a time:
+  # an owner who pressed Trust once would leave the second one switched off.
+  echo "${pad}Moblee enters two hooks of its own: one whose command ends bash-guard.py, which is the delete guard, and one whose command ends turn-end-commit.py, which saves your wiki at the end of every reply. Do steps 4 and 5 for each Moblee hook the page lists; ChatGPT trusts them one at a time."
   echo "${pad}If ChatGPT was open during this, quit it and open it again so that it reads the whole rules file."
   echo "${pad}Then prove it: python3 scripts/moblee-doctor.py --prove-guard (run from the Moblee folder; in the Moblee app, press Prove the guard). It uses a little of your ChatGPT allowance."
   echo "${pad}ChatGPT keeps its trust while Moblee's entry in its hooks list stays the same, so an ordinary Moblee update does not need these steps again. If an update ever does need them, Moblee says so at the end of the update and ChatGPT will not remind you. After any update, prove the guard again."

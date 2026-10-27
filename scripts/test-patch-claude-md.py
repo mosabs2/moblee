@@ -454,6 +454,108 @@ def test_blanking_only_touches_the_owner_sentence() -> None:
           "while an added sentence is still a different digest")
 
 
+# ------------------------------------ the end-of-reply save wording (v0.10.0)
+# (v0.10.0) The wiki now saves itself at the end of every reply, and the section
+# the assistant reads about saving says so. That makes it the one Moblee-owned
+# section this version changes, and a changed section is the whole point of the
+# corpus: an owner updating from v0.9.6 has the OLD wording, and unless that
+# wording's digest is in scripts/claude-md-known.json their section stops being
+# recognised and is never brought up to date again — and, worse, the engine
+# would report it to them as a section they had written in.
+#
+# The digest of the v0.9.6 body of this section, as scripts/claude-md-known.json
+# records it. Written out here rather than computed, so that a body quietly
+# falling out of the corpus is a failure and not a test that agrees with
+# whatever it is given.
+COMMIT_HEADING = "Commit at the end of every piece of work"
+V096_COMMIT_BODY = "e96e76b54346022b232271896e917a87f77e6dce3f6c244415cb7b4834814525"
+TURN_END_MARK = "saves itself at the end of every reply"
+
+
+def body_of(text: str, heading: str) -> str:
+    return next((b for h, b in engine.split_sections(text)[1] if h == heading), "")
+
+
+def rules_at_0_9_6() -> str:
+    """The shipped rules file with the v0.10.0 paragraph taken back out: the
+    commit section as it stood at v0.9.6, which is what an owner updating from
+    that version actually has. Built by subtraction rather than kept as a
+    fixture, so the two cannot drift apart; the digest check below is what
+    proves the subtraction landed on the real v0.9.6 wording."""
+    lines = TEMPLATE.read_text(encoding="utf-8").split("\n")
+    kept = []
+    for i, line in enumerate(lines):
+        if TURN_END_MARK in line:
+            continue                                    # the paragraph itself
+        if line == "" and i and TURN_END_MARK in lines[i - 1]:
+            continue                                    # and the blank after it
+        kept.append(line)
+    return "\n".join(kept)
+
+
+def test_the_shipped_section_says_what_it_should() -> None:
+    body = body_of(TEMPLATE.read_text(encoding="utf-8"), COMMIT_HEADING)
+    check(TURN_END_MARK in body,
+          "the shipped section says the wiki saves itself at the end of every reply")
+    check("backstop" in body and "not a reason to skip" in body,
+          "and says that is a backstop, not a reason to skip its own commit")
+    # (v0.10.0) The sentence used to promise that a refused save "is said out
+    # loud in the next reply". Nothing delivered that: the hook's output goes
+    # nowhere and no hook puts its record into a reply. What it says now is
+    # what is really true — the record is written down, nothing puts it into a
+    # reply, so read it when the owner asks or when a session opens on a wiki
+    # with earlier work in it.
+    check("turn-end-commit.json" in body and "said out loud" not in body,
+          "and says where the record is, without promising it is said out loud")
+    check("Nothing puts that record into a reply" in body
+          and "when the owner asks what is unsaved" in body,
+          "and tells the assistant to read it, since nothing hands it over")
+    check("never commits the owner's own uncommitted work" in body,
+          "and that the save leaves the owner's own uncommitted work alone")
+    check(body.count(TURN_END_MARK) == 1, "in one paragraph, said once")
+
+
+def test_the_old_wording_is_still_in_the_corpus() -> None:
+    old = body_of(rules_at_0_9_6(), COMMIT_HEADING)
+    check(engine.digest_body(old) == V096_COMMIT_BODY,
+          "taking the new paragraph out gives back the v0.9.6 body, digest and all",
+          engine.digest_body(old))
+    known = engine.load_known()
+    check(V096_COMMIT_BODY in known.get(engine.heading_key(COMMIT_HEADING), set()),
+          "and that digest is in scripts/claude-md-known.json, so an owner's "
+          "section is still recognised")
+    check(engine.digest_body(body_of(TEMPLATE.read_text(encoding="utf-8"), COMMIT_HEADING))
+          != V096_COMMIT_BODY, "while the wording shipping now is a different body")
+
+
+def test_the_changed_section_is_replaced_not_added() -> None:
+    plan, _v = run(rules_at_0_9_6())
+    out = plan.text or ""
+    check(COMMIT_HEADING in plan.replaced,
+          "an existing owner's commit section is brought up to date",
+          ", ".join(plan.replaced))
+    check(COMMIT_HEADING not in plan.skipped,
+          "not reported to them as a section they had written in",
+          ", ".join(plan.skipped))
+    check(COMMIT_HEADING not in plan.inserted,
+          "and not added a second time", ", ".join(plan.inserted))
+    check(out.count(f"## {COMMIT_HEADING}") == 1,
+          "so the file holds exactly one of that section",
+          str(out.count(f"## {COMMIT_HEADING}")))
+    check(TURN_END_MARK in out, "and it now says the wiki saves itself")
+    again, _v2 = run(out)
+    check(again.text is None, "running it a second time changes nothing")
+    check(again.skipped == [], "and skips nothing", ", ".join(again.skipped))
+
+
+def test_the_new_wording_survives_the_whole_script() -> None:
+    out, _said = patched_through_main(rules_at_0_9_6()).split("\n<<<SAID>>>\n")
+    check(TURN_END_MARK in out, "the new wording is there after the blocks have run too")
+    check(out.count(f"## {COMMIT_HEADING}") == 1, "still exactly one commit section")
+    twice, _said2 = patched_through_main(out).split("\n<<<SAID>>>\n")
+    check(twice == out, "and the whole script run twice changes nothing the second time")
+
+
 # ------------------------------------------------- the pages the content moves to
 # scripts/add-reference-pages.py is the other half of this: the updater runs it
 # first, and a section may only be dropped once the page carrying it is there.
@@ -604,6 +706,10 @@ def main() -> int:
                test_a_file_that_never_had_a_name_put_in,
                test_git_supplies_the_name_when_the_sentence_is_gone,
                test_blanking_only_touches_the_owner_sentence,
+               test_the_shipped_section_says_what_it_should,
+               test_the_old_wording_is_still_in_the_corpus,
+               test_the_changed_section_is_replaced_not_added,
+               test_the_new_wording_survives_the_whole_script,
                test_pages_arrive, test_pages_are_never_overwritten,
                test_no_link_to_a_page_that_is_not_there,
                test_a_page_of_the_owners_own_blocks_the_name,
