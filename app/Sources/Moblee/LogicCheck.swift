@@ -537,6 +537,10 @@ enum LogicCheck {
         check("0.10.0 counts as newer than 0.9.6, in both places that compare versions",
               HomeModel.isNewer("0.10.0", than: "0.9.6") && Placement.newer("0.10.0", than: "0.9.6")
               && !HomeModel.isNewer("0.9.6", than: "0.10.0") && !Placement.newer("0.9.6", than: "0.10.0"))
+        // (0.15.1) One comparison now, lenient for the screens and strict for the updater.
+        check("a version part that is not a number counts as 0 on the screens, and the updater refuses it",
+              Versions.newer("0.15.x", than: "0.14.9") && !Versions.newer("0.15.x", than: "0.14.9", strict: true)
+              && Versions.newer("0.15.1", than: "0.15.0", strict: true) && !Versions.newer("", than: "0.1", strict: true))
         check("Not now keeps that version away, and a newer one is offered again",
               NewerRelease.offer(latest: "0.9.3", current: "0.9.2", setAside: "0.9.3") == nil
               && NewerRelease.offer(latest: "0.9.4", current: "0.9.2", setAside: "0.9.3") == "0.9.4")
@@ -994,6 +998,21 @@ enum LogicCheck {
         AppDelegate.dropsInFlight -= 1
         check("and the moment the last drop has landed it lets itself be closed again",
               !AppDelegate.busyWithWork && AppDelegate.dropsInFlight == 0)
+        // (0.15.1) The updater's Install and Relaunch is a quit. It must wait for
+        // the smaller work too, which greys nothing else: Look again, an item
+        // being added, and a check-up going through the Hub.
+        check("a Moblee doing nothing lets the updater close it", !AppDelegate.busyForQuit)
+        flow.homeModel.lookingAgain = true
+        let quitLooking = AppDelegate.busyForQuit && !AppDelegate.busyWithWork
+        flow.homeModel.lookingAgain = false
+        flow.clinic.sending = true
+        let quitSending = AppDelegate.busyForQuit
+        flow.clinic.sending = false
+        flow.homeModel.addingInTerminal = true
+        let quitAdding = AppDelegate.busyForQuit
+        flow.homeModel.addingInTerminal = false
+        check("but not while it is looking again, sending a check-up, or adding an item (here, in a Terminal window)",
+              quitLooking && quitSending && quitAdding && !AppDelegate.busyForQuit)
         // A drop waits for the three that run the pack's scripts over the wiki,
         // and never for another drop: two files let go over the Dock icon a
         // moment apart must both land.
@@ -2824,6 +2843,26 @@ enum LogicCheck {
                 check("hub: the sentence after a send names the keeper",
                       Hub.sentSentence(.sent, to: "Kim") == "Sent to Kim through the Hub.")
             }
+            // (0.15.1) a pull that stopped half-way is put back before anything is committed
+            let torn = yard.appendingPathComponent("torn", isDirectory: true).path
+            let file = URL(fileURLWithPath: torn).appendingPathComponent("hub.json")
+            var tornMade = gitRun(["init", "-q", "-b", "main", torn])
+            put("1\n", file)
+            tornMade = tornMade && gitRun(["-C", torn] + ident + ["commit", "-q", "-a", "--allow-empty", "-m", "a"])
+                && gitRun(["-C", torn, "add", "hub.json"]) && gitRun(["-C", torn] + ident + ["commit", "-q", "-m", "b"])
+                && gitRun(["-C", torn, "branch", "side"])
+            put("2\n", file)
+            tornMade = tornMade && gitRun(["-C", torn] + ident + ["commit", "-q", "-a", "-m", "main"])
+                && gitRun(["-C", torn, "checkout", "-q", "side"])
+            put("3\n", file)
+            tornMade = tornMade && gitRun(["-C", torn] + ident + ["commit", "-q", "-a", "-m", "side"])
+            let stopped = !gitRun(["-C", torn] + ident + ["rebase", "-q", "main"])
+            let midway = fm.fileExists(atPath: torn + "/.git/rebase-merge") || fm.fileExists(atPath: torn + "/.git/rebase-apply")
+            check("hub: a Hub left in the middle of a rebase is put back, so the note is never committed into it",
+                  tornMade && stopped && midway && Hub.settleRebase(torn, home: home)
+                      && !fm.fileExists(atPath: torn + "/.git/rebase-merge") && !fm.fileExists(atPath: torn + "/.git/rebase-apply"))
+            check("hub: a Hub not in the middle of anything is left alone",
+                  Hub.settleRebase(torn, home: home))
             let cardText = "{\"lines\": [\"Moblee health card\"], \"state\": \"healthy\", \"headline\": \"h\", \"saving\": \"\", \"hub\": \"The wiki is in Test Hub as sam; the Hub's page is version 1.1.0.\", \"wrong\": [], \"unchecked\": [], \"actions\": []}"
             check("hub: the card's Hub line is read from the check-up",
                   Clinic.Card.read(cardText)?.hub.contains("version 1.1.0") == true)

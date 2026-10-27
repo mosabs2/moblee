@@ -546,7 +546,7 @@ struct HomeScreen: View {
                 .foregroundStyle(.secondary)
                 .padding(.trailing, Theme.pt(6))
             cornerButton("Install", id: "download-newer") {
-                if !flow.isTestMode || Updater.shared.practiceFeed != nil { Updater.shared.checkForUpdates() }
+                Updater.shared.checkForUpdates()
             }
             .accessibilityLabel("Install Moblee \(version)")
             cornerButton("Not now", id: "newer-not-now") { home.setAsideNewerRelease() }

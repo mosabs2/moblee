@@ -79,7 +79,13 @@ final class FilmFetch: NSObject, ObservableObject, URLSessionDownloadDelegate {
     @Published var state: State = .idle
     private var film: Films.Film?
     private var home: URL = FileManager.default.homeDirectoryForCurrentUser
-    private var session: URLSession?
+    /// (0.15.1) A session holds on to its delegate, this fetch, until it is
+    /// invalidated, so every session let go of is invalidated as it is let go
+    /// (letting a task that is finishing finish). Until 0.15.1 only `stop()`
+    /// did, and each film fetched kept a session and this fetch alive for good.
+    private var session: URLSession? {
+        didSet { if let old = oldValue, old !== session { old.finishTasksAndInvalidate() } }
+    }
     /// The addresses still to try, this version's release first.
     private var addresses: [URL] = []
     /// Bumped by every begin and stop, so a check or a fetch that finishes after

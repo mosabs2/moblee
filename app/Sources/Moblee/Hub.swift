@@ -171,7 +171,15 @@ enum Hub {
         let runGit = !practice || standIn
         // Bring the Hub up to date first, so the note's commit sits on what
         // everyone else has sent and the push is not refused for being behind.
-        if runGit { _ = git(["-C", folderPath, "pull", "-q", "--rebase", "--autostash"], home: home, timeout: 60) }
+        // (0.15.1) A pull that stops half-way (a conflict, or the 60-second limit
+        // cutting it off) leaves the Hub in the middle of a rebase. Committing the
+        // note into that would be refused by the assistant's next pull, so the
+        // rebase is put back first, and if it cannot be, the note is only written
+        // and left for the assistant's next "check the hub" to send.
+        var canCommit = true
+        if runGit, !git(["-C", folderPath, "pull", "-q", "--rebase", "--autostash"], home: home, timeout: 60) {
+            canCommit = settleRebase(folderPath, home: home)
+        }
         let post = hub.folder.appendingPathComponent("post", isDirectory: true)
         let note = reportNote(report: report, me: me, to: keeper, on: date)
         var url = post.appendingPathComponent(note.id + ".md")
@@ -188,7 +196,7 @@ enum Hub {
         }
         let rel = "post/" + url.lastPathComponent
         let folder = folderPath
-        guard runGit else { return .savedNotSent }
+        guard runGit, canCommit else { return .savedNotSent }
         guard git(["-C", folder, "add", "--", rel], home: home),
               git(["-C", folder, "commit", "-q", "-m", "hub: \(me) sent a check-up to \(keeper) from the Moblee app", "--", rel], home: home)
         else { return .savedNotSent }
@@ -198,8 +206,25 @@ enum Hub {
         guard gitOut(["-C", folder, "rev-list", "--count", "@{u}..HEAD"], home: home) == "1" else { return .savedNotSent }
         if git(["-C", folder, "push", "-q"], home: home, timeout: 60) { return .sent }
         // Someone sent something in the moment between: catch up once, and try once more.
-        _ = git(["-C", folder, "pull", "-q", "--rebase", "--autostash"], home: home, timeout: 60)
+        guard git(["-C", folder, "pull", "-q", "--rebase", "--autostash"], home: home, timeout: 60) else {
+            // The note's commit is safe either way; a half-done rebase is put back
+            // so that the next pull starts clean.
+            _ = settleRebase(folder, home: home)
+            return .savedNotSent
+        }
         return git(["-C", folder, "push", "-q"], home: home, timeout: 60) ? .sent : .savedNotSent
+    }
+
+    /// (0.15.1) After a pull that failed: true when the Hub is not in the middle
+    /// of a rebase, putting one back (`git rebase --abort`) if it was. A pull that
+    /// failed for want of a network starts no rebase, so this is true then too.
+    nonisolated static func settleRebase(_ folder: String, home: URL) -> Bool {
+        let gitDir = URL(fileURLWithPath: folder).appendingPathComponent(".git")
+        let midway = { ["rebase-merge", "rebase-apply"].contains {
+            FileManager.default.fileExists(atPath: gitDir.appendingPathComponent($0).path) } }
+        guard midway() else { return true }
+        _ = git(["-C", folder, "rebase", "--abort"], home: home, timeout: 30)
+        return !midway()
     }
 
     nonisolated private static func gitOut(_ args: [String], home: URL) -> String? {

@@ -276,8 +276,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         busyMakingOrMending || AppDelegate.dropsInFlight > 0
     }
 
+    /// (0.15.1) Work a quit must also wait for, though it greys nothing else: an
+    /// item being added (in the app, or in a Terminal window running the pack
+    /// from inside this app), Look again, and a check-up going through the Hub.
+    /// The updater's Install and Relaunch is a quit, and until 0.15.1 it could
+    /// cut any of these in half. "Busy with your wiki" is still true of them all.
+    @MainActor static var busyForQuit: Bool {
+        guard !busyWithWork else { return true }
+        guard let f = Dropped.shared.flow else { return false }
+        return f.homeModel.somethingRunning || f.homeModel.lookingAgain || f.clinic.sending
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        let busy = MainActor.assumeIsolated { AppDelegate.busyWithWork }
+        let busy = MainActor.assumeIsolated { AppDelegate.busyForQuit }
         if busy { NSSound.beep(); return .terminateCancel }
         return .terminateNow
     }

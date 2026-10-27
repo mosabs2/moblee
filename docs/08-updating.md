@@ -34,7 +34,7 @@ From v0.8.1 the skills step also moves an old `get-started` skill aside. That sk
 2. Press Command + Space and type Moblee.
 3. Hold Command and press Return: a Finder window opens with Moblee selected. Press Command + Delete to move it to the Bin. Repeat steps 2 and 3 until no Moblee comes up.
 4. Empty the Bin: two-finger click the Bin in the Dock, Empty Bin. Anything else in the Bin goes too.
-5. Download `Moblee-0.15.0.zip` from the Releases page.
+5. Download the newest `Moblee-<version>.zip` from the Releases page (`Moblee-0.15.1.zip` or later).
 6. Open Downloads, double-click the zip, then double-click Moblee; click Open if your Mac asks.
 7. Moblee asks to move itself to Applications: click Move it there. Done.
 
