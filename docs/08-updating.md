@@ -30,12 +30,13 @@ From v0.8.1 the skills step also moves an old `get-started` skill aside. That sk
 
 **Once, by hand, to get there: a clean install.** A Moblee from before v0.15.0 cannot update itself, so the step from it to v0.15.0 is the last one made by hand, and it has to start by removing every old Moblee. Old copies are what made a new version show the old screen: one still open is brought forward by macOS when you open the new copy, and one left in Applications, Downloads, the Bin or the Dock can be the one that opens. Removing the app never touches your wiki, which is its own folder.
 
-1. Quit Moblee (the Moblee menu at the top left, Quit Moblee), even if you think it is closed.
-2. In Finder, Applications: move Moblee to the Bin. In Downloads: move every Moblee and every Moblee zip to the Bin, including any called "Moblee 2".
-3. Open the Bin, and for each Moblee only, two-finger click, Delete Immediately. Leave the rest of the Bin alone.
-4. If Moblee is in your Dock, drag it up out of the Dock until it says Remove.
-5. Download `Moblee-0.15.0.zip` from the Releases page, double-click it in Downloads, double-click Moblee, click Open if asked, and click Move it there.
-6. Check: Moblee menu, About Moblee, Version 0.15.0.
+1. Quit Moblee: the Moblee menu at the top left, Quit Moblee.
+2. Press Command + Space and type Moblee.
+3. Hold Command and press Return: a Finder window opens with Moblee selected. Press Command + Delete to move it to the Bin. Repeat steps 2 and 3 until no Moblee comes up.
+4. Empty the Bin: two-finger click the Bin in the Dock, Empty Bin. Anything else in the Bin goes too.
+5. Download `Moblee-0.15.0.zip` from the Releases page.
+6. Open Downloads, double-click the zip, then double-click Moblee; click Open if your Mac asks.
+7. Moblee asks to move itself to Applications: click Move it there. Done.
 
 From then on, updates are the Install button above, and nothing is ever removed by hand again. It offers to take the place of the older one in Applications. When the app carries a newer Moblee than your wiki has, it opens with the sentence "A newer Moblee is ready for your wiki.", the two version numbers, and the line "Your pages are not touched." Press Update. The update is shown as nine pictures that light up in turn: tools, the gate, skills, the guard, the rules, new pages, the weekly check, lessons, and finishing. When it says "Your wiki is up to date.", press Done.
 
