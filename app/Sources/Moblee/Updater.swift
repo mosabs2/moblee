@@ -44,8 +44,9 @@ import Sparkle
 /// by pressing Install on the newer-version line, which appears only on the
 /// ordinary home screen and never during an install, an update or a repair,
 /// or by "Check for Updates…" in the Moblee menu. Replacing the app needs it to
-/// quit, and a quit is refused while work is running (`AppDelegate.busyWithWork`),
-/// so an update can never cut a build, a repair or a drop in half.
+/// quit, and a quit is refused while work is running (`AppDelegate.busyForQuit`),
+/// so an update can never cut a build, a repair, a drop, an item being added,
+/// Look again or a Hub send in half.
 @MainActor
 final class Updater: NSObject, SPUUpdaterDelegate {
     static let shared = Updater()
@@ -68,7 +69,12 @@ final class Updater: NSObject, SPUUpdaterDelegate {
     }
 
     /// The owner asked: look for a newer Moblee and, on their Install, put it in place.
+    /// (0.15.1) A practice run looks only at its own list (`--sparkle-feed`) and
+    /// otherwise at nothing. The guard is here, where every way in arrives:
+    /// until 0.15.1 the Install button had it and the menu item did not, so a
+    /// practice run's "Check for Updates…" read the real list on GitHub.
     func checkForUpdates() {
+        guard !Practice.on || practiceFeed != nil else { return }
         start()
         controller?.checkForUpdates(nil)
     }
@@ -97,14 +103,6 @@ final class Updater: NSObject, SPUUpdaterDelegate {
 
     /// Newer only if the build number is higher AND the version reads higher.
     nonisolated static func isNewer(build: Int, version: String, than ourBuild: Int, _ ourVersion: String) -> Bool {
-        guard build > ourBuild else { return false }
-        let a = version.split(separator: ".").map { Int($0) ?? -1 }
-        let b = ourVersion.split(separator: ".").map { Int($0) ?? -1 }
-        guard !a.contains(-1), !b.contains(-1) else { return false }
-        for i in 0..<max(a.count, b.count) {
-            let x = i < a.count ? a[i] : 0, y = i < b.count ? b[i] : 0
-            if x != y { return x > y }
-        }
-        return false
+        build > ourBuild && Versions.newer(version, than: ourVersion, strict: true)
     }
 }

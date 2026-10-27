@@ -139,14 +139,7 @@ enum Placement {
     }
 
     /// 0.10.0 is newer than 0.9.2: compared number by number, not as text.
-    static func newer(_ a: String, than b: String) -> Bool {
-        let pa = a.split(separator: ".").map { Int($0) ?? 0 }, pb = b.split(separator: ".").map { Int($0) ?? 0 }
-        for i in 0..<max(pa.count, pb.count) {
-            let x = i < pa.count ? pa[i] : 0, y = i < pb.count ? pb[i] : 0
-            if x != y { return x > y }
-        }
-        return false
-    }
+    static func newer(_ a: String, than b: String) -> Bool { Versions.newer(a, than: b) }
 
     /// Into the Bin (or the practice stand-in), never deleted.
     private static func setAside(_ url: URL, _ plan: Plan) throws {

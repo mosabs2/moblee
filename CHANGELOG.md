@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.15.1 (27 October 2026)
+
+**Small repairs, found by a full review of the app.** Nothing changes in how you use Moblee, and your wiki is not touched. This is also the first update most owners will install with one button.
+
+- **Done and Open it again work for every item on Add more.** An item first added from a tile on the home screen could not be finished from the Add more screen: both buttons did nothing. They now act on that tile.
+- **A scheduled job that did not switch on says so.** If your Mac refused to start a job you switched on, Moblee could show it as done a few seconds later and lose the reason. It now shows done only when the job is really running.
+- **A check-up sent through the Hub is never left half-sent.** If the Hub could not be brought up to date first, the note could be caught in an unfinished step and your assistant's next look at the Hub refused. Moblee now puts the Hub back as it was and keeps the note to go next time.
+- **An update waits for work in progress.** Install and Relaunch now waits while Moblee is adding something (in the app or in a Terminal window it opened), looking again, or sending a check-up, as it already waited for a build, an update or a repair of your wiki.
+- **Look again and adding an item never run at the same time**, so neither can overwrite what the other saved.
+- **Films use less memory.** Each film fetched for the help screens used to hold a little memory until Moblee closed.
+
+### For assistants and maintainers
+
+- `app/scripts/build-app.sh` with no argument (a build for this Mac only, as `test-app.sh` and `gallery.sh` run it) failed at once under macOS's own bash 3.2 with "arch[@]: unbound variable"; only the universal release build worked.
+- `HomeModel`: `addFromList` reopens a handed-over suggested tile and `doneFromList` finishes it, matching `extraState`; a job tile turns done only when `launchctl print gui/<uid>/com.moblee.<name>` finds it loaded, and a failed one is never overwritten; `press` and `addSilently` refuse while Look again runs, and `somethingRunning` counts a Terminal window's `moblee-setup.py --only`.
+- `Hub.send` checks its first pull and, if it stopped mid-rebase, aborts the rebase (`Hub.settleRebase`) before committing anything; the second pull's failure does the same.
+- `AppDelegate.busyForQuit` (quits, and so the updater) adds Look again, items being added and a Hub send to `busyWithWork`. The practice guard on checking for updates moved into `Updater.checkForUpdates`, so the menu item has it too.
+- `Versions.newer` is now the only version comparison (`strict` for the updater). `FilmFetch` invalidates every session it lets go of. `withdraw-release.sh` refuses when the release that would become latest has no `appcast.xml`.
+- New logic checks for the Hub rebase, the quit guard and the comparison.
+
 ## v0.15.0 (27 October 2026)
 
 **Moblee updates itself.** Until now a newer Moblee meant downloading it, unzipping it, putting it in place of the old one and opening it, and a Moblee left open made the new copy look like the old one. From this version, press **Install** on the "Moblee is out" line (or **Check for Updates…** in the Moblee menu), then **Install Update**, then **Install and Relaunch**: the new Moblee takes the old one's place and opens. Nothing to unzip, drag or delete.

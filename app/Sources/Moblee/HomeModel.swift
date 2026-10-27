@@ -82,6 +82,10 @@ final class HomeModel: ObservableObject {
     @Published var parts: Parts?
     /// (0.14.0) "Look again" is running the checklist's own check.
     @Published var lookingAgain = false
+    /// (0.15.1) The checklist is adding something in a Terminal window the app
+    /// opened. That window finishes out of the app's sight, so whether its
+    /// script is still running is looked at with the saved state, every few seconds.
+    @Published var addingInTerminal = false
     /// (0.14.0) The parts report could not be read (usually Apple's tools wanting
     /// a reinstall after a macOS upgrade): said plainly, not "Looking…" for ever.
     @Published var partsUnreadable = false
@@ -138,15 +142,7 @@ final class HomeModel: ObservableObject {
             && Self.isNewer(packVersion, than: wikiVersion)
     }
 
-    nonisolated static func isNewer(_ a: String, than b: String) -> Bool {
-        let pa = a.split(separator: ".").map { Int($0) ?? 0 }
-        let pb = b.split(separator: ".").map { Int($0) ?? 0 }
-        for i in 0..<max(pa.count, pb.count) {
-            let x = i < pa.count ? pa[i] : 0, y = i < pb.count ? pb[i] : 0
-            if x != y { return x > y }
-        }
-        return false
-    }
+    nonisolated static func isNewer(_ a: String, than b: String) -> Bool { Versions.newer(a, than: b) }
 
     /// The wiki this Mac already has, if any. The record is written by the
     /// installer's last step, so a half-built wiki is never taken for one.
@@ -696,8 +692,26 @@ final class HomeModel: ObservableObject {
     }
 
     /// (0.14.0) Something is being added, from a suggested tile or this screen.
+    /// (0.15.1) Or in a Terminal window the app opened, which writes the same
+    /// record: until 0.15.1 Look again could start while that window was still
+    /// adding, and whichever finished last won.
     var somethingRunning: Bool {
-        tiles.contains { $0.state == .running } || chosen.contains { $0.state == .running }
+        tiles.contains { $0.state == .running } || chosen.contains { $0.state == .running } || addingInTerminal
+    }
+
+    /// (0.15.1) Whether the checklist is adding an item anywhere on this Mac:
+    /// a Terminal window's `moblee-setup.py --only`, which is the only way one
+    /// runs outside the app. A practice run asks nothing of the real Mac.
+    static func checklistAdding() -> Bool {
+        guard !Practice.on else { return false }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        p.arguments = ["-f", "moblee-setup.py --only"]
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError = FileHandle.nullDevice
+        do { try p.run() } catch { return false }
+        p.waitUntilExit()
+        return p.terminationStatus == 0
     }
     var canLookAgain: Bool { !lookingAgain && !somethingRunning }
 
@@ -714,7 +728,15 @@ final class HomeModel: ObservableObject {
         // Not while the checklist is looking, and not a second time while the
         // same item is already being added from a suggested tile.
         guard !lookingAgain else { return }
-        if tiles.contains(where: { $0.kind == .item && $0.key == key && ($0.state == .running || $0.state == .handedOver) }) { return }
+        if tiles.contains(where: { $0.kind == .item && $0.key == key && $0.state == .running }) { return }
+        // (0.15.1) An item handed over from a suggested tile is the row's state
+        // (`extraState` reads the tiles first), so "Open it again" opens that
+        // tile again, exactly as the tile's own button does on the home screen.
+        // Before, this returned early and the button did nothing.
+        if let t = tiles.first(where: { $0.kind == .item && $0.key == key && $0.state == .handedOver }) {
+            press(t)
+            return
+        }
         if let i = chosen.firstIndex(where: { $0.key == key }) {
             guard chosen[i].state == .waiting || chosen[i].state == .failed || chosen[i].state == .handedOver else { return }
             chosen[i].state = .waiting
@@ -755,7 +777,12 @@ final class HomeModel: ObservableObject {
 
     /// (0.14.0) "Done" on a row handed over to clicks inside Claude.
     func doneFromList(_ key: String) {
-        if let t = chosen.first(where: { $0.key == key }) { markDone(t) }
+        // (0.15.1) The same tiles `extraState` reads, in the same order: a
+        // suggested tile handed over to clicks first, then a press on this
+        // screen. Before, only this screen's presses were searched, so Done on
+        // a row the home screen had handed over did nothing.
+        if let t = tiles.first(where: { $0.kind == .item && $0.key == key && $0.state == .handedOver })
+            ?? chosen.first(where: { $0.key == key }) { markDone(t) }
     }
 
     enum ExtraState: Equatable { case on, off, unseen, unknown, adding, handedOver(How), failed(String) }
@@ -864,6 +891,8 @@ final class HomeModel: ObservableObject {
     /// An item added in a Terminal window finishes out of the app's sight, so
     /// the saved state is looked at every few seconds.
     private func refreshStates() {
+        let terminal = Self.checklistAdding()
+        if terminal != addingInTerminal { addingInTerminal = terminal }
         // Read value by value: one entry that is not a plain yes or no must not
         // make the whole record unreadable and every added tile forget it was added.
         let status = ((Self.json(home.appendingPathComponent(".config/moblee/setup-state.json"))?["status"]
@@ -896,11 +925,33 @@ final class HomeModel: ObservableObject {
             case .connection:
                 if tiles[i].state != .done, ownerSaidDone().contains(tiles[i].doneKey) { tiles[i].state = .done }
             case .job:
-                // switched on means the scheduler file is in place under the owner's account
+                // (0.15.1) Switched on means the Mac's scheduler has the job loaded,
+                // not only that its file is in place: job-switch.py --on copies the
+                // file before asking the scheduler, and leaves it there when the
+                // scheduler refuses, so a failed switch-on used to turn "done" at the
+                // next look and its failure note vanished. A failure is the owner's
+                // to see, so it is never overwritten here either.
                 let placed = home.appendingPathComponent("Library/LaunchAgents/com.moblee.\(tiles[i].key).plist")
-                if tiles[i].state != .done, FileManager.default.fileExists(atPath: placed.path) { tiles[i].state = .done }
+                if tiles[i].state != .done, tiles[i].state != .failed,
+                   FileManager.default.fileExists(atPath: placed.path),
+                   Self.jobLoaded("com.moblee.\(tiles[i].key)") { tiles[i].state = .done }
             }
         }
+    }
+
+    /// (0.15.1) Whether the Mac's scheduler has this job loaded for the owner:
+    /// `launchctl print gui/<uid>/<label>` answers 0 only then. A practice run
+    /// asks nothing of the real scheduler and is never loaded.
+    static func jobLoaded(_ label: String) -> Bool {
+        guard !Practice.on else { return false }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        p.arguments = ["print", "gui/\(getuid())/\(label)"]
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError = FileHandle.nullDevice
+        do { try p.run() } catch { return false }
+        p.waitUntilExit()
+        return p.terminationStatus == 0
     }
 
     /// (0.12.0) The title of a built thing, from apps/<name>/app.json; nil when
@@ -932,6 +983,9 @@ final class HomeModel: ObservableObject {
     // MARK: pressing a tile's button
 
     func press(_ tile: Tile) {
+        // (0.15.1) Never beside Look again: both write the checklist's record.
+        // The home screen's tiles reached here without asking, until 0.15.1.
+        guard !lookingAgain else { return }
         switch (tile.kind, tile.how) {
         case (.item, .silent): addSilently(tile)
         case (.job, _): switchOnJob(tile)
@@ -948,7 +1002,7 @@ final class HomeModel: ObservableObject {
     }
 
     private func addSilently(_ tile: Tile) {
-        guard let pack else { return }
+        guard let pack, !lookingAgain else { return }
         setState(tile.id, .running)
         let t = EngineTask()
         tasks[tile.id] = t
