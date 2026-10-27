@@ -516,12 +516,14 @@ struct HomeScreen: View {
     static let checkWiki = "Check my wiki"
 
     static func newerReleaseSaid(_ version: String) -> String {
-        "Moblee \(version) is out. There are two buttons beside it: Download, and Not now."
+        "Moblee \(version) is out. There are two buttons beside it: Install, and Not now."
     }
 
-    /// "Moblee 0.9.3 is out." with Download (the app itself, opened in the
-    /// browser; nothing is downloaded or run by this app) and Not now (this
-    /// version is not offered again).
+    /// "Moblee 0.9.3 is out." with Install and Not now (this version is not
+    /// offered again). (v0.15.0) Install hands over to the updater (`Updater`),
+    /// which shows what is new and, on the owner's Install there, replaces this
+    /// app and opens the new one. Until 0.14 the button was Download and opened
+    /// the zip in the browser, leaving the owner to put it in place.
     private func newerReleaseLine(_ version: String) -> some View {
         HStack(spacing: Theme.pt(2)) {
             // (v0.9.5) One control for the whole line, as the other corner has.
@@ -543,12 +545,10 @@ struct HomeScreen: View {
             Text("Moblee \(version) is out.")
                 .foregroundStyle(.secondary)
                 .padding(.trailing, Theme.pt(6))
-            cornerButton("Download", id: "download-newer") {
-                if !flow.isTestMode, let url = NewerRelease.downloadURL(for: version) {
-                    NSWorkspace.shared.open(url)
-                }
+            cornerButton("Install", id: "download-newer") {
+                if !flow.isTestMode || Updater.shared.practiceFeed != nil { Updater.shared.checkForUpdates() }
             }
-            .accessibilityLabel("Download Moblee \(version)")
+            .accessibilityLabel("Install Moblee \(version)")
             cornerButton("Not now", id: "newer-not-now") { home.setAsideNewerRelease() }
                 .accessibilityLabel("Not now, do not offer Moblee \(version) again")
         }

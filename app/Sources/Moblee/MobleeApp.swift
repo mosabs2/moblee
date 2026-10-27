@@ -72,6 +72,12 @@ struct MobleeApp: App {
                        height: max(shape.size.height, Theme.leastHeight))
         }
         .windowStyle(.hiddenTitleBar)
+        // (v0.15.0) The updater's own way in, where every Mac app keeps it.
+        .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { Updater.shared.checkForUpdates() }
+            }
+        }
     }
 }
 
@@ -210,7 +216,7 @@ enum Practice {
                                         "--self-drive", "--dark", "--owner", "--step", "--fresh", "--icon",
                                         "--move-to", "--move-break", "--check-logic", "--fixtures",
                                         "--latest", "--release-url", "--live-release", "--ask-release",
-                                        "--text-scale", "--rtl", "--films"]
+                                        "--text-scale", "--rtl", "--films", "--sparkle-feed"]
 }
 
 /// Quitting half-way through a build, an update or a repair would leave it half
@@ -277,6 +283,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    /// (v0.15.0) The updater is made at launch, so that an update downloaded
+    /// earlier and waiting is finished; it looks for nothing by itself. The
+    /// practice modes that only draw or check (snapshots, the logic check)
+    /// leave it alone.
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            let quiet = ["--check-logic", "--snapshot", "--self-drive", "--rehearse"]
+            if !Practice.args.contains(where: { quiet.contains($0) }) { Updater.shared.start() }
+        }
+    }
 
     /// (v0.9.5) A file given to Moblee from outside — a drop on the Dock icon —
     /// arrives at `onOpenURL` on the screens, not here. See `MobleeApp.body`

@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.15.0 (27 October 2026)
+
+**Moblee updates itself.** Until now a newer Moblee meant downloading it, unzipping it, putting it in place of the old one and opening it, and a Moblee left open made the new copy look like the old one. From this version, press **Install** on the "Moblee is out" line (or **Check for Updates…** in the Moblee menu), then **Install Update**, then **Install and Relaunch**: the new Moblee takes the old one's place and opens. Nothing to unzip, drag or delete.
+
+- **It only installs what the maintainer signed.** Every update, and the list of versions itself, carries a signature made with an update key that never leaves the maintainer's Mac, and it is checked before anything is unpacked. A changed download or a tampered list is refused with an "Update Error", and your Moblee stays as it was.
+- **It never goes backwards**, and says so if it is ever offered an older version.
+- **It never looks or installs by itself.** It waits for you to press Install, and never during an install, an update or a repair of your wiki.
+- **This step is the last one by hand.** Quit the Moblee you have, download this one, open it. From here on, one button.
+
+### For assistants and maintainers
+
+- The updater is Sparkle 2.10.0, pinned exactly in `app/Package.swift`; `app/scripts/build-app.sh` copies `Sparkle.framework` (without its XPC services, which an unsandboxed app does not need) into `Contents/Frameworks`. `Updater.swift` holds the whole account of the safeguards.
+- `Info.plist`: `SUFeedURL` is the latest release's `appcast.xml`; `SUPublicEDKey` the update key's public half; `SUVerifyUpdateBeforeExtraction` and `SURequireSignedFeed` make that key the gate; automatic checks and installs are off.
+- `app/scripts/make-update-key.sh` makes the key once, in the maintainer's keychain. `app/scripts/release-app.sh` now refuses a build without the key, with a key that differs from the keychain's, with a test setting left in, or with a key-shaped file in the repository; signs Sparkle's helpers inside out; and makes the signed `appcast.xml` with this section as its notes. Attach it to the release beside the zip: the app does not offer a release that lacks it.
+- `app/scripts/withdraw-release.sh <version>` stops a release reaching anyone else by marking it a pre-release, so GitHub's latest, and its list, fall back to the release before.
+- New logic checks: a release without an appcast is not offered; the updater takes only a version newer in both its build number and its version. The update itself was proved end to end with two practice builds and a list served on the Mac: 0.15.0 replaced by 0.15.1 while running, and a changed download, an unsigned list and an older version each refused.
+
 ## v0.14.0 (26 October 2026)
 
 **Everything your wiki can have, in one place.** Once a wiki was set up, there was no way back in the app to see what else Moblee could add, or whether something like phone reach or the Hub was already there: it took a conversation with the wiki, or the checklist in Terminal. Now the app shows it all.
