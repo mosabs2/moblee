@@ -17,3 +17,13 @@ __pycache__/
 # The record beside it, .moblee/seed-state.json, IS kept: it says which starting
 # notes the owner has taken out, so an update never puts one back.
 .moblee/requests.json
+# (v0.11.0) Things built beside the wiki live in apps/<name>/ and are kept,
+# code, data and page. What a thing writes about itself as it runs is not:
+# its logs, its previous copies of saved data, and anything installed.
+apps/*/state/
+apps/*/node_modules/
+apps/*/.venv/
+apps/*/venv/
+apps/*/__pycache__/
+# (0.12.0) a thing's web copy is its own small repository, not the wiki's
+apps/*/site/

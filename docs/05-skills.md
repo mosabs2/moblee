@@ -30,6 +30,21 @@ On any later day, say "guide me" and it offers one next step, with the reason: s
 - "Something is wrong." / "Run a check-up."
 - "Can it do X every week?" / "I keep doing Y by hand."
 
+## build
+
+**What it does.** Builds things on your wiki for you, with your assistant doing the architecture, the planning, the coding and the placing. A dashboard over your data, a tracker, a planner, a page that shows a season's scores, a tool that runs every morning, a small app. You say what you want in your own words; it asks at most three questions, plans it on one screen and waits for your yes, writes the thing's page before its code, builds the smallest useful version from Moblee's standard parts (a server that shows the page on your Mac only and stops when you close the tab, a page in the Mac's own typeface, plain data files, a job that records every run, a launcher you can double-click), opens it on your screen to prove it, and writes it down. `docs/12-building-things.md` has the whole of it.
+
+**Where things live.** Anything that runs on what the Mac already has lives in the wiki at `apps/<name>/`, where the wiki's history keeps every version. Anything that needs installing, or must be reached from outside your Mac, lives outside the wiki at `~/Apps/<name>/`, with a pointer in `apps/` and its page in the wiki. Every build has a page under `wiki/Projects/`, and `wiki/Projects.md` is the index.
+
+**What it never does.** Install software itself, switch on a scheduled job, put a secret in a file, make anything reachable from outside your Mac, delete, or overwrite your data.
+
+**Trigger phrases.**
+
+- "Build me…" / "Make me…"
+- "I want an app that…" / "I want a dashboard."
+- "Can you make something that…"
+- "Open <Title>." / "Change <Title> so that…"
+
 ## brain
 
 **What it does.** Reflective queries against the wiki, plus your daily rhythm. Eleven patterns in three groups. Six analytical patterns ask your vault questions that draw across multiple pages: trace (follow a thread of thought or a position shift through the wiki), connect (find non-obvious links between two domains), emerge (surface what's been quietly accumulating), challenge (pressure-test a belief against the vault's own history), ideas (what should I work on next, judged against your active threads and inbox), synthesise (place a brand-new source into your existing corpus as a structured postscript). Two governance patterns: graduate (promote, demote or close items between the Active Threads / Open Decisions / Watch List tiers on `_context.md`, with every move logged) and ghost (answer a question in the reconstructed voice of a person your wiki documents deeply; it is always labelled as reconstruction, never invention). Three temporal patterns run your day against a `Daily Notes/` layer: today (a morning brief of your plan, due triggers and overnight activity), close-day (an end-of-workday reflection that writes the day's roll-up to the log and seeds tomorrow's plan with carry-forwards), and schedule (plan tomorrow, the week, or the run-up to a deadline into future daily notes, always proposed before written).

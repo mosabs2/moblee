@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "moblee-mods",
+  "description": "The small set of Claude Code mods that come with Moblee, the personal wiki pack. Each one adds something to Claude's own interface; none of them sends anything anywhere.",
+  "owner": {
+    "name": "Moblee",
+    "url": "https://github.com/mosabs2/moblee"
+  },
+  "plugins": [
+    {
+      "name": "cold-cache-warning",
+      "source": "./cold-cache-warning",
+      "description": "Shows a band above the prompt when a long conversation has gone cold, so you know the next message would make Claude re-read all of it at full price.",
+      "author": {
+        "name": "Moblee"
+      },
+      "category": "productivity",
+      "homepage": "https://github.com/mosabs2/moblee"
+    }
+  ]
+}

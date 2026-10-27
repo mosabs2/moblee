@@ -173,7 +173,7 @@ ours_by_content() {   # ours_by_content <name> <dst>
 }
 seed_record_once() {
   # An owner who installed before v0.9.2 has Moblee's skills in place and no
-  # record of them. Refusing to update all eight would be a worse fault than the
+  # record of them. Refusing to update all of them would be a worse fault than the
   # one the record prevents, so it is seeded once, from the skills Moblee ships
   # that are in the folder at that moment. Claude's folder only: until this
   # version Moblee was the only thing that put those names there for Claude,

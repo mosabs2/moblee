@@ -1,5 +1,198 @@
 # Changelog
 
+## v0.15.0 (27 October 2026)
+
+**Moblee updates itself.** Until now a newer Moblee meant downloading it, unzipping it, putting it in place of the old one and opening it, and a Moblee left open made the new copy look like the old one. From this version, press **Install** on the "Moblee is out" line (or **Check for Updates…** in the Moblee menu), then **Install Update**, then **Install and Relaunch**: the new Moblee takes the old one's place and opens. Nothing to unzip, drag or delete.
+
+- **It only installs what the maintainer signed.** Every update, and the list of versions itself, carries a signature made with an update key that never leaves the maintainer's Mac, and it is checked before anything is unpacked. A changed download or a tampered list is refused with an "Update Error", and your Moblee stays as it was.
+- **It never goes backwards**, and says so if it is ever offered an older version.
+- **It never looks or installs by itself.** It waits for you to press Install, and never during an install, an update or a repair of your wiki.
+- **This step is the last one by hand.** Quit the Moblee you have, download this one, open it. From here on, one button.
+
+### For assistants and maintainers
+
+- The updater is Sparkle 2.10.0, pinned exactly in `app/Package.swift`; `app/scripts/build-app.sh` copies `Sparkle.framework` (without its XPC services, which an unsandboxed app does not need) into `Contents/Frameworks`. `Updater.swift` holds the whole account of the safeguards.
+- `Info.plist`: `SUFeedURL` is the latest release's `appcast.xml`; `SUPublicEDKey` the update key's public half; `SUVerifyUpdateBeforeExtraction` and `SURequireSignedFeed` make that key the gate; automatic checks and installs are off.
+- `app/scripts/make-update-key.sh` makes the key once, in the maintainer's keychain. `app/scripts/release-app.sh` now refuses a build without the key, with a key that differs from the keychain's, with a test setting left in, or with a key-shaped file in the repository; signs Sparkle's helpers inside out; and makes the signed `appcast.xml` with this section as its notes. Attach it to the release beside the zip: the app does not offer a release that lacks it.
+- `app/scripts/withdraw-release.sh <version>` stops a release reaching anyone else by marking it a pre-release, so GitHub's latest, and its list, fall back to the release before.
+- New logic checks: a release without an appcast is not offered; the updater takes only a version newer in both its build number and its version. The update itself was proved end to end with two practice builds and a list served on the Mac: 0.15.0 replaced by 0.15.1 while running, and a changed download, an unsigned list and an older version each refused.
+
+## v0.14.0 (26 October 2026)
+
+**Everything your wiki can have, in one place.** Once a wiki was set up, there was no way back in the app to see what else Moblee could add, or whether something like phone reach or the Hub was already there: it took a conversation with the wiki, or the checklist in Terminal. Now the app shows it all.
+
+- **"Add more" is the home screen's second big button.** It opens one list. First, **what comes with every Moblee wiki**: the safety guard, saving after every reply, the companion, big questions to your wiki, saving a conversation, interviews, PDFs, your own look, the galaxy, the dashboard, keeping the wiki light, and building things. Each says what it is for, what to say to your assistant to use it where there are words for it, and whether it is in your wiki. Then **every extra** on the checklist, in its four groups, the Hub and phone reach (Tailscale) among them, each with what it is for, its time, room and cost, and whether it is set up.
+- **One press moves each on.** **Add** adds an extra the same way a tile Claude suggested does: on its own, in a Terminal window, or with a few clicks inside Claude, with the same explanation first and the same word when it can cost money. **Open** opens the galaxy (built afresh) or the dashboard in your browser. **Put back** runs the update, which puts back a part that is missing and leaves your pages alone. A copy you or your assistant changed is shown as "An older or changed copy" and left as it is. **Done** finishes an item made by clicks inside Claude.
+- **Plain about what it cannot see.** A connection made inside Claude's own app is marked "Moblee cannot see whether this is set up", with the steps one press away, never "not set up"; so is a guard or a save entered for ChatGPT, which runs them only once trusted. An item never looked at says so. The screen says when it last looked, looks first on a wiki the checklist has never looked at, and **Look again** runs the checklist's own check, which changes nothing you have set up and saves what it saw. It never runs while something is being added, and an item already being added from a suggested tile is not added twice.
+- **The example wiki moved into this screen**, from the home screen, where Add more took its place so that the busiest home screen keeps to twenty controls. A new owner still meets it on the welcome screen.
+- **At the end of an update in the app**, "See what else you can add" opens the same screen. (An update run from Terminal still offers the full checklist there, as before.)
+
+### For assistants and maintainers
+
+- `moblee-setup.py --parts` prints, as JSON and read only, the parts every wiki comes with and whether each is in place for the assistant (or both) the owner uses, and what the checklist's own record last saw of each extra. `--list --json` now carries each item's group.
+- The companion points an owner who asks what else there is to the Add more screen.
+- `--only --yes` (the app adding one item) no longer writes items it did not look at into the checklist's record as not working.
+- New tests: `tools/test-parts.py` (25), and twenty-four logic checks on the app.
+
+## v0.13.1 (26 October 2026)
+
+**Joining the Hub after its move.** On 26 October 2026 the Hub and its lobby moved into the group's own GitHub organisation, Moblee-Main-Devs, so that more than one member can let people in. Moblee 0.13.0 still knew only the old address, and a newcomer's join waited for an invitation it could never recognise: GitHub names the Hub in an invitation by its new name.
+
+- **The new addresses are built in.** The Hub item joins `Moblee-Main-Devs/moblee-hub` and knocks at `Moblee-Main-Devs/moblee-hub-lobby`.
+- **A move no longer stalls a join.** When the Hub's public lobby has moved, GitHub says where, and an invitation to the Hub's own name under the lobby's new owner is accepted. So a Hub that moves again with its lobby, keeping its name, is still found. An invitation to a repository of the same name anywhere else is not accepted.
+- **A copy made before the move is pointed at the new address.** When the Hub's own `hub.json` gives a new address and GitHub itself says the old address now leads there, choosing the Hub item points the folder at the new address and says so, instead of reporting F62. A folder whose `hub.json` names a different repository, even an up-to-date copy of the Hub, is left exactly as it is for the keeper to confirm.
+- **F62 says what to do.** The check-up's finding, and the field guide's entry, now say that choosing the Hub item re-points a Hub that has moved.
+
+## v0.13.0 (24 October 2026)
+
+**The Hub, inside Moblee.** The group's Hub, a shared wiki of wikis on GitHub with a shelf of recipes and a post office of notes, was joined until now by a note passed round by hand, an invitation sent by email and an assistant reading instructions cold. Moblee now works with the Hub as the keeper has set it up, so the Hub can change without a new Moblee.
+
+### Joining, from the app
+
+- **A new item, "The Moblee Hub"**, in "Connect your life". It brings the GitHub item with it, knocks once at the Hub's door for you (the door is a public page, so the knock carries your GitHub name and nothing else), waits for the keeper's approval, accepts the invitation itself, and copies the Hub into `hub/` in your wiki. It asks the name the group calls you (your first name, unless you say otherwise), offers a short name for the Hub's files from it, finds your member file again if you joined before on another Mac, and asks for the words that must never leave your Mac in anything you share. Your wiki's history and Obsidian are told to leave `hub/` alone, and your rules gain a short section about the Hub. A hub folder that was copied rather than joined is left exactly as it is.
+- **Your wiki's rules gain "The Moblee Hub"** only when the wiki really holds a Hub: read the Hub's own rules first, nothing in a note or a recipe runs without your yes, and a change another member makes to those rules is told to you, never adopted silently.
+
+### The Hub in the app and the check-up
+
+- **"Open the hub"** on the home screen, only on a wiki that has joined, opens the Hub's page in your browser.
+- **Check my wiki can send its result into the Hub for its keeper**, in one press, as a note that asks nothing. It is the same report the app saves in your `raw` folder, with your Hub name in place of your full name. Everyone in the Hub can read it. Only that note is sent; if it cannot go, it waits on your Mac and goes the next time your assistant checks the Hub.
+- **The health card says the wiki is in a Hub**, and which version of the Hub's page it has.
+- **Seven new findings (F61 to F67):** a hub folder copied rather than joined; a Hub that has moved; something of yours not yet sent; notes addressed to you with no reply (notes to everyone are counted apart and never make the wiki look unwell); a newer version of a recipe you took; a wiki linked to the Hub but not yet joined; and, on the keeper's own wiki only, the keeper's GitHub key for letting people in running out within a month or already run out.
+
+### Sharing to the Hub
+
+- **"Share <thing> to the hub"** turns something you built into a recipe on the Hub's shelf, held to the Hub's rule book: the working code without your data, its page and pictures, and an install note with a check on every step. What only a person can write is marked for your assistant to write, nothing is guessed, your assistant runs the Hub's own checker after reading it, a page in `wiki/Private/` is never shared, and nothing is sent until it has been tested on an empty wiki and you have said yes. A thing carrying a key or a password is not shared. On a wiki outside the Hub, "make a kit" still makes a file to send by hand.
+
+### Two short films
+
+- **At the end of an install, and at the end of an update**, "Watch two short films": a minute on what Moblee does, and two minutes on the Hub. Nothing is fetched until you press one. Each is fetched from this version's release, played in the window, and kept on your Mac, and a film that is not exactly the one published is never played.
+
+### Also
+
+- `docs/16-the-hub.md`: joining, using the Hub, sending a check-up, leaving.
+
+## v0.12.0 (22 October 2026)
+
+**The platform you were given, as it was meant to work.** Owners who tried to build the kind of thing Moblee is for met warnings at every turn: Claude asking before every tool a build needs and every file outside the wiki, Claude's own safety check refusing the check-up, and the delete guard refusing ordinary steps in a build folder. This version takes those three down, so that what you were told you could do, you can do; and it adds the rest of what the platform was meant to carry: a page on the web, your things from your phone, jobs you switch on from the app, jobs that ask Claude while you are away, alerts to your phone, a wiki that looks after itself on a laptop shut most of the day, and memory search. **With ChatGPT:** the trust and rules changes, the delete guard and the build skill apply as before; the jobs that ask the assistant, the morning page, the weekly tidy and memory search are for Claude, and the app says so where they are offered.
+
+### Building no longer asks at every step
+
+- **Claude has been told yes in advance** to the tools a build needs: the programs that fetch a thing's parts and run them, a history of its own like the wiki's, the launcher that opens it, a look at which network doors on this Mac are already taken, and a read of the skills' own files (a build that could not read its own rules asked for them, in the stranger's run). Installing software, switching on a job that runs when you are not there, and sending anything to a website still ask: those are yours.
+- **The builds' home, `~/Apps`, is a folder Claude may edit in**, so a thing built outside the wiki no longer asks before every file. Moblee makes the folder if it is not there.
+- **Your wiki's working mode is set to Accept edits** unless you had chosen one yourself. The mode is the switch beside the box where you type: on Accept edits, an edit in the wiki or in `~/Apps` just happens; a command asks unless Moblee has already said it is fine; the delete guard reads every command regardless. The check-up now says which mode is set.
+- **The delete guard knows a build folder from your wiki** (guard v5.2). Inside `~/Apps/<name>/` your assistant may clear a folder of fetched parts or of built files, write over a generated file, and put a file back from that thing's own history. It still never removes the thing itself, its history or its `data` and `state` folders; nothing in your wiki is ever deleted, however it is named, by a link or by a script; and history rewrites stay refused everywhere. The guard decides deletion alone now: four of Moblee's earlier blanket refusals of removal and of putting a file back, which stood in its way, are taken back out of an existing wiki's settings by the update, and nothing of your own rules is touched.
+- **"Denied by auto mode" explained, and avoided for Moblee's own tools.** When Claude's switch is on Auto, a separate check inside Claude reviews what a rule has not settled and can refuse, as it refused one owner's check-up after the assistant had read the owner's conversations with it. Moblee cannot change that check and does not try.
+- **Moblee now tells that check what its own two tools do**, the check-up's card and the end-of-reply save, so those are settled before the check sees them, and the check-up reports if Auto mode has not been told (F56).
+- **A new page, `docs/13-when-claude-asks.md`**, says in plain words what the switch beside the box where you type does, what Claude asks you, what "denied by auto mode" means and the three ways round it, and what the delete guard's message means. The rules file tells your assistant the same, and to do a readout of your conversations in a conversation of its own.
+- **Two new findings in the check-up:** the rules are the set from before 0.12.0 (F55), and Auto mode does not know Moblee's own tools (F56). Both are fixed by Repair or an update.
+- **The wiki's folder is marked as trusted.** Claude reads a folder's own rules only once you have answered yes to its question on first opening the folder; until then every rule Moblee wrote is ignored without a word, and Claude asks before everything. Found by running a fresh install as a stranger with nobody at the screen: the rules were there and Claude ignored all eighty-one of them. The installer and the updater now mark the wiki's folder trusted in Claude's own state file (a copy kept first), the check-up says when a wiki is not (F60), and Repair marks it. Two rules written in a form Claude never read are taken out of existing wikis the same way as the four earlier ones.
+
+### A page on the web, your phone, jobs you switch on, and a job that asks Claude
+
+- **A page on the web.** When a build is a page that shows something, your assistant offers once, at the end, to put it on the web: a public page at an address of your own, with its data as it stands, open from anywhere, including when this Mac is shut. It uses your GitHub connection, sweeps the copy first for keys, passwords and your own name, and Claude asks you before anything is sent up. A no is remembered. A thing that saves stays on the Mac. (`docs/12-building-things.md`)
+- **Reach your things from your phone, by the route you choose.** A new item in the Moblee app, "Reach your things from your phone", offers Tailscale (recommended, free for your own devices) or a private network you already have, in which case you give this Mac's address. A thing built for the phone then opens there while this Mac is awake, and its page says so; asleep or shut, it does not, and a page that must always be reachable goes on the web.
+- **Jobs switched on from the app.** A thing that runs on a schedule is switched on by you: your assistant asks Moblee to show a tile, "Switch on <Title>", and you press it. The two Terminal lines are gone from the ordinary path. A laptop asleep at the job's hour runs it once at the next wake, however many days were missed.
+- **A job that asks Claude.** For a morning page, a weekly tidy or any job that needs Claude to think, the build skill lays down what to ask, in plain words, and a fence: what the job may do, a time limit, and the battery level below which it waits. It needs a new item, "Jobs that ask Claude while you are away", which keeps a long-lived sign-in Claude makes for you once; each run uses a little of your allowance, and the thing's page says so.
+- **Alerts on your phone.** A new item, "Alerts on your phone": the free ntfy app and one code to type. A job then sends one line when it finishes or fails, naming the file to look at and never sending it. Nothing but that line leaves the Mac.
+- **An always-on Mac, for the owner who wants one.** `docs/14-an-always-on-mac.md`, written for the owner whose laptop is shut most of the day: most need none of it, and it says so first.
+- **Every build can be shown working inside the Claude app itself**, without opening your browser, so your assistant can prove a thing on your screen as it goes.
+- **Sharing what you built.** "Make a kit of <Title>" packs a thing for somebody else: without your data, with its page, and with a note telling the other person's assistant to read first and install only on their yes. Nothing with a secret or your name in it is packed.
+
+### The wiki looks after itself, on a laptop that is shut most of the day
+
+- **A second copy of the wiki's history, every week.** The Saturday check now first makes one file holding the wiki's whole history, outside the wiki, under Moblee's own folder, and never removes one; Check my wiki says how old the newest is and names the oldest when there are many (F57). It also says whether Time Machine has somewhere to copy to (F58). A laptop shut on Saturday makes its copy at the next wake.
+- **The weekly tidy.** A new item: after the Saturday check, Claude reads the report and puts right what can safely be put right (a link one page has and the other lacks, a line a new page is missing in the Index, a link to a renamed page), lists what it found and left (a claim past its date, a thing two pages say differently, a claim still unverified), and leaves it all on one short page in plain words; "what did the tidy find" reads it. It runs within limits written down for it, never deletes, stops after twenty changes, and needs the item for jobs that ask Claude. The weekly card knows the tidy page.
+- **The one tidying move that needs no judgement is now a script.** The working-state file your assistant reads at the start of every conversation grows a note at every refresh; the tidy moves the old notes into the archive page, losing nothing, so every conversation starts a little cheaper. The script is the same for every wiki, run twice it changes nothing, and it has a suite of its own.
+- **Your morning page.** A new item: each morning at half past six, or at the first wake after it, Claude writes a page from what the wiki holds (your daily notes, the working-state file, the last week of the log, the inbox, your jobs' records) and nothing else: what is on today, what moved, what is waiting, one thing worth doing with its reason. With the Alerts item your phone is told when it is ready. If you have the Mac apps item and a mailbox named "Wiki", anything you sent there from your phone is saved into the wiki first.
+- **A correction is kept twice.** When you correct how your assistant works, the line goes on your own page as before and now also into the assistant's own memory, so it holds across conversations and Macs.
+- **Memory search.** A new item: your assistant finds pages by their words, and this adds finding them by meaning. When you ask a question, the three or four sections of your wiki closest to it are put in front of Claude before it reads your message, as leads to check, with a line saying so. A small model (Ollama, about 300 MB) runs on this Mac; nothing leaves it; restricted folders are never indexed; a command never fires it; and the index, a disposable copy outside the wiki, refreshes by itself after each save and nightly, in seconds, on the Python that comes with the Mac. The check-up knows its five ways of being half-set-up (F59), and choosing the item again mends any of them.
+- **One page says what runs by itself, what each needs, what it costs and what it never does:** `docs/15-what-runs-by-itself.md`.
+
+### Kept, carried, tidied
+
+- **An update no longer undoes your dashboard choices.** The chart list your assistant adds to and the dashboard's settings file are set aside before a refresh and put back after it, and the update says so. The read-aloud box now keeps its state in that settings file, so switching it off stays off. `docs/08-updating.md` lists everything an update never replaces.
+- **For the maintainer:** a skills check, `tools/skills-parity.py`, lists file by file where the pack's copies of the shared skills differ from the live ones, to be read before every release commit; a note inside the code of the line above the prompt (not on screen) that had two drafts run together since 0.10.0 reads as one; and an earlier Moblee's copy of a skill was already recognised from 0.9.4, with a skill that is not Moblee's named rather than offered a repair that cannot succeed, so that item is closed.
+
+### Tested
+
+- The guard's own tests, 559 things it must refuse and 268 it must allow, all pass on the Python that comes with the Mac: nothing once refused in the wiki is now allowed, and eighty-three new cases prove the build-folder freedoms and their limits (the folder itself, its history, data and state, the wiki by its path, by a link, or by a script that spells the path out, and every history rewrite).
+- **A reader who had seen none of the work tried to get round the new guard**, as every version since v0.8.0 has had, and found six ways to point the wiki's history at a build folder, or a build folder at the wiki, among them the two files that tell the guard where each lives, a folder name spelt in another case, and a link into the wiki. Every one is now refused and has a case in the suite. The same reader found the check-up fell over on an oddly shaped settings file, and that a build was refused when the conversation had started in the home folder; both fixed.
+- **The building parts have their own cases in the build skill's suite, now 202 checks:** a thing built for the phone and for a thinking job, its scheduler file, its prompt and its limits; the preview entry added once and a file of another shape left alone; the server answering a phone route only when it can, and never for a route written as the word no; the thinking job run against a stand-in for Claude, its record, its answer, a failed run, a prompt that is a link refused, and a fence that lets through only what it names; alerts with no channel chosen, with a stand-in for the phone service, with an odd code and with the service out of reach; the web copy with its data minus what is private, a key stopping it before anything is laid down, a file no longer carried leaving the record, a file outside the thing's folder left out, a file too large to read refused, the owner's own name pointed out, and a fresh build's record; a kit with and without a link, an installed folder, a key in a file with no extension; and the job switch's status, dry run, and refusal of a schedule file that is not the thing's own.
+- **A second reader tried to get round the building parts** and found thirteen things, four of them serious: the publisher fell over on a fresh build; the thinking job's fence could be written around; a kit could carry a secret through a link; and the sweep did not look for the owner's name though it said it did. All thirteen are closed, each with a case above. A third reader then tried the fixes themselves and found twelve more, three of them real (a spelling of a file's name that walked past the private list, a file in another text encoding the sweep read as nothing, a file named like a left-out folder packed with its findings thrown away); all twelve are closed with cases too.
+- **A friend's afternoon, run as a stranger with nobody at the screen** on a Mac that had never seen Moblee: install, ask a question with memory search on, then "build me a page that counts the days to..." in one sentence. The first run showed what owners had been meeting: Claude ignored every rule because the folder was not yet trusted. With that fixed, the second run built the thing from one sentence with no prompt (its page, its address, its record, saved), and the morning page was laid down by its item and written for real in seventeen seconds. Not run for real: the publish to the web (it would make a public page on a real account) and an alert to a real phone, which the suites cover with stand-ins.
+- **Memory search has a suite of its own, 68 checks:** what is indexed and what never is (a private folder in any spelling, a link into one, a page marked restricted, one behind a byte-order mark, a memory that links to a private page); a question finding its section; the refresh embedding only what changed; the lock; the hook's skips and its firing, and its refusal to attach a page restricted or gone since the index was built; the installer run twice, run dry, against a settings file that is not JSON, of the wrong shape, or still pointing at an old place of the wiki; the refresh script finding the wiki from its own place; and the save hook starting a refresh only for a commit that touched a page, a page with an accented name among them. **A reader tried to get round it** and found eighteen things, eight of them real, every one closed with a case above.
+- Everything else as before: the check-up's suite, 356 checks; the rules-file section engine, 138; the refresh-note rotation, 13; the installer and updater each run end to end against throwaway wikis, 86 and 162 checks; the app's own 219 checks and its screen walk on a bundle built from this pack.
+- **Two more readers read it cold, twice over:** one every word an owner meets, as somebody who does not read much, who found twenty-five places to put right the first time (jargon such as "repository" and "selector", a promise the version did not yet keep, a paragraph three times the length of its neighbours, the same thing under four names) and seventeen the second (four of them promises the files did not keep), all folded in; one swept the whole tree and every commit message for anything personal and found one pronoun the first time and one example the second.
+
+## v0.11.0 (19 October 2026)
+
+**Build things on your wiki, and let your assistant do the rest.** Owners were already building on Moblee: a health dashboard over a fitness band's numbers, a concierge that books tables. Each one's assistant started from nothing, invented its own home, its own installer and its own habits, and what one owner built would have stopped another. This version makes building a thing a part of Moblee, with the assistant doing the architecture, the planning, the coding and the placing.
+
+### A new skill, `build`
+
+- **You say what you want in your own words**: "I want a page that shows my gym sessions by week", "make me something that checks the tide times every morning". Your assistant asks at most three questions, plans it on one screen (what it will look like, where it will live, what it will read and write, what it will cost, what it will not do) and waits for your yes.
+- **The page comes before the code.** Every build has a page in your wiki under `wiki/Projects/` with the plan on it, the decisions and a dated Progress list, and `wiki/Projects.md` is the index of everything built. A build without a page is one the next conversation does not know exists.
+- **Where it lives is decided by what it needs.** Anything that runs on what the Mac already has lives in the wiki at `apps/<name>/`, where the wiki's history keeps every version. Anything that needs installing, or must be reached from outside your Mac, lives outside the wiki at `~/Apps/<name>/`, with a pointer in `apps/` and anything worth keeping under `wiki/data/<name>/`.
+- **Every build shares the same proven parts** rather than inventing its own: a server that shows the page on your Mac only, refuses other websites and stops when you close the tab; a page in the Mac's own typeface, light and dark, with nothing fetched from the internet; plain data files that a change to the code never touches, each save keeping the previous copy; a job that writes a record every time it runs, so a job that quietly stopped is seen; a launcher, `Open <Title>.app`, to double-click or keep in the Dock; and a Keychain helper, so a secret never goes into a file.
+- **It is proved on your screen** with your real data before it is called done, and made to fail once on purpose so that you both see the failure say so calmly.
+- **What it never does**: install software itself, switch on a scheduled job, put a secret in a file, make anything reachable from outside your Mac, delete, or overwrite your data.
+- The rules file gains a short section, "Things built for the owner", added to existing wikis by the update; the companion hands over to the new skill when a wish is this size; `docs/12-building-things.md` explains it all in plain words.
+
+### The check-up reads what is built
+
+- **Every folder in `apps/` is read**: whether its record is whole (F50), whether an install folder has crept into the wiki (F51), whether its port is one browsers accept (F52), whether its scheduled job last ran and succeeded (F53), and whether a thing recorded as living outside the wiki is still there (F54). Five new field-guide entries say what fixes each and who does the fix. The report a helper is sent carries counts and never a thing's name.
+
+### Fixed, from the first 0.10.0 report back from the field
+
+- **The line about things waiting in the Moblee app was cut off before the name**, so a helper reading the health card could see that one thing was waiting but not which. The name now comes first.
+- **The app's check-up said it could not read the wiki's refresh date** whenever the date was written as words ("19 October 2026"), which is how the brain skill writes it. It reads both forms now.
+
+### Tested
+
+- **A suite of its own for the build skill** (`tools/test-build.py`, 102 checks, 0 failed): the scaffold against a fresh template wiki, every placeholder filled, a second run leaving everything alone, the outside-the-wiki pointer, a port chosen and recorded, titles that would make an unopenable page or clash with a page the wiki already has refused, a folder name holding an ampersand still giving a scheduler file the Mac accepts; the copied server started as the owner starts it, serving its page, refusing a foreign Host, a foreign Origin, a save without the page's header, folder listings, and anything under `state/` or hidden however the path is spelt, keeping the previous copy of a saved file, finding its own first copy on a second start, stopping on the page's goodbye and stopping when nobody is looking; the copied job recording a success and a failure; the launcher made on a Mac; the check-up's five findings each from the state that earns it; the Keychain helper never putting a secret on a command line; and the delete guard letting every copied part run while still refusing a deletion in the same folder. Run again on a Mac's stock Python 3.9.6, which is what an owner's scheduled job runs.
+- **Everything else as before:** the check-up's own suite, 317 checks; the rules-file section engine, 138; the delete guard, 507 refusals and 240 allowances; every field-guide code accounted for; the app's 436 logic checks on a bundle built from the committed pack, the new date check among them; and the installer and updater each run end to end against throwaway wikis, 83 and 150 checks.
+- **Three readers who had seen none of the work read it cold before it was finished**, as every version since v0.8.0 has had. One ran the copied parts and the scaffold against throwaway wikis on the Mac's own Python and found eight faults, every one fixed and tested: a check on which files the server would serve that could be got round by spelling the path differently, a HEAD request that skipped every check, a scheduler file that broke on a folder name holding an ampersand, a launcher that did nothing after a fresh copy of the wiki, a secret that reached a command line, a title check that let through names Obsidian cannot open, a page name that could clash with one the wiki already had, and a hand-edited `app.json` that stopped the server starting. One read every word an owner would meet as somebody who does not read much and found twelve places to put right, among them instructions with nobody named to do them and two names that belonged to real people's projects. One swept the whole tree and every commit message for anything personal.
+
+## v0.10.0 (14 October 2026)
+
+**Nothing is left unsaved, and you are told when a conversation has gone cold.** Two things owners kept paying for without knowing it. You leave a conversation in the middle of something, and whatever your assistant had changed sits unsaved until you come back and ask for it — and asking, hours later, is the dearest message of the day, because your assistant re-reads the whole conversation before it can do anything at all. Both of those are now handled for you, with nothing to turn on and nothing to remember.
+
+### Your wiki saves itself at the end of every reply
+
+- **You can stop in the middle of something, close the window and walk away.** The work up to that point is saved. You never have to open a conversation again just to say "save everything".
+- **Your assistant still saves each piece of finished work itself**, under its own description, as before. This catches whatever is left over when a reply ends, and it is a backstop rather than a replacement.
+- **It saves in two parts, so the history still reads.** What that conversation changed itself goes in under the conversation's own title. Everything else — a file a script wrote, work another conversation left, something that arrived from another machine — goes in as "changes found in the wiki".
+- **The commit gate still checks every save.** If the gate refuses one, each file is offered again on its own, so one bad file no longer holds up the rest. The files it still refuses are **left exactly as they were** — the work is still on your Mac, nothing is lost — and they are written down. **Press "Check my wiki" and it tells you how many are still unsaved and what to ask for**; the line above the prompt says the same once it appears; and asking your assistant makes it read the record. You are never left believing work was saved when it was not.
+- **Your own half-finished work is never swept into a save in Moblee's name.** If you have been editing your rules file, your `.gitignore` or a script of your own, those are left for your own next commit rather than going in under a message saying Moblee did it, and the check-up says what is waiting.
+- **It never pushes anything anywhere, never deletes anything, and never gets round the gate.** Your reply never waits for it either: it lets go of your assistant at once and does its work behind the scenes.
+- **The record of what each conversation last saved** is kept at `~/.config/moblee/state/turn-end-commit.json`, for thirty days. It is outside Claude's and ChatGPT's own folders, which Moblee's rules put out of bounds, and both assistants share the one place.
+- **With ChatGPT there is one extra press.** A new entry in ChatGPT's hooks file has to be trusted, so the update prints those steps again when it adds one, and the app's Trust screen now names **both** of Moblee's hooks. Before this it named one, and an owner who trusted only that one would have had no end-of-reply save and no way of knowing.
+
+### A line above the prompt when a long conversation has gone cold
+
+- **With Claude, a line appears above where you type** once a long conversation has sat without a reply for about an hour: how long it has been, roughly how much your next message would make Claude re-read, and that a fresh conversation starts far smaller. There is a "Got it" button. Typing `/cache` asks the same question at any time.
+- **It also tells you whether your work is saved**, reading the record above: either everything from this conversation is committed and it is safe to start a new one, or how many files the gate stopped and what to say in a new conversation.
+- **Nothing is sent anywhere and no model call is ever made** to work any of that out, and **no message of yours is ever held or stopped** — so a long one you have dictated can never be lost to it.
+- **The hour is not a fact on every plan**, so the line says "about an hour on most plans" rather than pretending to certainty. If you know your own figure, put the number of minutes in `~/.config/moblee/cache-minutes` and it will use that.
+- **Moblee installs it for you**, without Terminal. It needs a recent Claude; where the Claude on your Mac is older, Moblee says so in one sentence and nothing else is affected — the line appears on its own once Claude has updated itself. For a wiki used with ChatGPT alone there is nothing to install, and Moblee says that too.
+
+### Fixed
+
+- **A page named in Arabic, Chinese or Greek was passed over in silence by every check in the commit gate** — as was one holding a space or a quote mark in its name. Git hands such a name back spelled out in escapes, which matches no file on the disk, so the gate looked, found nothing, and let the commit through saying all was well. The gate now reads every name as it stands. Two checks come with it: a row added to a `.csv` under `wiki/` must have as many columns as its own header (one unquoted comma and everything below reads wrong), and a page whose properties this commit touched must still read as properties (an unquoted colon ends the block early and the page silently loses all of them).
+- **The wiki's health check now warns before a file is too big, not after.** A file your assistant loads at every session is reported once it reaches 95 per cent of its limit, in words that say plainly that nothing is broken yet and what to do. It also no longer dies when one of its own checks breaks: that check is reported as a fault in Moblee, and every other check still runs, so you always get a report. And one of those always-loaded files going missing is now reported and counted, where before it was quietly skipped and the wiki could still come back all-clean.
+- **The delete guard goes to v5.1, closing six ways round it**: Python that starts a process under another name, wrappers it did not look through, `git checkout`'s cleverer spellings, your wiki named by its full path from somewhere else, `ssh` options that run a command on your own Mac, and the guard's own files, which could be edited or replaced. The check-up now also tells you **which guard is on your Mac**, beside the existing check that it is Moblee's own copy.
+- **An update would never have put the new above-the-prompt line into your wiki.** The updater decides whether a file is your own work by asking whether Moblee ships a file of that name, and this is the first thing Moblee ships under one name and installs under another. Every file of it read as yours, so it would have been named on screen as your work and left out of Moblee's save.
+- **"4 thing(s)" is gone from the rest of the pack.** v0.9.6 took it off the screens and said a few older findings still carried it; those are now done — the check-up's line about things waiting in the app, the updater's two counts and the diary line it writes, and the app's own note of what a drop copied in. They say "1 thing" and "4 things".
+
+### Tested
+
+- **435 checks in the app that need no window, 0 failed**, among them that 0.10.0 counts as newer than 0.9.6 in both of the places that compare versions — which is the comparison every 0.9.6 app already on an owner's Mac is about to make — and that the Trust screen names both hooks and says what each is for. **Eighty-eight drawn screens**, each in light and dark and laid out both ways, all twelve runs identical, and the new line on the check-up card looked at in every size.
+- **The end-of-reply save was watched doing it.** Its own suite is 105 checks, 0 failed, covering both parts, a file the gate stops (named, never forced through), a rename, a file someone else had staged, two runs at once, the detached run, a hook message with nothing in it, and every one of the faults the cold reading below turned up. Then the real headless Claude was asked for a one-line edit in a practice wiki in a sandboxed home, and the wiki saved itself when the reply ended, with the record written. The previous version could test everything but that.
+- **The above-the-prompt line validates and passes its own tests on Claude's current engine** (22 checks, 0 failed, up from 9), type-checks clean, and was installed for real in a sandboxed home, where Claude listed it as installed and switched on. All three cases of "which Claude is on this Mac" were exercised, two of them for real on the machine that built this.
+- **The guard's suite is 507 refusals and 240 allowances, 0 failures**, against v0.9.6's 380 and 184: nothing once refused is now allowed, and nothing once allowed is now refused. The check-up is 317 checks, up from 179. The health check has a suite of its own for the first time, 34 checks. The rules-file engine is 138, up from 119. The weekly card 44, the starting memories 93, every finding's code documented, and all pinned hashes current.
+- **Three people who had seen none of the work read it cold before it was finished**, as every version since v0.8.0 has had. One ran the installer's and updater's code against throwaway wikis and proved six ways the end-of-reply save could lose or mislabel an owner's work; one read every screen and every line of the check-up as somebody who does not read much, and found twelve places where the words were wrong for that reader; one swept the whole tree and every commit message for anything personal. Everything they found that was a fault is fixed and tested, and the two things that are judgements rather than faults are written down for whoever cuts the release.
+- **Two walk-throughs are still waiting on a person**, and this version did not clear them: the one in `vault-template/Welcome.md` and the one in `docs/03-first-conversation.md`. Both describe what an owner does in ChatGPT, and both can only be confirmed by somebody sitting in front of it.
+
 ## v0.9.6 (27 September 2026)
 
 **Seeing what a wiki is, and checking your own.** v0.9.4 fixed what owners hit and v0.9.5 gave them things to use. Owners said, in different words, the same two things: they did not know what the wiki was for, and when something felt wrong they had no way to find out. This version answers both, and adds one screen for the person who helps them.
@@ -352,7 +545,7 @@ The number 0.8.0 was carried by the builds tested on that account and was never 
 
 ### Verified
 
-On the maintainer's two Macs, on the committed code: the installer test (62 checks: the app-style and Terminal installs, the diary, a place already taken, a broken settings file, a half-made wiki, a skill already under one of Moblee's names, the starter dates, the connections check seen and unseen, the saved record) and the release test (72 checks: a fresh install, the checklist engine, the updater on a wiki made by 0.7.0, the check-up, made-to-measure skills, and `safety/release-hashes.py --check`) passed on every round; the app test (46 checks) drew twenty-three screens in light and dark and drove the real window through an install, the home screen, each kind of addition, a stale note of where the pack is, an aged guard repaired, three hostile requests refused, and the move to Applications from a pretend Downloads against an older Moblee, first with a copy made to fail and then for real. Fifteen awkward owner names, among them Arabic, accented, quoted and command-shaped ones, installed correctly and none was ever executed. The signed app was then run by a person on a new macOS account with nothing on it, three times, on the builds before this one, and the findings of those runs are the section above. What changed after the third run is small and is listed last in that section. Two reviewers who had seen none of the reasoning read the changes cold, one before the second run and one before this build.
+On two Macs, on the committed code: the installer test (62 checks: the app-style and Terminal installs, the diary, a place already taken, a broken settings file, a half-made wiki, a skill already under one of Moblee's names, the starter dates, the connections check seen and unseen, the saved record) and the release test (72 checks: a fresh install, the checklist engine, the updater on a wiki made by 0.7.0, the check-up, made-to-measure skills, and `safety/release-hashes.py --check`) passed on every round; the app test (46 checks) drew twenty-three screens in light and dark and drove the real window through an install, the home screen, each kind of addition, a stale note of where the pack is, an aged guard repaired, three hostile requests refused, and the move to Applications from a pretend Downloads against an older Moblee, first with a copy made to fail and then for real. Fifteen awkward owner names, among them Arabic, accented, quoted and command-shaped ones, installed correctly and none was ever executed. The signed app was then run by a person on a new macOS account with nothing on it, three times, on the builds before this one, and the findings of those runs are the section above. What changed after the third run is small and is listed last in that section. Two reviewers who had seen none of the reasoning read the changes cold, one before the second run and one before this build.
 
 ## v0.7.0 (19 September 2026)
 
@@ -433,7 +626,7 @@ A refinement release: fixes from the first remote support sessions, an optional 
 
 ## v0.5.0 (16 September 2026)
 
-The safety release. It exists because a recipient's vault lost a folder the day after its first housekeeping run, and the review that followed found that the three things protecting the maintainer's own vault (a delete guard, a permission list, and a written identity for Claude) had never shipped: all three lived outside the vault, and the v0.4 port had taken the vault as the boundary of the pattern. The rule from here on: a recipient gets what the maintainer has, or the pack does not ship.
+The safety release. It exists because a recipient's vault lost a folder the day after its first housekeeping run, and the review that followed found that the three things protecting the wiki it was all built on (a delete guard, a permission list, and a written identity for Claude) had never shipped: all three lived outside the vault, and the v0.4 port had taken the vault as the boundary of the pattern. The rule from here on: a recipient gets what the pack's own wiki has, or the pack does not ship.
 
 ### Added
 
@@ -448,7 +641,7 @@ The safety release. It exists because a recipient's vault lost a folder the day 
 - **`scripts/log-append.py`**, the one way a log entry is written: it reads the clock itself and emits the one correct header form, retiring hand-composed timestamps.
 - **The commit gate wired through `scripts/hooks/`** and `git config core.hooksPath`, so the gate is versioned and updates reach it; nothing is written into `.git/hooks/` any more. Gate gains **G6**: a wikilink added to `wiki/` must resolve (folder links advisory).
 - **Five more lint checks**, generalised: frontmatter schema (cluster notes, daily notes), duplicate frontmatter, session-metadata footers, prose boilerplate, skills-layer weight.
-- **`clinic/`**: the maintainer's tools for looking after a vault remotely by exchanging files: a clinic-note template, a checker that runs every command in a note through the guard, and the ten-point standard a note must pass before it is sent.
+- **`clinic/`**: the tools for looking after a vault remotely by exchanging files: a clinic-note template, a checker that runs every command in a note through the guard, and the ten-point standard a note must pass before it is sent.
 - `docs/08-updating.md` and `docs/09-safety.md`.
 
 ### Changed
@@ -484,7 +677,7 @@ Installed end to end three times in a sandboxed `HOME` on a stock `PATH`, with H
 
 ## v0.4.1 (4 September 2026)
 
-First-install fixes, found by running the installer as a fresh user on a stock Mac rather than on the maintainer's machine.
+First-install fixes, found by running the installer as a fresh user on a stock Mac rather than on the machine it was written on.
 
 ### Fixed
 
@@ -493,7 +686,7 @@ First-install fixes, found by running the installer as a fresh user on a stock M
 
 ## v0.4 (1 September 2026)
 
-The maintainer's operational layer, generalised. Everything below was built and battle-tested on the maintainer's live vault June-August 2026, then ported with all personal content stripped and vault-path detection generalised (`~/.config/moblee/vault-path`, written by the installer; `MOBLEE_VAULT` env override; walk-up fallback).
+The operational layer, generalised. Everything below was built and proved on a live wiki between June and August 2026, then ported with all personal content stripped and vault-path detection generalised (`~/.config/moblee/vault-path`, written by the installer; `MOBLEE_VAULT` env override; walk-up fallback).
 
 ### Added
 
@@ -512,7 +705,7 @@ The maintainer's operational layer, generalised. Everything below was built and 
 
 ### Not ported, deliberately
 
-The maintainer's personal automations (scheduled news briefs, domain dashboards, semantic recall, cross-machine sync tooling) stay out: they are one person's assistant, not the pattern. The pattern is what ships.
+Automations fitted to one person (scheduled news briefs, domain dashboards, semantic recall, cross-machine sync tooling) stay out: they are one person's assistant, not the pattern. The pattern is what ships.
 
 ### Migration
 
@@ -520,7 +713,7 @@ Existing installs keep working. To adopt v0.4 pieces on an existing vault: re-ru
 
 ## v0.3 (5 June 2026)
 
-`wiki-to-pdf` rendering upgrades, ported from the maintainer's live skill and brand-abstracted so they are driven by your own `design-your-brand` settings.
+`wiki-to-pdf` rendering upgrades, ported from a live skill and brand-abstracted so they are driven by your own `design-your-brand` settings.
 
 ### Added
 
@@ -536,7 +729,7 @@ Existing installs keep working. To adopt v0.4 pieces on an existing vault: re-ru
 
 ### Brand abstraction
 
-The CV style reads `--brand-primary`, `--brand-secondary`, `--brand-body`, and `--brand-font-family` from the same `brand.css` `:root` block that `design-your-brand` writes, so one brand setup drives both render styles. No maintainer-specific colours, fonts, or assets are baked in. The EB Garamond serif is the fixed signature of the statement style.
+The CV style reads `--brand-primary`, `--brand-secondary`, `--brand-body`, and `--brand-font-family` from the same `brand.css` `:root` block that `design-your-brand` writes, so one brand setup drives both render styles. No one person's colours, fonts, or assets are baked in. The EB Garamond serif is the fixed signature of the statement style.
 
 ## v0.2 (25 May 2026)
 

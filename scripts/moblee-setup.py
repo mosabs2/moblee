@@ -957,6 +957,464 @@ def check_weekly():
     return True, "the health check runs by itself every Saturday"
 
 
+# --- (0.12.0) alerts on the phone, reach from the phone, thinking jobs ----------
+
+NTFY_TOPIC = CONFIG_DIR / "ntfy-topic"
+REACH_FILE = CONFIG_DIR / "reach.json"
+CLAUDE_TOKEN = CONFIG_DIR / "claude-token"
+TAILSCALE_CLI = Path("/Applications/Tailscale.app/Contents/MacOS/Tailscale")
+
+
+def check_alerts():
+    try:
+        t = NTFY_TOPIC.read_text(encoding="utf-8").strip()
+    except OSError:
+        return False, "not set up"
+    if not t:
+        return False, "not set up"
+    return True, "alerts reach the ntfy app on your phone"
+
+
+def install_alerts():
+    import secrets
+    rule("Alerts on your phone")
+    say("  A free app called ntfy on your phone shows a line when a job of yours")
+    say("  finishes or fails. Nothing but that line leaves this Mac: it names the")
+    say("  file to look at and never sends the file.")
+    say("")
+    try:
+        code = NTFY_TOPIC.read_text(encoding="utf-8").strip()
+    except OSError:
+        code = ""
+    if not code:
+        code = "moblee-" + secrets.token_urlsafe(12).replace("_", "x").replace("-", "y")
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        NTFY_TOPIC.write_text(code + "\n", encoding="utf-8")
+        os.chmod(NTFY_TOPIC, 0o600)
+    say("  1. On your phone, get the app called ntfy from the App Store (it is free).")
+    say("  2. Open it, press the + sign to add a channel, and type this code exactly:")
+    say("")
+    say(f"         {code}")
+    say("")
+    say("  3. Press Subscribe. That is all; the code is your private channel.")
+    say("")
+    if not wait_for_return("Press Return when the app shows the channel"):
+        return False
+    import urllib.request
+    try:
+        req = urllib.request.Request("https://ntfy.sh/" + code, data=b"Moblee: alerts are working. This is the test.", method="POST")
+        req.add_header("Title", "Moblee")
+        with urllib.request.urlopen(req, timeout=15) as r:
+            ok = 200 <= r.status < 300
+    except Exception:
+        ok = False
+    if ok:
+        say("  A test alert was sent; it should be on your phone now.")
+    else:
+        say("  The test could not be sent just now (no internet?). The channel is set up; ask your assistant to send a test alert when you are back online.")
+    return True
+
+
+def check_reach():
+    try:
+        cfg = json.loads(REACH_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False, "no route chosen"
+    addr = cfg.get("address") if isinstance(cfg, dict) else None
+    if not isinstance(addr, str) or not addr or len(addr) > 253 or not all(c.isalnum() or c in ".-:" for c in addr):
+        return False, "no route chosen"
+    route = "Tailscale" if cfg.get("route") == "tailscale" else "your own private network"
+    return True, f"things made to open from your phone do so over {route} while this Mac is awake"
+
+
+def tailscale_ip() -> str | None:
+    for cli in (TAILSCALE_CLI, Path(which("tailscale") or "/nonexistent")):
+        if cli.exists():
+            code, out = run([str(cli), "ip", "-4"], timeout=30)
+            if code == 0:
+                for line in out.splitlines():
+                    line = line.strip()
+                    if line.count(".") == 3 and all(p.isdigit() for p in line.split(".")):
+                        return line
+    return None
+
+
+def install_reach():
+    rule("Reach your things from your phone")
+    say("  A thing built for you runs on this Mac. To open it from your phone, your")
+    say("  phone needs a private way to reach this Mac. Two choices:")
+    say("")
+    say("  1. Tailscale (recommended): a free private network for your own devices.")
+    say("     Nothing is opened to the internet. An account, the app on this Mac and")
+    say("     on your phone, and a sign-in on each. About every six months Tailscale")
+    say("     asks you to sign in again on each device; that is normal and you can leave it so.")
+    say("  2. A private way home you already have: a VPN, or your router's remote access.")
+    say("     You give this Mac's address as your phone sees it. If you do not know it,")
+    say("     press 3 for now and ask your assistant, who can read it from this Mac and tell you.")
+    say("  3. Not now.")
+    say("")
+    try:
+        choice = input("  Which? Type 1, 2 or 3 and press Return: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return False
+    if choice == "3":
+        say("  Nothing was changed.")
+        return False
+    if choice == "2":
+        try:
+            addr = input("  This Mac's address on your network (for example 192.168.1.20): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            return False
+        if not addr or len(addr) > 253 or not all(c.isalnum() or c in ".-:" for c in addr):
+            say("  That does not read as an address; nothing was changed.")
+            return False
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        REACH_FILE.write_text(json.dumps({"route": "named", "address": addr,
+                                          "recorded": datetime.date.today().isoformat()}, indent=2) + "\n", encoding="utf-8")
+        say(f"  Recorded: your phone reaches this Mac at {addr}. Things made to open from your phone will open there while this Mac is awake.")
+        return True
+    if choice != "1":
+        say("  Nothing was changed.")
+        return False
+    if not TAILSCALE_CLI.exists():
+        if not brew_install(["tailscale"], cask=True):
+            say("  Tailscale could not be installed. You can get it from tailscale.com and run this again.")
+            return False
+    say("")
+    say("  Tailscale will open. Sign in (or make an account) in the window it shows, and")
+    say("  when the Mac shows a box saying Tailscale would like to add VPN configurations,")
+    say("  press Allow. Then come back here.")
+    run(["open", "-a", "Tailscale"], timeout=30)
+    if not wait_for_return("Press Return once you are signed in to Tailscale"):
+        return False
+    ip = tailscale_ip()
+    if not ip:
+        say("  Tailscale does not show an address yet. Finish signing in, then run this item again from Moblee.")
+        return False
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    REACH_FILE.write_text(json.dumps({"route": "tailscale", "address": ip,
+                                      "recorded": datetime.date.today().isoformat()}, indent=2) + "\n", encoding="utf-8")
+    say(f"  Recorded: this Mac is {ip} on your Tailscale network. Put Tailscale on your phone too, signed in to")
+    say("  the same account, and things made to open from your phone will open there while this Mac is awake.")
+    return True
+
+
+def claude_engine() -> str | None:
+    """Claude's engine: inside the Claude app, newest first, else on the path."""
+    import glob
+    found = sorted(glob.glob(str(Path.home() / "Library" / "Application Support" / "Claude" / "claude-code"
+                                 / "*" / "*" / "claude.app" / "Contents" / "MacOS" / "claude")))
+    if found:
+        return found[-1]
+    return which("claude")
+
+
+def check_thinking():
+    try:
+        tok = CLAUDE_TOKEN.read_text(encoding="utf-8").strip()
+    except OSError:
+        tok = ""
+    if not tok:
+        return False, "no long-lived sign-in yet"
+    if not claude_engine():
+        return False, "the sign-in is kept, but the Claude app was not found on this Mac"
+    return True, "jobs can ask Claude while you are away; the sign-in is kept in a file only you can read"
+
+
+def install_thinking():
+    import getpass
+    rule("Jobs that ask Claude while you are away")
+    say("  A job that runs on a schedule and asks Claude to think (a morning page, a")
+    say("  weekly tidy) needs a sign-in that works with nobody at the screen. Claude")
+    say("  makes one for you; it lasts about a year, and when it runs out the jobs stop")
+    say("  and tell your phone, and you do this once more. Each such run uses a little")
+    say("  of your Claude allowance, which the job's page says.")
+    say("")
+    engine = claude_engine()
+    if not engine:
+        say("  The Claude app was not found on this Mac. Open it once, then run this again.")
+        return False
+    say("  1. A web page opens; sign in there if it asks, and press Allow.")
+    say("  2. Back in this black window a long code starting sk-ant- appears. Drag across")
+    say("     the whole code to select it, then press Command and C.")
+    say("  3. Press Return here, then press Command and V to paste it when asked.")
+    say("     Nothing shows while you paste; that is normal.")
+    say("")
+    if not wait_for_return("Press Return to start"):
+        return False
+    run([engine, "setup-token"], interactive=True, timeout=600)
+    try:
+        tok = getpass.getpass("  Paste the code and press Return: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return False
+    if not tok.startswith("sk-ant-") or len(tok) < 40 or any(c.isspace() for c in tok):
+        say("  That does not read as the code. Nothing was kept; run this again when you have it.")
+        return False
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    CLAUDE_TOKEN.write_text(tok + "\n", encoding="utf-8")
+    os.chmod(CLAUDE_TOKEN, 0o600)
+    say("  Kept, in a file only you can read. Jobs that ask Claude can now run while you are away.")
+    return True
+
+
+# --- (0.12.0) the two jobs that ask Claude: the weekly tidy and the morning page --
+
+def thing_status(name: str) -> dict:
+    v = vault_path()
+    if not v:
+        return {}
+    code, out = run(["python3", str(PACKAGE_ROOT / "scripts" / "job-switch.py"), "--vault", str(v),
+                     "--name", name, "--status", "--json"], timeout=60)
+    try:
+        d = json.loads(out)
+        return d if isinstance(d, dict) else {}
+    except ValueError:
+        return {}
+
+
+def install_thinking_thing(name: str, title: str, prompt_file: Path, when: list, what: str) -> bool:
+    """Lay the thing down with the build skill's scaffold, give it Moblee's own
+    prompt, and switch its job on: the owner pressed this item, which is their
+    hand on the switch."""
+    v = vault_path()
+    if not v:
+        say("  The wiki could not be found, so nothing was set up.")
+        return False
+    if not CLAUDE_TOKEN.exists():
+        say("  This needs the item \"Jobs that ask Claude while you are away\" first, which keeps the")
+        say("  sign-in a job uses when nobody is at the screen. Choose that, then this again.")
+        return False
+    parts = PACKAGE_ROOT / "skills" / "build" / "parts"
+    code, out = run(["python3", str(parts / "scaffold.py"), "--vault", str(v), "--name", name, "--title", title,
+                     "--what", what, "--think", *when], timeout=120)
+    if code != 0:
+        say("  The thing could not be laid down: " + out.strip().splitlines()[-1][:200] if out.strip() else "  The thing could not be laid down.")
+        return False
+    prompt = v / "apps" / name / "prompt.md"
+    try:
+        current = prompt.read_text(encoding="utf-8") if prompt.exists() else ""
+    except OSError:
+        current = ""
+    if not current or "The assistant replaces this paragraph" in current:
+        # Moblee's own words go in only where the owner has not written their own
+        prompt.write_text(prompt_file.read_text(encoding="utf-8"), encoding="utf-8")
+    code, out = run(["python3", str(PACKAGE_ROOT / "scripts" / "job-switch.py"), "--vault", str(v),
+                     "--name", name, "--on", "--json"], timeout=60)
+    try:
+        d = json.loads(out)
+    except ValueError:
+        d = {}
+    if code != 0 or not d.get("loaded"):
+        say("  It was laid down but could not be switched on: " + str(d.get("why") or "the scheduler did not take it"))
+        return False
+    say(f"  {title} is switched on. It runs within limits written down for it, which your assistant can show or")
+    say("  change, and a missed hour runs at the next wake.")
+    return True
+
+
+def check_tidy():
+    s = thing_status("moblee-tidy")
+    if not s.get("file"):
+        return False, "not set up"
+    if not s.get("loaded"):
+        return False, "set up but not switched on (choose this item again)"
+    last = s.get("last_run")
+    return True, "runs after the Saturday check" + (f"; last ran {str(last)[:10]}" if last else "; has not run yet")
+
+
+def install_tidy():
+    rule("The weekly tidy")
+    say("  After the Saturday check, Claude puts right what can safely be put right and")
+    say("  lists the rest for you on one short page. One run a week of your allowance.")
+    return install_thinking_thing("moblee-tidy", "Weekly tidy", PACKAGE_ROOT / "scripts" / "cadence" / "tidy-prompt.md",
+                                  ["--weekday", "6", "--hour", "9", "--minute", "30"],
+                                  "The weekly tidy: what the Saturday check found, put right where it safely can be, and the rest listed for the owner.")
+
+
+def check_morning():
+    s = thing_status("moblee-morning")
+    if not s.get("file"):
+        return False, "not set up"
+    if not s.get("loaded"):
+        return False, "set up but not switched on (choose this item again)"
+    last = s.get("last_run")
+    return True, "a morning page each day" + (f"; last written {str(last)[:10]}" if last else "; not written yet")
+
+
+def install_morning():
+    rule("Your morning page")
+    say("  Each morning, at half past six or the first wake after it, Claude writes you a")
+    say("  page: what is on today, what moved, what is waiting, one thing worth doing.")
+    say("  One run a day of your allowance.")
+    return install_thinking_thing("moblee-morning", "Morning page", PACKAGE_ROOT / "scripts" / "cadence" / "morning-prompt.md",
+                                  ["--hour", "6", "--minute", "30"],
+                                  "The morning page: what matters today, from what the wiki holds, written before the owner is up.")
+
+
+# --- (0.12.0) memory search: the wiki searched by meaning, on this Mac only ----
+
+OLLAMA_URL = os.environ.get("MOBLEE_OLLAMA", "http://127.0.0.1:11434")
+EMBED_MODEL = "nomic-embed-text"
+
+
+def recall_cache_dir(v: Path) -> Path:
+    """One folder per wiki, the same formula as recall.py and the check-up."""
+    import hashlib
+    env = os.environ.get("MOBLEE_RECALL_CACHE")
+    if env:
+        return Path(os.path.expanduser(env))
+    key = hashlib.sha1(os.path.realpath(str(v)).encode("utf-8")).hexdigest()[:12]
+    return HOME / ".cache" / "moblee-recall" / key
+
+
+def ollama_present() -> bool:
+    """The app, the command, or a service already answering (Homebrew's
+    `brew services` runs it with neither on the path)."""
+    return Path("/Applications/Ollama.app").is_dir() or bool(which("ollama")) or ollama_up(2)
+
+
+def ollama_up(timeout: float = 4) -> bool:
+    import urllib.request
+    try:
+        with urllib.request.urlopen(OLLAMA_URL + "/api/tags", timeout=timeout) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def ollama_has_model() -> bool:
+    import urllib.request
+    try:
+        with urllib.request.urlopen(OLLAMA_URL + "/api/tags", timeout=4) as r:
+            names = [m.get("name", "") for m in json.loads(r.read()).get("models", [])]
+        return any(n.split(":")[0] == EMBED_MODEL for n in names)
+    except Exception:
+        return False
+
+
+def recall_hook_registered() -> bool:
+    try:
+        settings = json.loads(SETTINGS.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    hooks = settings.get("hooks") if isinstance(settings, dict) else None
+    ups = hooks.get("UserPromptSubmit") if isinstance(hooks, dict) else None
+    for g in ups or []:
+        for h in (g.get("hooks") or []) if isinstance(g, dict) else []:
+            if isinstance(h, dict) and "recall-inject.py" in str(h.get("command", "")):
+                return True
+    return False
+
+
+def check_recall():
+    v = vault_path()
+    if not v or not (v / "scripts" / "recall" / "recall.py").exists():
+        return False, "not set up"
+    if not recall_hook_registered():
+        return False, "set up, but Claude has not been told to use it (choose this item again)"
+    if not ollama_present():
+        return False, "set up, but the small model's program (Ollama) is not on this Mac (choose this item again)"
+    meta = recall_cache_dir(v) / "meta.json"
+    if not meta.exists():
+        return False, "set up, but the index has not been built yet (choose this item again)"
+    try:
+        built = json.loads(meta.read_text(encoding="utf-8")).get("count")
+    except (OSError, ValueError):
+        built = None
+    return True, f"questions find the closest pages by meaning ({built} sections indexed)" if built else \
+        "questions find the closest pages by meaning"
+
+
+def pull_model() -> bool:
+    """Fetch the embedding model through Ollama's own service, so no command
+    line tool and no password are needed; progress is shown as it comes."""
+    import urllib.request
+    try:
+        req = urllib.request.Request(OLLAMA_URL + "/api/pull", data=json.dumps({"name": EMBED_MODEL}).encode(),
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=1800) as r:
+            last = ""
+            for line in r:
+                try:
+                    d = json.loads(line)
+                except ValueError:
+                    continue
+                st = str(d.get("status", ""))
+                if d.get("total") and d.get("completed"):
+                    pct = int(100 * d["completed"] / d["total"])
+                    st = f"{st} {pct}%"
+                if st != last:
+                    sys.stdout.write(f"\r     {st[:70]:<70}")
+                    sys.stdout.flush()
+                    last = st
+                if d.get("error"):
+                    say("")
+                    say(f"  The model could not be fetched: {d['error']}")
+                    return False
+        say("")
+        return True
+    except Exception as exc:
+        say("")
+        say(f"  The model could not be fetched: {exc}")
+        return False
+
+
+def install_recall():
+    rule("Memory search")
+    say("  Your assistant finds pages by the words in them. Memory search adds finding")
+    say("  them by meaning: when you ask a question, the three or four sections of your")
+    say("  wiki closest to it are put in front of Claude before it reads your message,")
+    say("  as leads to check. A small model (Ollama, about 300 MB) runs on this Mac for")
+    say("  it; nothing leaves the Mac, and the index is a disposable copy outside the wiki.")
+    say("")
+    v = vault_path()
+    if not v:
+        say("  The wiki could not be found, so nothing was set up.")
+        return False
+    if not ollama_present():
+        say("  Installing Ollama with Homebrew (it may ask for your Mac password; nothing shows as you type).")
+        code, _ = run(["brew", "install", "--cask", "ollama"], interactive=True, timeout=1800)
+        if code != 0 or not ollama_present():
+            say("  Ollama could not be installed. Run this item again when you have a moment, or fetch it from ollama.com.")
+            return False
+    if not ollama_up():
+        say("  Opening Ollama. The first time, the Mac may ask whether to open a program fetched from the")
+        say("  internet: press Open. It may also offer to finish its own setup; that can be skipped.")
+        if Path("/Applications/Ollama.app").is_dir():
+            run(["open", "-gj", "/Applications/Ollama.app"], timeout=30)
+        else:
+            run(["open", "-gja", "Ollama"], timeout=30)
+        for _ in range(18):
+            time.sleep(5)
+            if ollama_up():
+                break
+    if not ollama_up():
+        say("  Ollama is installed but did not start. Open it once from Applications and answer what it asks,")
+        say("  then choose this item again.")
+        return False
+    if not ollama_has_model():
+        say("  Fetching the small model (about 300 MB, once)...")
+        if not pull_model():
+            return False
+    say("  Putting the scripts in your wiki and telling Claude about them...")
+    code, out = run(["python3", str(PACKAGE_ROOT / "extras" / "recall" / "install-recall.py"), "--vault", str(v)],
+                    timeout=300)
+    for line in out.strip().splitlines():
+        say("   " + line)
+    if code != 0:
+        return False
+    say("  Building the index: every section of your wiki is read once, which takes a minute")
+    say("  on a new wiki and longer on a large one. This window waits.")
+    code, out = run(["bash", str(v / "scripts" / "recall" / "rebuild-index.sh"), "setup"], timeout=3600)
+    if not (recall_cache_dir(v) / "meta.json").exists():
+        say("  The index was not built. Choose this item again; if it fails twice, ask your assistant why,")
+        say("  which can read the reason.")
+        return False
+    say("  Done. Ask your assistant a question and it has the closest pages in front of it.")
+    say("  The index refreshes by itself after each save and once a night, in seconds.")
+    return True
+
+
 def install_weekly():
     code, _ = run(["bash", str(PACKAGE_ROOT / "scripts" / "install-schedule.sh")], interactive=True, timeout=300)
     return code == 0
@@ -1047,6 +1505,576 @@ def install_vault_fn():
     return True
 
 
+# --- (0.13.0) the Moblee Hub ----------------------------------------------------
+#
+# The Hub is the group's shared wiki of wikis: a private GitHub repository kept
+# by one member (the keeper), with a shelf of recipes and a post office of notes.
+# Moblee is a client of it and copies none of its code: it reads the Hub's
+# manifest (hub.json) and the fixed layout beside it, knocks at the door the
+# manifest names, and clones. The page, the checker and the rules keep arriving
+# by pull. The defaults below are the group's own Hub; ~/.config/moblee/hub.json
+# names another, and the MOBLEE_HUB_* settings exist for the tests. The Hub
+# moved into the group's own GitHub organisation on 26 October 2026; 0.13.1
+# carries the new addresses and follows a move instead of stalling on one.
+
+HUB_DEFAULT = {
+    "name": "Moblee Hub",
+    "address": "https://github.com/Moblee-Main-Devs/moblee-hub.git",
+    "join": "approve",
+    "lobby": "https://github.com/Moblee-Main-Devs/moblee-hub-lobby",
+}
+HUB_CHOICE = CONFIG_DIR / "hub.json"
+HUB_POLICIES = ("invite", "approve", "open")
+HUB_ID_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789-")
+HUB_SLUG_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_./")
+
+
+def hub_settings() -> dict:
+    """Which Hub, before the folder exists: the owner's choice on record, else the
+    group's own. Once hub/ is a clone, its own hub.json is the word on it."""
+    hub = dict(HUB_DEFAULT)
+    try:
+        chosen = json.loads(HUB_CHOICE.read_text(encoding="utf-8"))
+        if isinstance(chosen, dict):
+            hub.update({k: v for k, v in chosen.items() if isinstance(v, str) and k in hub})
+    except (OSError, ValueError):
+        pass
+    for key in ("address", "join", "lobby"):
+        env = os.environ.get("MOBLEE_HUB_" + key.upper())
+        if env:
+            hub[key] = env
+    if hub.get("join") not in HUB_POLICIES:
+        hub["join"] = "invite"
+    return hub
+
+
+def same_address(one: str, other: str) -> bool:
+    def norm(a: str) -> str:
+        a = (a or "").strip().rstrip("/")
+        if a.endswith(".git"):
+            a = a[:-4]
+        return a.lower()
+    return norm(one) == norm(other)
+
+
+def repo_slug(address: str) -> str | None:
+    """owner/name from a github.com address, or None for anything else."""
+    a = (address or "").strip().rstrip("/")
+    if a.endswith(".git"):
+        a = a[:-4]
+    for prefix in ("https://github.com/", "git@github.com:"):
+        if a.lower().startswith(prefix):
+            rest = a[len(prefix):]
+            if rest.count("/") == 1 and all(rest.split("/")):
+                return rest
+    return None
+
+
+def gh_tool() -> str | None:
+    return os.environ.get("MOBLEE_GH") or which("gh")
+
+
+def hub_git(args: list, timeout: int = 60) -> tuple[int, str]:
+    """git for the Hub, never stopping at a password question nobody can see:
+    a sign-in that is not set up fails at once and says so."""
+    os.environ["GIT_TERMINAL_PROMPT"] = "0"
+    return run(["git"] + args, timeout=timeout)
+
+
+def env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, str(default)))
+    except ValueError:
+        return default
+
+
+def hub_folder() -> Path | None:
+    v = vault_path()
+    return (v / "hub") if v else None
+
+
+def hub_manifest(folder: Path) -> dict | None:
+    try:
+        data = json.loads((folder / "hub.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def hub_remote(folder: Path) -> str | None:
+    if not (folder / ".git").exists():
+        return None
+    code, out = hub_git(["-C", str(folder), "config", "--get", "remote.origin.url"], timeout=30)
+    return out.strip() if code == 0 and out.strip() else None
+
+
+def hub_me(folder: Path) -> str | None:
+    try:
+        me = json.loads((folder / "app" / "state" / "me.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    mid = me.get("id") if isinstance(me, dict) else None
+    return mid if isinstance(mid, str) and mid and set(mid) <= HUB_ID_CHARS else None
+
+
+def check_hub():
+    folder = hub_folder()
+    if folder is None:
+        return False, "no wiki was found to join it from"
+    if not folder.exists():
+        return False, "this wiki has not joined the Hub"
+    remote = hub_remote(folder)
+    if remote is None:
+        return False, "a hub folder is there, but it is not linked to GitHub (it was copied, not joined)"
+    manifest = hub_manifest(folder)
+    if manifest is None:
+        return False, "the hub folder has no hub.json, so it is not a Hub this version of Moblee knows"
+    if not same_address(remote, str(manifest.get("address", ""))):
+        return False, ("the hub folder points somewhere other than the address the Hub itself gives; if GitHub "
+                       "confirms the Hub has moved, choosing this item again points your copy at "
+                       + str(manifest.get("address") or "it"))
+    me = hub_me(folder)
+    if me is None:
+        return False, "linked, but this Mac has not joined as a member yet (run this item again)"
+    code, _ = hub_git(["-C", str(folder), "cat-file", "-e", f"@{{u}}:members/{me}.json"], timeout=30)
+    if code != 0:
+        return False, f"joined as {me}, but your member file has not reached GitHub yet (run this item again)"
+    gh = gh_tool()
+    if gh and repo_slug(remote) and run([gh, "auth", "status"], timeout=60)[0] != 0:
+        return False, f"joined as {me}, but GitHub's sign-in on this Mac has lapsed (run the GitHub item again)"
+    version = manifest.get("version")
+    page = f"; the Hub's page is version {version}" if isinstance(version, str) and version else ""
+    return True, f"in {manifest.get('name') or 'the Hub'} as {me}{page}"
+
+
+def hub_reachable(address: str) -> bool:
+    return hub_git(["ls-remote", "--heads", address], timeout=60)[0] == 0
+
+
+def hub_login(gh: str) -> str | None:
+    code, out = run([gh, "api", "user", "--jq", ".login"], timeout=60)
+    if code != 0:
+        return None
+    # gh's own notices (a new release, say) can arrive beside the answer: the
+    # login is the one word on a line of its own.
+    for line in reversed(out.strip().splitlines()):
+        line = line.strip()
+        if line and " " not in line and set(line) <= HUB_SLUG_CHARS and "/" not in line:
+            return line
+    return None
+
+
+def gh_full_name(gh: str | None, slug: str | None) -> str | None:
+    """The name GitHub gives a repository today, asked by the name on record.
+    GitHub answers a moved repository's old name with its new one, so this is
+    GitHub's own word on a move. Only the line shaped like owner/name counts:
+    anything gh prints besides (a notice, a warning) is not an answer."""
+    if not gh or not slug:
+        return None
+    code, out = run([gh, "api", f"repos/{slug}", "--jq", ".full_name"], timeout=60)
+    if code != 0:
+        return None
+    for line in reversed(out.strip().splitlines()):
+        line = line.strip()
+        if line.count("/") == 1 and all(line.split("/")) and set(line) <= HUB_SLUG_CHARS:
+            return line
+    return None
+
+
+def hub_moved_owner(gh: str, slug: str, lobby: str | None) -> str | None:
+    """Where the Hub's keeper keeps it now, when the Hub has moved with its
+    lobby. The lobby is public, so GitHub tells anyone its new name; a private
+    Hub's new name is told only to members. Counted as a move only when the
+    lobby has really moved and the Hub and lobby on record had the same owner."""
+    if not lobby or lobby.split("/")[0].lower() != slug.split("/")[0].lower():
+        return None
+    now = gh_full_name(gh, lobby)
+    if not now or now.lower() == lobby.lower():
+        return None
+    return now.split("/")[0]
+
+
+def hub_invitation(gh: str, slug: str, lobby: str | None = None) -> int | None:
+    """The waiting invitation to this Hub, if there is one. GitHub names the
+    repository in an invitation as it is called now, so a Hub that has moved
+    with its lobby is matched by its own name under the lobby's new owner
+    (0.13.1: until then a moved Hub's invitation was never seen, and the join
+    waited for ever)."""
+    code, out = run([gh, "api", "/user/repository_invitations"], timeout=60)
+    if code != 0:
+        return None
+    body = out[out.find("["):out.rfind("]") + 1] if "[" in out else "[]"   # gh's notices kept out
+    try:
+        invitations = [(str((inv.get("repository") or {}).get("full_name", "")), int(inv["id"]))
+                       for inv in json.loads(body or "[]")]
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return None
+    for repo, iid in invitations:
+        if repo.lower() == slug.lower():
+            return iid
+    name = slug.split("/")[1].lower()
+    if not any(repo.lower().endswith("/" + name) for repo, _ in invitations):
+        return None
+    owner = hub_moved_owner(gh, slug, lobby)
+    if owner:
+        for repo, iid in invitations:
+            if repo.lower() == f"{owner}/{name}".lower():
+                return iid
+    return None
+
+
+def hub_same_hub(one: str, other: str) -> bool:
+    """Two addresses for one Hub: the same address, or, on GitHub, an old one
+    that GitHub itself says now leads to the other. Matching branches are not
+    enough (an up-to-date copy elsewhere has the same ones), and an address
+    outside GitHub is never taken for a move."""
+    if same_address(one, other):
+        return True
+    old, new = repo_slug(one), repo_slug(other)
+    if not old or not new:
+        return False
+    now = gh_full_name(gh_tool(), old)
+    return bool(now) and now.lower() == new.lower()
+
+
+def hub_follow_move(folder: Path) -> bool:
+    """When the Hub's own hub.json gives a new address and GitHub says the old
+    one the folder points at has moved there, point the folder at the new one.
+    True when the folder now points where its hub.json says."""
+    manifest = hub_manifest(folder) or {}
+    new = str(manifest.get("address") or "")
+    remote = hub_remote(folder) or ""
+    if not new or same_address(remote, new):
+        return bool(new)
+    if not hub_same_hub(remote, new):
+        return False
+    if hub_git(["-C", str(folder), "remote", "set-url", "origin", new], timeout=30)[0] != 0:
+        return False
+    say("  The Hub has moved, so your copy now points at its new address:")
+    say("  " + new)
+    return True
+
+
+def hub_knock(gh: str, hub: dict, login: str) -> bool:
+    """Open the one issue in the lobby that asks the door to invite this account.
+
+    The lobby is public, so the knock carries the GitHub name and nothing else:
+    never the owner's own name, which is the first of the words they are about
+    to be asked to keep off the Hub (cold read, 24 October 2026). An open issue
+    already asking for the same account is not opened twice, and when the
+    lobby's list cannot be read no new knock is made."""
+    lobby = repo_slug(hub.get("lobby", ""))
+    if not lobby:
+        return False
+    title = f"join: {login}"
+    code, out = run([gh, "issue", "list", "-R", lobby, "--state", "open", "--limit", "200",
+                     "--json", "title"], timeout=60)
+    if code != 0:
+        say("  The Hub's door could not be read just now (no internet?). Nothing was sent; choose")
+        say("  this item again in a while.")
+        return False
+    try:
+        mine = [i for i in json.loads(out or "[]")
+                if str(i.get("title", "")).strip().lower() in (title.lower(),)
+                or str(i.get("title", "")).lower().startswith(f"join: {login.lower()},")]
+    except (ValueError, AttributeError):
+        mine = []
+    if mine:
+        say("  The knock is already at the door from before; it is not sent twice.")
+        return True
+    say(f"  Knocking at the Hub's door. The door is a public page, so the knock carries only")
+    say(f"  your GitHub name, {login}, and nothing else of yours.")
+    body = ("Opened by Moblee on behalf of this account, to join the Hub. "
+            "The keeper adds the label `approved` and the door sends the invitation.")
+    code, out = run([gh, "issue", "create", "-R", lobby, "--title", title, "--body", body], timeout=60)
+    if code != 0:
+        say("  The knock could not be left at the door: " + (out.strip().splitlines() or ["no answer"])[-1])
+        return False
+    return True
+
+
+def hub_wait_for_invitation(gh: str, slug: str, address: str, lobby: str | None = None) -> bool:
+    """Wait for the keeper, accepting the invitation the moment it arrives. True
+    once this account can read the Hub."""
+    poll = max(1, env_int("MOBLEE_HUB_POLL", 15))
+    limit = max(poll, env_int("MOBLEE_HUB_WAIT", 1800))
+    waited = 0
+    told = False
+    while waited <= limit:
+        inv = hub_invitation(gh, slug, lobby)
+        if inv is not None:
+            code, out = run([gh, "api", "-X", "PATCH", f"/user/repository_invitations/{inv}"], timeout=60)
+            if code != 0:
+                say("  The invitation came, but accepting it failed: " + (out.strip().splitlines() or ["no answer"])[-1])
+                return False
+            say("  The invitation came and has been accepted.")
+            for _ in range(6):   # GitHub can take a moment to let a new member in
+                if hub_reachable(address):
+                    return True
+                time.sleep(poll)
+            say("  Accepted, but GitHub has not opened the Hub to you yet. Choose this item again")
+            say("  in a minute; it carries on from here.")
+            return False
+        if hub_reachable(address):
+            return True
+        if not told:
+            say("  Waiting for the Hub's keeper to let you in. You can leave this window open;")
+            say("  it carries on by itself the moment they do. If you close it, choosing this")
+            say("  item again picks up where it stopped.")
+            told = True
+        time.sleep(poll)
+        waited += poll
+    say("  The keeper has not let you in yet. Nothing is lost: choose this item again later.")
+    return False
+
+
+def hub_ignore(v: Path) -> None:
+    """The wiki's git and Obsidian both leave the Hub alone."""
+    gi = v / ".gitignore"
+    try:
+        text = gi.read_text(encoding="utf-8")
+    except OSError:
+        text = ""
+    if not any(line.strip() in ("hub/", "/hub/", "hub", "/hub") for line in text.splitlines()):
+        # "/hub" and not "hub/": a folder-only pattern lets git track a link called hub.
+        if gi.exists():
+            backup(gi)
+        add = ("" if not text or text.endswith("\n") else "\n") + \
+              "# The Moblee Hub keeps its own history (GitHub), so the wiki does not track it\n/hub\n"
+        gi.write_text(text + add, encoding="utf-8")
+    app = v / ".obsidian" / "app.json"
+    try:
+        data = json.loads(app.read_text(encoding="utf-8")) if app.exists() else {}
+    except ValueError:
+        say("  Obsidian's settings file could not be read, so it was left alone; the Hub's")
+        say("  notes may show in Obsidian until it is put right.")
+        return
+    if not isinstance(data, dict):
+        return
+    filters = data.get("userIgnoreFilters")
+    if not isinstance(filters, list):
+        filters = []
+    if "hub/" not in filters:
+        if app.exists():
+            backup(app)
+        data["userIgnoreFilters"] = filters + ["hub/"]
+        app.parent.mkdir(parents=True, exist_ok=True)
+        app.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def hub_owner_name(v: Path) -> str | None:
+    try:
+        text = (v / "CLAUDE.md").read_text(encoding="utf-8")
+    except OSError:
+        try:
+            text = (v / "AGENTS.md").read_text(encoding="utf-8")
+        except OSError:
+            return None
+    import re
+    m = re.search(r"knowledge base for ([^\n]{1,80}?) where (?:Claude|the assistant) is the maintainer", text)
+    name = m.group(1).strip() if m else None
+    return None if not name or name == "[Your Name]" else name
+
+
+def hub_suggest_id(name: str) -> str:
+    """The first word of the name, in small letters and digits only."""
+    first = name.split()[0].lower() if name.split() else ""
+    word = "".join(c for c in first if c in HUB_ID_CHARS and c != "-")
+    return word[:24] or "me"
+
+
+def hub_join(folder: Path, v: Path, name_hint: str | None) -> str | None:
+    """The member file, the Mac's own record of who it is, and the private words.
+    Returns the member id, or None when the owner stopped."""
+    me = hub_me(folder)
+    if me and (folder / "members" / f"{me}.json").exists():
+        return me
+    rule("The Hub: your name in the group")
+    # The first word only, by default: the surname is the first of the words
+    # the owner is about to be asked to keep off the Hub.
+    default = (name_hint or "").split()[0] if (name_hint or "").split() else ""
+    say("  The other members see this name beside everything you share.")
+    name = ask(f"  What does the group call you?{' [' + default + ']' if default else ''} ")
+    if name is None:
+        return None
+    name = name.strip() or default
+    if not name:
+        say("  A name is needed to join. Choose this item again when you have one.")
+        return None
+    taken = {p.stem for p in (folder / "members").glob("*.json")}
+    mid = hub_suggest_id(name)
+    # Joined before, on another Mac or before the folder was copied again: the
+    # member file is already there, and is this owner's, not someone else's.
+    if mid in taken:
+        try:
+            there = json.loads((folder / "members" / f"{mid}.json").read_text(encoding="utf-8")).get("name")
+        except (OSError, ValueError, AttributeError):
+            there = None
+        if isinstance(there, str) and there.strip().lower() == name.strip().lower() \
+                and yes(f"  The Hub already has a member called {there}, '{mid}'. Is that you?"):
+            state = folder / "app" / "state"
+            state.mkdir(parents=True, exist_ok=True)
+            (state / "me.json").write_text(json.dumps({"id": mid}) + "\n", encoding="utf-8")
+            return mid
+    while True:
+        if mid in taken:
+            say(f"  The short name '{mid}' is already someone else's.")
+            mid = ""
+        typed = ask(f"  A short name for you, used in the Hub's file names (small letters, digits, hyphens){' [' + mid + ']' if mid else ''} ")
+        if typed is None:
+            return None
+        typed = typed.strip().lower() or mid
+        if typed and set(typed) <= HUB_ID_CHARS and typed not in taken and len(typed) <= 24:
+            mid = typed
+            break
+        say("  That will not do: small letters, digits and hyphens only, and not one already taken.")
+        mid = ""
+    (folder / "members").mkdir(exist_ok=True)
+    member = {"id": mid, "name": name, "joined": datetime.date.today().isoformat(), "taken": []}
+    (folder / "members" / f"{mid}.json").write_text(json.dumps(member, indent=2) + "\n", encoding="utf-8")
+    state = folder / "app" / "state"
+    state.mkdir(parents=True, exist_ok=True)
+    (state / "me.json").write_text(json.dumps({"id": mid}) + "\n", encoding="utf-8")
+    words_file = folder / "tools" / "private-words.txt"
+    if not words_file.exists():
+        say("")
+        say("  Last, the words that must never leave this Mac in anything you share: your")
+        say("  surname, your family's names, the names of a coach, doctor or friend in your")
+        say("  wiki. Type them on one line with commas between them, or press Return to")
+        say("  add them later. They stay on this Mac; the Hub's checker sweeps for them.")
+        typed = ask("  Words: ") or ""
+        words = [w.strip() for w in typed.split(",") if w.strip()]
+        words += [w for w in name.split() if len(w) > 2 and w not in words]
+        words_file.parent.mkdir(parents=True, exist_ok=True)
+        words_file.write_text("".join(w + "\n" for w in words), encoding="utf-8")
+    return mid
+
+
+def install_hub():
+    v = vault_path()
+    if v is None:
+        say("  No wiki was found on this Mac to join the Hub from.")
+        return False
+    hub = hub_settings()
+    folder = v / "hub"
+    if folder.exists() and hub_remote(folder) is None:
+        say("  There is a folder called hub in your wiki that is not linked to GitHub. It is")
+        say("  left exactly as it is. Ask your assistant to look at it before trying again.")
+        return False
+    slug = repo_slug(hub["address"])
+    gh = gh_tool()
+    if slug:
+        ok, _ = check_github()
+        if not ok and not os.environ.get("MOBLEE_GH"):
+            say("  The Hub lives on GitHub, so GitHub comes first.")
+            if not install_github():
+                return False
+            gh = gh_tool()
+        if not gh:
+            say("  GitHub's tool is not on this Mac, so the Hub cannot be joined yet.")
+            return False
+        if run([gh, "auth", "setup-git"], timeout=60)[0] != 0:
+            say("  GitHub's sign-in could not be set up for git on this Mac. Choose the GitHub")
+            say("  item again, then this one.")
+            return False
+    rule("The Hub")
+    if not folder.exists():
+        if not hub_reachable(hub["address"]):
+            if not slug:
+                say("  The Hub's address does not answer: " + hub["address"])
+                return False
+            login = hub_login(gh)
+            if not login:
+                say("  Your GitHub name could not be read. Run the GitHub item again, then this one.")
+                return False
+            if hub_invitation(gh, slug, repo_slug(hub.get("lobby", ""))) is None:
+                if hub["join"] == "invite":
+                    say(f"  This Hub's keeper lets members in by hand. Send them your GitHub name,")
+                    say(f"  {login}, and this window waits for the invitation.")
+                else:
+                    if not hub_knock(gh, hub, login):
+                        return False
+                    if hub["join"] == "approve":
+                        say("  Your request is at the door. The Hub's keeper approves it with one press.")
+            if not hub_wait_for_invitation(gh, slug, hub["address"], repo_slug(hub.get("lobby", ""))):
+                return False
+        code, out = run(["git", "clone", hub["address"], str(folder)], timeout=600)
+        if code != 0:
+            say("  The Hub could not be copied to this Mac: " + (out.strip().splitlines() or ["no answer"])[-1])
+            return False
+        # Copied from an old address GitHub forwards: point it at the Hub's own,
+        # and join nothing whose own address GitHub does not confirm.
+        claimed = str((hub_manifest(folder) or {}).get("address") or "")
+        if claimed and not same_address(hub_remote(folder) or "", claimed) and not hub_follow_move(folder):
+            say("  The Hub gives an address that GitHub could not confirm as its home just now,")
+            say("  so nothing was sent. Choose this item again in a while; if it still cannot,")
+            say("  the check-up names it (F62).")
+            return False
+    else:
+        manifest = hub_manifest(folder) or {}
+        claimed = str(manifest.get("address") or "")
+        if claimed and not same_address(hub_remote(folder) or "", claimed) and not hub_follow_move(folder):
+            say("  Your hub folder points somewhere other than the Hub it says it is. It is left")
+            say("  as it is; the check-up names it (field guide F62).")
+            return False
+        code, out = run(["git", "-C", str(folder), "pull", "--rebase", "--autostash"], timeout=300)
+        if code != 0:
+            say("  The Hub could not be brought up to date just now (no internet?). Carrying on.")
+        # The pull may bring a hub.json that names a new address (the Hub moved
+        # since this copy was made): follow it now rather than at the next run,
+        # and stop, as before the pull, when GitHub does not confirm the move.
+        claimed = str((hub_manifest(folder) or {}).get("address") or "")
+        if claimed and not same_address(hub_remote(folder) or "", claimed) and not hub_follow_move(folder):
+            say("  The Hub now gives a new address, and GitHub could not confirm it as the")
+            say("  Hub's new home just now, so your hub folder is left as it is. Choose this")
+            say("  item again in a while; if it still cannot, the check-up names it (F62).")
+            return False
+    manifest = hub_manifest(folder)
+    if manifest is None:
+        say("  The Hub arrived without its hub.json, so this version of Moblee cannot use it.")
+        return False
+    hub_ignore(v)
+    mid = hub_join(folder, v, hub_owner_name(v))
+    if mid is None:
+        return False
+    member = f"members/{mid}.json"
+    if run(["git", "-C", str(folder), "config", "user.name"], timeout=30)[1].strip() == "":
+        # A fresh Mac may have no git identity, and a commit without one fails or
+        # prints git's long notice. The Hub's own folder gets one; nothing global.
+        login = hub_login(gh) if (gh and slug) else None
+        member_name = json.loads((folder / member).read_text(encoding="utf-8")).get("name") or mid
+        run(["git", "-C", str(folder), "config", "user.name", member_name], timeout=30)
+        run(["git", "-C", str(folder), "config", "user.email",
+             f"{login}@users.noreply.github.com" if login else f"{mid}@members.moblee.invalid"], timeout=30)
+    code, _ = hub_git(["-C", str(folder), "cat-file", "-e", f"@{{u}}:{member}"], timeout=30)
+    if code != 0:
+        if hub_git(["-C", str(folder), "rev-parse", "--abbrev-ref", "@{u}"], timeout=30)[0] != 0:
+            say("  The hub folder has no branch on GitHub to send to, so nothing was sent. Ask")
+            say("  your assistant to look at it (field guide F62).")
+            return False
+        code, out = hub_git(["-C", str(folder), "rev-list", "--count", "@{u}..HEAD"], timeout=30)
+        if code != 0 or out.strip() != "0":
+            # Other saves of the owner's are waiting to go. They are the
+            # assistant's to send with the owner's yes, not this item's.
+            say("  Other saves of yours in the Hub are waiting to be sent, so this item sends")
+            say("  nothing. Say 'check the hub' to your assistant, then choose this item again.")
+            return False
+        hub_git(["-C", str(folder), "add", "--", member], timeout=30)
+        hub_git(["-C", str(folder), "commit", "-q", "-m", f"hub: {mid} joined", "--", member], timeout=60)
+        code, out = hub_git(["-C", str(folder), "push", "-q"], timeout=300)
+        if code != 0:
+            hub_git(["-C", str(folder), "pull", "-q", "--rebase", "--autostash"], timeout=300)
+            code, out = hub_git(["-C", str(folder), "push", "-q"], timeout=300)
+        if code != 0:
+            say("  You are in, but your member file could not be sent to GitHub just now. Choose")
+            say("  this item again in a while; nothing is lost.")
+            return False
+    patcher = PACKAGE_ROOT / "scripts" / "patch-claude-md.py"
+    run([sys.executable, str(patcher), "--blocks-only", "--vault", str(v)], timeout=120)
+    say(f"  You are in the Hub as {mid}. Say 'open the hub' or 'check the hub' to your assistant.")
+    return True
+
+
 # --- the list, in the order it is shown ---------------------------------------
 
 def build_items() -> list:
@@ -1066,6 +2094,11 @@ def build_items() -> list:
              "Claude can read and work with your GitHub projects.",
              4, 40, "free (needs a free GitHub account)", needs=("homebrew",), signin="sign in to GitHub in your browser",
              install=install_github, check=check_github),
+        Item("hub", connect, "The Moblee Hub",
+             "The group's shared wiki of wikis: take what another member's wiki has (a tracker, a way of working) and share yours. Private, on GitHub; the Hub's keeper lets you in with one tap.",
+             4, 20, "free (needs the GitHub item, which this brings with it)", needs=("homebrew",),
+             signin="sign in to GitHub if you have not, then wait for the keeper's yes",
+             install=install_hub, check=check_hub),
         Item("chrome", connect, "Chrome, with your X, Instagram and YouTube",
              "Claude uses Chrome to read pages behind your own logins. It never posts without your yes.",
              5, 0, "free (installs Chrome if you do not have it)", needs=("homebrew",),
@@ -1109,9 +2142,31 @@ def build_items() -> list:
         Item("voice", paid, "Claude reads its replies aloud",
              "Spoken replies and a nudge when Claude is waiting on you. Mac voice free; ElevenLabs voice optional and paid.",
              3, 5, "free (paid voice optional)", install=install_voice, check=check_voice),
+        Item("alerts", connect, "Alerts on your phone",
+             "A line on your phone when a job of yours finishes or fails, through the free ntfy app. It names the file to look at and never sends it.",
+             3, 0, "free (the ntfy app on your phone)", signin="get the ntfy app on your phone and type one code",
+             install=install_alerts, check=check_alerts),
+        Item("reach", connect, "Reach your things from your phone",
+             "Open a thing built for you from your phone, over a private network of your own: Tailscale (recommended), or one you already have. Works while this Mac is awake.",
+             6, 100, "free (Tailscale's personal plan, or your own network)", needs=("homebrew",),
+             signin="sign in to Tailscale on this Mac and on your phone, or give this Mac's address",
+             install=install_reach, check=check_reach),
+        Item("thinking", habits, "Jobs that ask Claude while you are away",
+             "A scheduled job can ask Claude to think (a morning page, a weekly tidy). Needs a long-lived sign-in Claude makes for you; each run uses a little of your allowance.",
+             4, 0, "free (uses your Claude allowance)", signin="sign in once in the browser and paste a code",
+             install=install_thinking, check=check_thinking),
         Item("weekly", habits, "Weekly health check",
-             "The wiki checks itself every Saturday morning and tells you what needs attention.",
+             "The wiki checks itself every Saturday morning, makes a copy of its whole history outside the wiki, and tells you what needs attention.",
              1, 0, "free", install=install_weekly, check=check_weekly),
+        Item("tidy", habits, "The weekly tidy",
+             "After the Saturday check, Claude puts right what can safely be put right and lists the rest for you on one short page. Needs the item for jobs that ask Claude.",
+             1, 0, "free (one run a week of your Claude allowance)", install=install_tidy, check=check_tidy),
+        Item("morning", habits, "Your morning page",
+             "Each morning, or at the first wake after it, Claude writes you a page: what is on today, what moved, what is waiting, one thing worth doing. Needs the item for jobs that ask Claude.",
+             1, 0, "free (one run a day of your Claude allowance)", install=install_morning, check=check_morning),
+        Item("recall", habits, "Memory search",
+             "Your assistant finds pages by their words; this adds finding them by meaning. A question puts the closest sections in front of Claude first. A small model runs on this Mac; nothing leaves it.",
+             6, 400, "free (a 300 MB model on this Mac)", needs=("homebrew",), install=install_recall, check=check_recall),
         Item("lessons", habits, "The learning path",
              "Thirty-two short lessons, one an evening, with a 9 pm reminder.",
              1, 1, "free", install=install_lessons, check=check_lessons),
@@ -1209,7 +2264,7 @@ def choose(items: list, status: dict, preset: set | None, tick: set | None = Non
 # pictures. "hidden": only useful to someone who works in Terminal.
 HOW = {
     "news-brief": "silent", "trips": "silent", "x-capture": "silent",
-    "weekly": "silent", "lessons": "silent", "voice": "silent",
+    "weekly": "silent", "lessons": "silent", "voice": "silent", "tidy": "silent", "morning": "silent",
     "google": "clicks", "generation": "clicks",
     "vault-fn": "hidden",
 }
@@ -1341,6 +2396,198 @@ def save_state(status: dict, results: list, checked=None, **extra) -> None:
     STATE_FILE.write_text(json.dumps(state, indent=2) + "\n")
 
 
+# (0.14.0) What comes with every Moblee wiki, for the app's "Add more" screen:
+# the parts the installer always puts in, as the owner knows them. Each says what
+# it is for and, where there is one, what to say to the assistant to use it.
+# `open` names a part the app can open itself. These are not on the checklist:
+# a part that is missing is put back by the app's Repair, which runs the updater.
+CORE_PARTS = [
+    {"key": "guard", "title": "The safety guard",
+     "what": "Stops your assistant deleting or overwriting your files.", "say": "", "open": ""},
+    {"key": "save", "title": "Saving after every reply",
+     "what": "The wiki saves its own history after each answer, so any change can be undone.", "say": "", "open": ""},
+    {"key": "companion", "title": "The companion",
+     "what": "Sets things up with you and suggests what suits the way you work.", "say": "review my setup", "open": ""},
+    {"key": "brain", "title": "Big questions to your wiki",
+     "what": "Traces an idea through your pages, connects two subjects and tests a view against what you wrote.",
+     "say": "trace this idea across my wiki", "open": ""},
+    {"key": "wiki-capture", "title": "Saving a conversation",
+     "what": "Keeps a good answer or a passing thought in your wiki.", "say": "save this to the wiki", "open": ""},
+    {"key": "wiki-interview", "title": "Interviews",
+     "what": "Your assistant asks you questions and writes the page from your answers.", "say": "interview me about…", "open": ""},
+    {"key": "wiki-to-pdf", "title": "Pages as PDFs",
+     "what": "Turns a page of your wiki into a well-made PDF. It needs the \u201cPDF, Word, PowerPoint and Excel\u201d extra below.",
+     "say": "make a PDF of…", "open": ""},
+    {"key": "design-your-brand", "title": "Your own look",
+     "what": "Your colours, letters and monogram, used on your PDFs.", "say": "design my brand", "open": ""},
+    {"key": "galaxy", "title": "The wiki galaxy",
+     "what": "Every page a star and every link a line between them, in 3D in your browser.", "say": "galaxy", "open": "galaxy"},
+    {"key": "dashboard", "title": "The dashboard",
+     "what": "Your wiki at a glance in your browser, with charts and questions asked aloud.", "say": "", "open": "dashboard"},
+    {"key": "compact", "title": "Keeping the wiki light",
+     "what": "Trims the files your assistant reads at the start of every conversation.", "say": "compact the wiki", "open": ""},
+    {"key": "build", "title": "Building things for you",
+     "what": "Plans and builds small apps beside your wiki, from a wish in plain words.", "say": "build me…", "open": ""},
+]
+
+
+def _file_sha(path: Path) -> str | None:
+    import hashlib
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def _hook_commands(path: Path, event: str) -> list | None:
+    """The commands a settings or hooks file enters for one hook event, or None
+    when the file is there and cannot be read. Read as the check-up reads it:
+    the hook entries themselves, never the file as text, since a script's name
+    also appears in the permission rules beside them (cold read, 26 October
+    2026: the save looked switched on wherever those rules were)."""
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    hooks = data.get("hooks") if isinstance(data, dict) else None
+    entries = hooks.get(event) if isinstance(hooks, dict) else None
+    out = []
+    for entry in entries if isinstance(entries, list) else []:
+        for h in (entry.get("hooks") or []) if isinstance(entry, dict) else []:
+            if isinstance(h, dict):
+                out.append(str(h.get("command", "")))
+    return out
+
+
+def _names_file(command: str, wanted: Path) -> bool:
+    """Whether a hook's command runs this very file: the whole path, read back
+    the way a shell reads it, so a hook left pointing at a moved or renamed
+    wiki, or at a second wiki on the Mac, does not count."""
+    import shlex
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        words = [command]
+    for w in words:
+        try:
+            if os.path.realpath(Path(w).expanduser()) == os.path.realpath(wanted):
+                return True
+        except (OSError, ValueError):
+            continue
+    return False
+
+
+def parts_report() -> dict:
+    """(0.14.0) Read only, and quick: nothing is run, fetched or written. What
+    comes with every wiki and whether it is in place, and what the checklist
+    last saw of each extra. The app's "Add more" screen draws this."""
+    who = assistant_choice()
+    v = vault_path()
+    claude, chatgpt = who in ("claude", "both"), who in ("chatgpt", "both")
+    skill_dirs = ([HOME / ".claude" / "skills"] if claude else []) + ([HOME / ".agents" / "skills"] if chatgpt else [])
+
+    # A wiki on a different version from this Moblee is expected to hold
+    # different copies of the skills: present is all that can be said then.
+    try:
+        same_version = v is not None and (v / "VERSION").read_text().strip() == (PACKAGE_ROOT / "VERSION").read_text().strip()
+    except OSError:
+        same_version = False
+
+    def skill(name: str) -> str:
+        mine = PACKAGE_ROOT / "skills" / name / "SKILL.md"
+        states = []
+        for d in skill_dirs:
+            have = d / name / "SKILL.md"
+            if not have.is_file():
+                states.append("missing")
+            elif same_version and _file_sha(have) != _file_sha(mine):
+                states.append("differs")
+            else:
+                states.append("in")
+        for word in ("missing", "differs"):
+            if word in states:
+                return word
+        return "in" if states else "missing"
+
+    def combine(states: list) -> str:
+        """Every assistant the owner uses must have it. ChatGPT runs a hook only
+        once the owner has trusted it, which cannot be seen from here, so a hook
+        entered for ChatGPT is 'unseen', never 'in' (the check-up says the same)."""
+        for word in ("missing", "unseen"):
+            if word in states:
+                return word
+        return "in"
+
+    def guard() -> str:
+        states = []
+        for on, script, settings, trusted in (
+                (claude, HOME / ".claude" / "hooks" / "bash-guard.py", HOME / ".claude" / "settings.json", True),
+                (chatgpt, HOME / ".codex" / "hooks" / "bash-guard.py", HOME / ".codex" / "hooks.json", False)):
+            if not on:
+                continue
+            commands = _hook_commands(settings, "PreToolUse") or []
+            entered = script.is_file() and any(_names_file(c, script) for c in commands)
+            states.append(("in" if trusted else "unseen") if entered else "missing")
+        return combine(states)
+
+    def save() -> str:
+        if v is None or not (v / "scripts" / "turn-end-commit.py").is_file():
+            return "missing"
+        wanted = v / "scripts" / "turn-end-commit.py"
+        states = []
+        for on, settings, trusted in ((claude, HOME / ".claude" / "settings.json", True),
+                                      (chatgpt, HOME / ".codex" / "hooks.json", False)):
+            if not on:
+                continue
+            commands = _hook_commands(settings, "Stop") or []
+            entered = any(_names_file(c, wanted) for c in commands)
+            states.append(("in" if trusted else "unseen") if entered else "missing")
+        return combine(states)
+
+    core = []
+    for part in CORE_PARTS:
+        key = part["key"]
+        if key == "guard":
+            state = guard()
+        elif key == "save":
+            state = save()
+        elif key == "dashboard":
+            state = "in" if v is not None and (v / "dashboard" / "server.py").is_file() else "missing"
+        elif key == "galaxy":
+            state = skill("galaxy")
+            if state == "in" and (v is None or not (v / "scripts" / "wiki-galaxy" / "build.py").is_file()):
+                state = "missing"
+        elif (PACKAGE_ROOT / "skills" / key).is_dir():
+            state = skill(key)
+        else:
+            continue          # a part this Moblee does not carry is not listed
+        core.append(dict(part, state=state))
+
+    try:
+        record = json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else {}
+    except (OSError, ValueError):
+        record = {}
+    if not isinstance(record, dict):
+        record = {}
+    status = record.get("status") if isinstance(record.get("status"), dict) else {}
+    unseen = set(k for k in record.get("unseen", []) if isinstance(k, str)) if isinstance(record.get("unseen"), list) else set()
+    extras = {}
+    for it in build_items():
+        seen = status.get(it.key, "never")
+        if it.key in unseen or seen is None:
+            extras[it.key] = "unseen"
+        elif seen is True:
+            extras[it.key] = "on"
+        elif seen is False:
+            extras[it.key] = "off"
+        else:
+            extras[it.key] = "unknown"
+    checked = record.get("last_check") if isinstance(record.get("last_check"), str) else None
+    return {"assistant": who, "vault": bool(v), "checked": checked, "core": core, "extras": extras}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Connect a Moblee wiki to this Mac, its accounts and its tools.")
     ap.add_argument("--check", action="store_true", help="test everything and change nothing")
@@ -1350,6 +2597,7 @@ def main() -> int:
     ap.add_argument("--json", action="store_true", help="with --list: print the items as JSON, for the Moblee app")
     ap.add_argument("--yes", action="store_true", help="with --only: do not ask 'Start now?' (the Moblee app uses this after the owner presses an item's button)")
     ap.add_argument("--progress", action="store_true", help="also print one machine-readable line per item, for the Moblee app")
+    ap.add_argument("--parts", action="store_true", help="print, as JSON, what comes with the wiki and what was last seen of each extra; read only (0.14.0)")
     args = ap.parse_args()
 
     if platform.system() != "Darwin":
@@ -1366,9 +2614,12 @@ def main() -> int:
     global PROGRESS
     PROGRESS = args.progress
 
+    if args.parts:
+        print(json.dumps(parts_report(), indent=2))
+        return 0
     items = build_items()
     if args.list and args.json:
-        print(json.dumps([{"key": it.key, "title": it.title, "what": it.what, "minutes": it.minutes,
+        print(json.dumps([{"key": it.key, "group": it.group, "title": it.title, "what": it.what, "minutes": it.minutes,
                            "space_mb": it.space_mb, "cost": it.cost, "paid": it.cost.startswith("PAID"),
                            "needs": it.needs, "signin": it.signin, "how": how(it.key),
                            "steps": CLICKS.get(it.key, [])}
@@ -1421,7 +2672,10 @@ def main() -> int:
             saved = {}
         if not isinstance(saved, dict):
             saved = {}
-        status = {it.key: (it.check()[0] if it.key in preset else bool(saved.get(it.key, False))) for it in items}
+        # (0.14.0) An item the record has never named stays unnamed, rather than
+        # being written down as not working when nobody looked at it.
+        status = {it.key: (it.check()[0] if it.key in preset else bool(saved[it.key]))
+                  for it in items if it.key in preset or it.key in saved}
         checked = set(preset)
     else:
         say("Looking at what is already working (this can take a minute or two)...")

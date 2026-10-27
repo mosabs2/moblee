@@ -61,7 +61,7 @@ Answer yes. Your assistant continues.
 7. **Update the Index.** Because this is a new top-level page, it adds a one-line entry to the Domains section of `wiki/Index.md`: `[[Composting]]: home composting troubleshooting and practice.`
 8. **Refresh _context.md** if the new page changes the working state. On a brand-new vault, it does: this is your first content. Your assistant bumps the Last refreshed line and adds a paragraph to the Recent significant additions section.
 9. **Move the source.** `Clippings/Why Your Compost Bin Smells.md` moves to `Clippings/processed/Why Your Compost Bin Smells.md`.
-10. **Commit to git.** Your assistant runs `git add .` and `git commit -m "ingest: Why Your Compost Bin Smells, NYT"`. With Claude this is automatic. (In Cowork rather than Claude Code, this step is deferred to your next `vault` invocation.) With ChatGPT you are asked to approve the commit, because ChatGPT's sandbox protects the vault's `.git` folder. That is expected.
+10. **Commit to git.** Your assistant runs `git add .` and `git commit -m "ingest: Why Your Compost Bin Smells, NYT"`. With Claude this is automatic. (In Cowork rather than Claude Code, Cowork cannot run git itself, so it leaves the work unsaved; the wiki saves itself at the end of every reply, so your next conversation in the wiki picks that up as "changes found in the wiki".) With ChatGPT you are asked to approve the commit, because ChatGPT's sandbox protects the vault's `.git` folder. That is expected.
 
 ## Step 4: inspect the result
 
