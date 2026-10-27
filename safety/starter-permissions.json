@@ -1,9 +1,20 @@
 {
-  "_comment": "Starter permission rules for a Moblee vault. Merged (never replacing) into <vault>/.claude/settings.local.json by safety/install-safety.py. __VAULT__ is replaced with the vault's absolute path (which begins with /, so the rule form /__VAULT__ yields the //absolute/path form Claude Code expects). The allow list is broad only because the delete guard (bash-guard.py) inspects every shell command, and every script file a command runs, before it runs, whatever the allow list says.",
+  "_comment": "Starter permission rules for a Moblee vault. Merged (never replacing) into <vault>/.claude/settings.local.json by safety/install-safety.py. __VAULT__ is replaced with the vault's absolute path (which begins with /, so the rule form /__VAULT__ yields the //absolute/path form Claude Code expects); __HOME__ with the owner's home folder. The allow list is broad only because the delete guard (bash-guard.py) inspects every shell command, and every script file a command runs, before it runs, whatever the allow list says. From 0.12.0 the list also covers what a build needs (a package manager, a runtime, fetching, a repository of its own, a launcher, a port in use), and the builds' home ~/Apps is an additional directory, so a thing built outside the wiki is edited without a prompt per file. Installing software, loading a scheduled job and pushing to a remote still ask: those are the owner's acts.",
+  "defaultMode": "acceptEdits",
+  "_autoModeAllow_comment": "Written into ~/.claude/settings.json under autoMode.allow, which Claude's auto mode reads only from that file. Entries are plain sentences for the check that reviews actions in auto mode, not tool patterns.",
+  "autoModeAllow": [
+    "Moblee's check-up (scripts/moblee-doctor.py, run with --card or --card-file) may write its health card into the wiki's raw/ folder: the card carries counts, versions and verdicts about the wiki's own setup, and nothing of the owner's material or conversations.",
+    "Moblee's end-of-reply save (scripts/turn-end-commit.py) may stage and commit the wiki's own files to the wiki's own local git history at the end of a reply; it never pushes anywhere."
+  ],
+  "additionalDirectories": [
+    "__HOME__/Apps"
+  ],
   "allow": [
     "Read(/__VAULT__/**)",
     "Edit(/__VAULT__/**)",
-    "Write(/__VAULT__/**)",
+    "Read(~/.claude/skills/**)",
+    "Read(~/Apps/**)",
+    "Edit(~/Apps/**)",
     "Bash(git add:*)",
     "Bash(git commit:*)",
     "Bash(git log:*)",
@@ -15,6 +26,16 @@
     "Bash(git stash list:*)",
     "Bash(git config --get:*)",
     "Bash(git --version:*)",
+    "Bash(git init:*)",
+    "Bash(git clone:*)",
+    "Bash(git switch:*)",
+    "Bash(git checkout -b:*)",
+    "Bash(git branch:*)",
+    "Bash(git remote:*)",
+    "Bash(git fetch:*)",
+    "Bash(git pull:*)",
+    "Bash(git tag:*)",
+    "Bash(git worktree list:*)",
     "Bash(grep:*)",
     "Bash(rg:*)",
     "Bash(ls:*)",
@@ -50,12 +71,37 @@
     "Bash(bash:*)",
     "Bash(launchctl list:*)",
     "Bash(launchctl print:*)",
-    "Bash(claude --version:*)"
+    "Bash(claude --version:*)",
+    "Bash(npm:*)",
+    "Bash(npx:*)",
+    "Bash(node:*)",
+    "Bash(pip3:*)",
+    "Bash(curl:*)",
+    "Bash(chmod:*)",
+    "Bash(lsof:*)",
+    "Bash(kill:*)",
+    "Bash(osacompile:*)",
+    "Bash(plutil:*)",
+    "Bash(xattr -l:*)",
+    "Bash(gh auth status:*)",
+    "Bash(gh repo view:*)",
+    "Bash(gh api:*)",
+    "Bash(gh release view:*)",
+    "Bash(tailscale status:*)",
+    "Bash(tailscale ip:*)",
+    "Bash(pmset -g:*)",
+    "Bash(security find-generic-password:*)"
   ],
-  "deny": [
+  "_deny_comment": "From 0.12.0 deletion (rm, rmdir, unlink) and git restore are decided by the delete guard alone, which knows a build folder from the wiki; a rule here would refuse them everywhere before the guard could look. The rules below are the ones no folder ever needs. Rules listed under retired are Moblee's own earlier rules, taken back out of an existing wiki's settings by the installer.",
+  "retired": [
     "Bash(rm:*)",
     "Bash(rmdir:*)",
     "Bash(unlink:*)",
+    "Bash(git restore:*)",
+    "Write(/__VAULT__/**)",
+    "Write(/__VAULT__/.git/**)"
+  ],
+  "deny": [
     "Bash(trash:*)",
     "Bash(truncate:*)",
     "Bash(git reset --hard:*)",
@@ -65,14 +111,12 @@
     "Bash(git push --force-with-lease:*)",
     "Bash(git rebase:*)",
     "Bash(git filter-branch:*)",
-    "Bash(git restore:*)",
     "Bash(git stash drop:*)",
     "Bash(git stash clear:*)",
     "Bash(git branch -D:*)",
     "Bash(git branch -d:*)",
     "Bash(git reflog expire:*)",
     "Bash(git gc:*)",
-    "Edit(/__VAULT__/.git/**)",
-    "Write(/__VAULT__/.git/**)"
+    "Edit(/__VAULT__/.git/**)"
   ]
 }

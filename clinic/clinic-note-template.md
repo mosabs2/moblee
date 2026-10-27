@@ -3,7 +3,7 @@ date: <YYYY-MM-DD>
 type: Moblee clinic note
 round: <N>
 owner_assistant: <claude, chatgpt or both: ask the owner before writing; write "unknown" if not known, and Section 0 finds out>
-from: the assistant in the maintainer's vault
+from: the assistant that looks after Moblee
 to: the assistant in <owner's first name>'s vault
 assumes_pack_version: <e.g. 0.4.1; write "unknown" if not known, and Section 0 finds out>
 status: pending-execution

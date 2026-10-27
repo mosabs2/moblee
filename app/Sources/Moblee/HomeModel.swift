@@ -20,7 +20,7 @@ import AppKit
 @MainActor
 final class HomeModel: ObservableObject {
     enum How: String { case silent, terminal, clicks, hidden }
-    enum Kind: String { case item, skill, connection }
+    enum Kind: String { case item, skill, connection, job }
     enum TileState: Equatable { case waiting, running, done, failed, handedOver, blocked }
 
     struct Tile: Identifiable, Equatable {
@@ -44,6 +44,7 @@ final class HomeModel: ObservableObject {
             switch kind {
             case .skill: return "wand.and.stars"
             case .connection: return "link"
+            case .job: return "clock.badge.checkmark"
             case .item:
                 switch how {
                 case .silent: return "square.and.arrow.down.fill"
@@ -57,6 +58,8 @@ final class HomeModel: ObservableObject {
 
     @Published var tiles: [Tile] = []
     @Published var wikiVersion: String = ""
+    /// (v0.13.0) The group's Hub, when the wiki holds a real clone of it.
+    @Published var hub: Hub.Linked?
     @Published var packVersion: String = ""
     @Published var needsRepair = false
     @Published var repairFailed = false
@@ -69,6 +72,24 @@ final class HomeModel: ObservableObject {
     @Published var newerRelease: String?
     @Published var loaded = false
     @Published var explaining: Tile?
+    /// (0.14.0) The "Add more" screen is open: everything the wiki can have,
+    /// what is in place and what is not. Opened from the home screen and from
+    /// the end of an update; closed by its own Done.
+    @Published var addMoreOpen = false
+    /// (0.14.0) What `moblee-setup.py --parts` last said: the parts every wiki
+    /// comes with and whether each is in place, and what the checklist's own
+    /// record last saw of each extra. Nil until it has answered once.
+    @Published var parts: Parts?
+    /// (0.14.0) "Look again" is running the checklist's own check.
+    @Published var lookingAgain = false
+    /// (0.14.0) The parts report could not be read (usually Apple's tools wanting
+    /// a reinstall after a macOS upgrade): said plainly, not "Looking…" for ever.
+    @Published var partsUnreadable = false
+    /// (0.14.0) Extras the owner chose to add from the Add more screen. Kept apart
+    /// from `tiles`, which are Claude's suggestions and are read afresh from
+    /// requests.json every few seconds; these are the owner's own presses and
+    /// would be wiped by that reading.
+    @Published var chosen: [Tile] = []
     /// (v0.9.4) Which of the Terminal explanation's three pictures to open at.
     /// Only the picture-file drawing sets this; an owner always starts at the
     /// first, and the screen itself moves on from there.
@@ -105,6 +126,8 @@ final class HomeModel: ObservableObject {
     private var home: URL = FileManager.default.homeDirectoryForCurrentUser
     private var pack: URL?
     private var catalogue: [String: [String: Any]] = [:]
+    /// (0.14.0) The checklist's items in the order it lists them, for the Add more screen.
+    private(set) var catalogueOrder: [String] = []
     private var timer: Timer?
     private var activeObserver: NSObjectProtocol?
     private var tasks: [String: EngineTask] = [:]
@@ -153,6 +176,7 @@ final class HomeModel: ObservableObject {
         guard let vault else { loaded = true; return }
 
         wikiVersion = Self.read(vault.appendingPathComponent("VERSION"))
+        hub = Hub.linked(vault: vault)
         if let bundledPack { packVersion = Self.read(bundledPack.appendingPathComponent("VERSION")) }
         checkSafety()
         lookForNewerRelease()
@@ -220,6 +244,7 @@ final class HomeModel: ObservableObject {
             let list = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]]
             if code == 0, let list, !list.isEmpty {
                 for entry in list { if let k = entry["key"] as? String { self.catalogue[k] = entry } }
+                self.catalogueOrder = list.compactMap { $0["key"] as? String }
                 self.listUnreadable = false
             } else {
                 // Usually Apple's tools needing a reinstall after a macOS upgrade.
@@ -593,6 +618,148 @@ final class HomeModel: ObservableObject {
         return s.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }
     }
 
+    /// A tile for one of the checklist's own items, in the pack's own words:
+    /// nil for a key the pack does not list, or one the app cannot add. The
+    /// suggested tiles and the Add more screen both make theirs here. (0.14.0:
+    /// lifted out of `readRequests`, unchanged.)
+    func itemTile(_ key: String, why: String) -> Tile? {
+        guard let c = catalogue[key] else { return nil }
+        let how = How(rawValue: c["how"] as? String ?? "terminal") ?? .terminal
+        if how == .hidden { return nil }
+        let mb = c["space_mb"] as? Int ?? 0
+        let size = mb >= 1000 ? String(format: "%.1f GB", Double(mb) / 1000) : "\(mb) MB"
+        let paid = c["paid"] as? Bool ?? false
+        // Something that takes no room (a connection) says nothing about room: "0 MB" is noise.
+        let detail = "About \(c["minutes"] as? Int ?? 1) min · " + (mb > 0 ? "\(size) · " : "")
+            + (paid ? "can cost money" : "free")
+        var tile = Tile(kind: .item, key: key, title: c["title"] as? String ?? key,
+                        why: why, detail: detail, how: how, paid: paid)
+        // The pack's own words for the three cards; a list of any other shape is ignored.
+        if let steps = c["steps"] as? [[String]], steps.count == 3, steps.allSatisfy({ $0.count == 2 }) {
+            tile.steps = steps
+        }
+        return tile
+    }
+
+    /// (0.14.0) For the picture files and the logic checks only: the checklist's
+    /// list as the pack gives it, without a pack settled into place.
+    func useCatalogue(_ list: [[String: Any]]) {
+        catalogue = [:]
+        for entry in list { if let k = entry["key"] as? String { catalogue[k] = entry } }
+        catalogueOrder = list.compactMap { $0["key"] as? String }
+    }
+
+    /// (0.14.0) The checklist's own line on what an item is for, and its group.
+    func itemWhat(_ key: String) -> String { Self.plain(catalogue[key]?["what"] as? String ?? "", limit: 200) }
+    func itemGroup(_ key: String) -> String { catalogue[key]?["group"] as? String ?? "" }
+
+    /// (0.14.0) Ask the pack what is in place. Read only and quick: nothing is
+    /// run but the report itself.
+    func loadParts() {
+        guard let pack else { return }
+        EngineTask.output(of: "/usr/bin/python3",
+                          [pack.appendingPathComponent("scripts/moblee-setup.py").path, "--parts"],
+                          home: home) { [weak self] code, data in
+            guard let self else { return }
+            if code == 0, let fresh = Parts.parse(data) {
+                self.partsUnreadable = false
+                if fresh != self.parts { self.parts = fresh }
+                // A wiki the checklist has never looked at: look now, once, so
+                // that "not set up" is never said of something that is.
+                if fresh.checked == nil && !self.lookedThisOpening { self.lookAgain() }
+            } else if self.parts == nil {
+                self.partsUnreadable = true
+            }
+        }
+    }
+    private var lookedThisOpening = false
+
+    /// (0.14.0) "Look again": the checklist's own check, which tests every item
+    /// and changes nothing on the Mac (it saves its record and a report in the
+    /// wiki's outputs folder), then the parts report afresh.
+    func lookAgain() {
+        // Never beside something being added: the check and an add both write
+        // the checklist's record, and whichever finished last would win.
+        guard let pack, canLookAgain else { return }
+        lookedThisOpening = true
+        // A practice run asks nothing of the real Mac's tools.
+        guard !Practice.on else { return }
+        lookingAgain = true
+        EngineTask.output(of: "/usr/bin/python3",
+                          [pack.appendingPathComponent("scripts/moblee-setup.py").path, "--check"],
+                          home: home) { [weak self] _, _ in
+            guard let self else { return }
+            self.lookingAgain = false
+            self.refreshStates()
+            self.loadParts()
+        }
+    }
+
+    /// (0.14.0) Something is being added, from a suggested tile or this screen.
+    var somethingRunning: Bool {
+        tiles.contains { $0.state == .running } || chosen.contains { $0.state == .running }
+    }
+    var canLookAgain: Bool { !lookingAgain && !somethingRunning }
+
+    /// (0.14.0) Opened from the home screen or the end of an update.
+    func openAddMore() {
+        addMoreOpen = true
+        loadParts()
+    }
+
+    /// (0.14.0) The owner pressed Add on one of the checklist's items in the Add
+    /// more screen: the same three ways in as a suggested tile (on its own, in a
+    /// Terminal window, or by clicks inside Claude), with the same explanations.
+    func addFromList(_ key: String) {
+        // Not while the checklist is looking, and not a second time while the
+        // same item is already being added from a suggested tile.
+        guard !lookingAgain else { return }
+        if tiles.contains(where: { $0.kind == .item && $0.key == key && ($0.state == .running || $0.state == .handedOver) }) { return }
+        if let i = chosen.firstIndex(where: { $0.key == key }) {
+            guard chosen[i].state == .waiting || chosen[i].state == .failed || chosen[i].state == .handedOver else { return }
+            chosen[i].state = .waiting
+            chosen[i].note = ""
+            press(chosen[i])
+            return
+        }
+        guard var tile = itemTile(key, why: itemWhat(key)) else { return }
+        tile.asked = "add-more"
+        chosen.append(tile)
+        press(tile)
+    }
+
+    /// (0.14.0) What the Add more screen shows for one of the checklist's items:
+    /// a press in this opening of the app first, then the checklist's record.
+    func extraState(_ key: String) -> ExtraState {
+        // A suggested tile for the same item first, then a press on this screen,
+        // then the checklist's record.
+        for t in tiles.filter({ $0.kind == .item && $0.key == key }) + chosen.filter({ $0.key == key }) {
+            switch t.state {
+            case .running: return .adding
+            case .done: return .on
+            case .handedOver: return .handedOver(t.how)
+            case .failed, .blocked: if chosen.contains(where: { $0.id == t.id }) { return .failed(t.note) }
+            case .waiting: break
+            }
+        }
+        switch parts?.extras[key] {
+        case "on": return .on
+        case "off": return .off
+        case "unseen":
+            // Made by clicks inside Claude, where neither Moblee nor the check can
+            // see: the owner's own Done is the word on it.
+            return ownerSaidDone().contains { $0 == "item:\(key)" || $0.hasPrefix("item:\(key)@") } ? .on : .unseen
+        default: return .unknown
+        }
+    }
+
+    /// (0.14.0) "Done" on a row handed over to clicks inside Claude.
+    func doneFromList(_ key: String) {
+        if let t = chosen.first(where: { $0.key == key }) { markDone(t) }
+    }
+
+    enum ExtraState: Equatable { case on, off, unseen, unknown, adding, handedOver(How), failed(String) }
+
     private func readRequests() {
         guard let vault else { return }
         let list = (Self.json(vault.appendingPathComponent(".moblee/requests.json"))?["requests"] as? [[String: Any]]) ?? []
@@ -607,21 +774,8 @@ final class HomeModel: ObservableObject {
             var tile: Tile?
             switch kind {
             case .item:
-                guard let c = catalogue[key] else { continue }       // only the pack's own items
-                let how = How(rawValue: c["how"] as? String ?? "terminal") ?? .terminal
-                if how == .hidden { continue }
-                let mb = c["space_mb"] as? Int ?? 0
-                let size = mb >= 1000 ? String(format: "%.1f GB", Double(mb) / 1000) : "\(mb) MB"
-                let paid = c["paid"] as? Bool ?? false
-                // Something that takes no room (a connection) says nothing about room: "0 MB" is noise.
-                let detail = "About \(c["minutes"] as? Int ?? 1) min · " + (mb > 0 ? "\(size) · " : "")
-                    + (paid ? "can cost money" : "free")
-                tile = Tile(kind: .item, key: key, title: c["title"] as? String ?? key,
-                            why: why, detail: detail, how: how, paid: paid)
-                // The pack's own words for the three cards; a list of any other shape is ignored.
-                if let steps = c["steps"] as? [[String]], steps.count == 3, steps.allSatisfy({ $0.count == 2 }) {
-                    tile?.steps = steps
-                }
+                guard let made = itemTile(key, why: why) else { continue }   // only the pack's own items
+                tile = made
             case .skill:
                 guard Self.safeName(key) else { continue }
                 tile = Tile(kind: .skill, key: key, title: "A skill Claude wrote: \(key)",
@@ -631,6 +785,14 @@ final class HomeModel: ObservableObject {
                 guard !name.isEmpty else { continue }
                 tile = Tile(kind: .connection, key: name, title: "Connect \(name)",
                             why: why, detail: "A few clicks inside Claude", how: .clicks, paid: false)
+            case .job:
+                // (0.12.0) A built thing's scheduled job, switched on from here: the
+                // key is the thing's folder name under apps/, and the title comes
+                // from its own app.json, never from the request.
+                guard Self.safeName(key), let title = Self.jobTitle(for: key, vault: vault) else { continue }
+                tile = Tile(kind: .job, key: key, title: "Switch on \(title)",
+                            why: why, detail: "Runs on its own while this Mac is awake; a missed hour runs at the next wake",
+                            how: .silent, paid: false)
             }
             guard var t = tile, !seen.contains(t.id) else { continue }
             t.asked = Self.plain(r["asked"] as? String ?? "", limit: 20)
@@ -706,6 +868,14 @@ final class HomeModel: ObservableObject {
         // make the whole record unreadable and every added tile forget it was added.
         let status = ((Self.json(home.appendingPathComponent(".config/moblee/setup-state.json"))?["status"]
                        as? [String: Any]) ?? [:]).compactMapValues { $0 as? Bool }
+        // (0.14.0) An item chosen on the Add more screen and finished in a
+        // Terminal window is seen to be done the same way as a suggested one.
+        var newlyDone = false
+        for i in chosen.indices where chosen[i].state != .running && chosen[i].state != .done {
+            if status[chosen[i].key] == true { chosen[i].state = .done; newlyDone = true }
+            else if chosen[i].how == .clicks, ownerSaidDone().contains(chosen[i].doneKey) { chosen[i].state = .done; newlyDone = true }
+        }
+        if newlyDone && addMoreOpen { loadParts() }
         for i in tiles.indices where tiles[i].state != .running {
             switch tiles[i].kind {
             case .item:
@@ -725,8 +895,23 @@ final class HomeModel: ObservableObject {
                 }
             case .connection:
                 if tiles[i].state != .done, ownerSaidDone().contains(tiles[i].doneKey) { tiles[i].state = .done }
+            case .job:
+                // switched on means the scheduler file is in place under the owner's account
+                let placed = home.appendingPathComponent("Library/LaunchAgents/com.moblee.\(tiles[i].key).plist")
+                if tiles[i].state != .done, FileManager.default.fileExists(atPath: placed.path) { tiles[i].state = .done }
             }
         }
+    }
+
+    /// (0.12.0) The title of a built thing, from apps/<name>/app.json; nil when
+    /// there is no such thing, or no scheduler file to switch on.
+    static func jobTitle(for key: String, vault: URL) -> String? {
+        guard safeName(key) else { return nil }
+        let app = vault.appendingPathComponent("apps/\(key)", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: app.appendingPathComponent("com.moblee.\(key).plist").path),
+              let m = json(app.appendingPathComponent("app.json")) else { return nil }
+        let title = plain(m["title"] as? String ?? "", limit: 60)
+        return title.isEmpty ? nil : title
     }
 
     private func setState(_ id: String, _ s: TileState, note: String = "") {
@@ -736,6 +921,12 @@ final class HomeModel: ObservableObject {
                 tiles[i].note = note
             }
         }
+        // (0.14.0) The same item chosen on the Add more screen moves with it.
+        if let i = chosen.firstIndex(where: { $0.id == id }) {
+            chosen[i].state = s
+            chosen[i].note = note
+            if s == .done { loadParts() }
+        }
     }
 
     // MARK: pressing a tile's button
@@ -743,6 +934,7 @@ final class HomeModel: ObservableObject {
     func press(_ tile: Tile) {
         switch (tile.kind, tile.how) {
         case (.item, .silent): addSilently(tile)
+        case (.job, _): switchOnJob(tile)
         case (.skill, _):
             // Look at the draft again at this moment, so that what the owner is
             // shown is what would be added, even if the draft changed since.
@@ -777,6 +969,26 @@ final class HomeModel: ObservableObject {
                   if code == 0 && worked { self?.setState(tile.id, .done) }
                   else { self?.setState(tile.id, .failed, note: why) }
               })
+    }
+
+    /// (0.12.0) Switch a built thing's scheduled job on: the pack's own script
+    /// copies the scheduler file into place and asks the Mac's scheduler to
+    /// take it. The owner's press is the act; the assistant never runs this.
+    private func switchOnJob(_ tile: Tile) {
+        guard let pack, let vault, Self.safeName(tile.key) else { return }
+        setState(tile.id, .running)
+        EngineTask.output(of: "/usr/bin/python3",
+                          [pack.appendingPathComponent("scripts/job-switch.py").path,
+                           "--vault", vault.path, "--name", tile.key, "--on", "--json"],
+                          home: home) { [weak self] code, data in
+            guard let self else { return }
+            var why = "It could not be switched on. Tell Claude."
+            if let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let w = parsed["why"] as? String, !w.isEmpty {
+                why = Self.plain(w, limit: 160)
+            }
+            if code == 0 { self.setState(tile.id, .done) } else { self.setState(tile.id, .failed, note: why) }
+        }
     }
 
     /// After the owner has seen what the skill says it does and pressed Add.

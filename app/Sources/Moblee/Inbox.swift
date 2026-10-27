@@ -643,7 +643,11 @@ enum Inbox {
             return lines
         }
         if landing.anythingLanded {
-            lines.append("drop: \(landing.landed.count) thing(s) copied into the wiki's inbox "
+            // (v0.10.0) "thing(s)" asked its reader to pick the right word out of
+            // the brackets, which is a programmer's shortcut for not choosing, in
+            // a product whose own rules tell every assistant to use plain words.
+            let count = landing.landed.count
+            lines.append("drop: \(count) \(count == 1 ? "thing" : "things") copied into the wiki's inbox "
                          + "(no names here: what was dropped is the owner's own)")
         }
         for turned in landing.turnedAway {

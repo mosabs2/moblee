@@ -95,6 +95,15 @@ final class Clinic: ObservableObject {
     }
 
     @Published var state: State = .idle
+    /// (v0.13.0) What became of the owner's press on "Send it to ...", or nil before it.
+    @Published var sendResult: Hub.SendResult?
+    @Published var sending = false
+    /// The report as saved, so the same words can go to the Hub's keeper.
+    private(set) var reportText: String?
+    /// Bumped by forget, so a send that ends after Done never lands on the next check-up.
+    private var sendRun = 0
+    /// The owner's name as the report spells it, so the Hub's copy can carry their Hub name instead.
+    private var reportOwner: String?
 
     /// Where the report went, for the screen and for the Finder window.
     private var reportURL: URL?
@@ -115,6 +124,16 @@ final class Clinic: ObservableObject {
         var lines: [String] = []           // the card exactly as the check-up prints it
         var state: String = "healthy"      // healthy, unchecked or unwell
         var headline: String = ""
+        /// (v0.10.0) One line, in the check-up's own words: whether the wiki
+        /// saves itself after every reply. It is not a finding and has no
+        /// field-guide code of its own on the card; it is the one thing about
+        /// the wiki an owner asks about unprompted, and a finding that is right
+        /// never reaches the lists below. Empty where the check-up said nothing
+        /// on the matter (it found no wiki), and then nothing is drawn: see
+        /// `card_saving` in the check-up.
+        var saving: String = ""
+        /// (v0.13.0) Which Hub the wiki is in and its page's version, or empty outside one.
+        var hub: String = ""
         var wrong: [Row] = []
         var wrongTotal: Int = 0
         var unchecked: [Row] = []
@@ -157,6 +176,8 @@ final class Clinic: ObservableObject {
             card.lines = lines
             card.state = json["state"] as? String ?? "unwell"
             card.headline = json["headline"] as? String ?? ""
+            card.saving = json["saving"] as? String ?? ""
+            card.hub = json["hub"] as? String ?? ""
             card.wrong = rows("wrong")
             card.wrongTotal = json["wrong_total"] as? Int ?? card.wrong.count
             card.unchecked = rows("unchecked")
@@ -413,7 +434,28 @@ final class Clinic: ObservableObject {
         guard let text = try? String(contentsOf: vault.appendingPathComponent("wiki/_context.md"), encoding: .utf8)
         else { return nil }
         for line in text.split(separator: "\n", omittingEmptySubsequences: false) where line.contains("Last refreshed") {
-            return firstDate(in: String(line)) ?? "a date Moblee could not read"
+            // (v0.11.0) The brain skill writes this line as "19 October 2026
+            // 20:30", not as 2026-10-19, so on most wikis the first reader
+            // found nothing and the report said a date Moblee could not read.
+            // Both forms are read now.
+            return firstDate(in: String(line)) ?? firstProseDate(in: String(line)) ?? "a date Moblee could not read"
+        }
+        return nil
+    }
+
+    /// The first "19 October 2026" in a piece of text, as YYYY-MM-DD, or nothing.
+    /// Only the twelve English month names are known; a date in another form is
+    /// left for the caller to say it could not read.
+    nonisolated static func firstProseDate(in text: String) -> String? {
+        let months = ["january", "february", "march", "april", "may", "june", "july",
+                      "august", "september", "october", "november", "december"]
+        let words = text.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map { String($0) }
+        guard words.count >= 3 else { return nil }
+        for i in 0..<(words.count - 2) {
+            guard let day = Int(words[i]), (1...31).contains(day),
+                  let month = months.firstIndex(of: words[i + 1].lowercased()),
+                  let year = Int(words[i + 2]), (1900...2999).contains(year) else { continue }
+            return String(format: "%04d-%02d-%02d", year, month + 1, day)
         }
         return nil
     }
@@ -909,6 +951,8 @@ final class Clinic: ObservableObject {
                                       place: Self.kindOfPlace(vault: vault, home: home),
                                       ends: ends, today: Date())
                     let body = Self.report(card: card, trouble: trouble, facts: facts)
+                    self.reportText = body
+                    self.reportOwner = facts.owner
                     let name = Self.reportName(ownerKey: Self.ownerKey(from: facts.owner), on: facts.today)
                     var savedAs: String?
                     let url = Self.freeReport(in: rawFolder, named: name)
@@ -959,10 +1003,46 @@ final class Clinic: ObservableObject {
         }
     }
 
+    /// (v0.13.0) The owner's press on "Send it to <keeper>": the saved report
+    /// goes into the Hub's post office as a note of kind `report`. Only after a
+    /// report was saved, only once, and only to the keeper `hub.json` names.
+    func sendToKeeper(hub: Hub.Linked) {
+        guard !sending, sendResult == nil, let saved = reportText,
+              let to = Hub.recipient(hub) else { return }
+        // Everyone in the Hub can read the post office, so the copy sent there
+        // names the owner by the name the group already knows them by.
+        let text = Hub.withHubName(saved, owner: reportOwner, hubName: hub.meName ?? hub.me ?? "")
+        sending = true
+        let home = self.home
+        let practice = home != FileManager.default.homeDirectoryForCurrentUser
+        let mine = sendRun
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Hub.send(report: text, hub: hub, to: to.id, home: home, practice: practice)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard mine == self.sendRun else { return }
+                    self.sending = false
+                    self.sendResult = result
+                    if let vault = self.vault {
+                        Diary.write("check-up: " + (result == .sent ? "sent to the Hub's keeper"
+                                                    : result == .savedNotSent ? "put in the Hub, not yet sent"
+                                                    : "could not be put in the Hub"),
+                                    home: home, vault: vault)
+                    }
+                }
+            }
+        }
+    }
+
     /// Set aside for a fresh run: pressing the button again starts a new
     /// check-up rather than showing the last one's answer.
     func forget() {
         state = .idle
+        sendRun += 1
+        sendResult = nil
+        sending = false
+        reportText = nil
+        reportOwner = nil
         reportURL = nil
         rawFolder = nil
     }

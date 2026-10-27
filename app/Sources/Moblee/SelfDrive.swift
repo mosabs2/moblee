@@ -648,9 +648,8 @@ enum SelfDrive {
             canChangeAssistant: flow.homeModel.canChangeAssistant,
             wantsChatGPT: flow.homeModel.assistant.wantsChatGPT,
             newerRelease: flow.homeModel.newerRelease != nil && flow.homeModel.newerReleaseLineAllowed,
-            // (v0.9.6) The way into the example wiki is the second big button,
-            // and it is on this screen whenever the app carries the example.
-            showsExample: flow.hasExample)
+            // (0.14.0) The second big button is "Add more", on this screen always.
+            showsExample: true)
         say("and the screen's own list of its controls is: \(shouldBe.joined(separator: ", "))")
         // And then the keyboard is let go, exactly as the app lets it go when a
         // control it was on goes away (see `FocusedControl.letGoIfNothingTookIt`),
@@ -753,11 +752,24 @@ enum SelfDrive {
         // which was run and held; this is here for the first Mac that can run a
         // window again.
         if flow.hasExample {
+            // (0.14.0) The home screen's second big button is now "Add more", and
+            // the way into the example is that screen's own second big button.
+            window.makeFirstResponder(nil)
+            await pause(0.6)
+            let onAddMore = await tabUntil("second-button")
+            say("Tab reached Add more: \(onAddMore)")
+            await expect("Tab alone reaches Add more on the home screen") { onAddMore }
+            pressSpace()
+            await expect("and Space alone opens it", within: 5) { flow.homeModel.addMoreOpen }
+            await expect("and its list of what is in place is read", within: 20) {
+                flow.homeModel.parts.map { !$0.core.isEmpty } ?? false
+            }
+            await pause(1.0)
             window.makeFirstResponder(nil)
             await pause(0.6)
             let onTheWayIn = await tabUntil("second-button")
             say("Tab reached the way into the example wiki: \(onTheWayIn)")
-            await expect("Tab alone reaches the way into the example wiki") { onTheWayIn }
+            await expect("Tab alone reaches the way into the example wiki, inside Add more") { onTheWayIn }
             pressSpace()
             await expect("and Space alone opens it, on the page it opens on and not on the catalogue", within: 5) {
                 flow.example?.showing == .page(ExamplePages.firstPage)
@@ -801,8 +813,13 @@ enum SelfDrive {
             say("nothing spoke inside the example: \(Speaker.shared.speakingId == nil)")
             await expect("nothing spoke inside the example unasked") { Speaker.shared.speakingId == nil }
             await clickBigButton()
-            await expect("and the way out puts an owner who has a wiki back on the home screen", within: 5) {
-                flow.example == nil && flow.mode == .home
+            await expect("and the way out puts an owner back on the Add more screen they came from", within: 5) {
+                flow.example == nil && flow.mode == .home && flow.homeModel.addMoreOpen
+            }
+            await pause(1.0)
+            await clickBigButton()
+            await expect("and Done there puts them back on the home screen", within: 5) {
+                !flow.homeModel.addMoreOpen
             }
             await pause(1.0)
         } else {

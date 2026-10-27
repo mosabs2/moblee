@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import UniformTypeIdentifiers
 
 /// `--check-logic` (only with `--home <practice folder>`) checks the decisions
@@ -69,6 +70,28 @@ enum LogicCheck {
             let forBoth = wiki("both", real: ["CLAUDE.md"], links: ["AGENTS.md": "CLAUDE.md"])
             let forClaude = wiki("claude", real: ["CLAUDE.md"], links: [:])
             let twoFiles = wiki("two-real-files", real: ["CLAUDE.md", "AGENTS.md"], links: [:])
+
+            // --- (0.12.0) a built thing's job, switched on from a tile ---
+            // The title comes from the thing's own app.json, never from the
+            // request; no scheduler file, no tile; a key with a path in it, no tile.
+            let jobWiki = wiki("job-wiki", real: ["CLAUDE.md"], links: [:])
+            let demo = jobWiki.appendingPathComponent("apps/demo", isDirectory: true)
+            try? fm.createDirectory(at: demo, withIntermediateDirectories: true)
+            try? "{\"name\": \"demo\", \"title\": \"Tide Times\"}\n".write(to: demo.appendingPathComponent("app.json"), atomically: true, encoding: .utf8)
+            check("a built thing with no scheduler file offers no tile",
+                  HomeModel.jobTitle(for: "demo", vault: jobWiki) == nil)
+            try? "<plist/>\n".write(to: demo.appendingPathComponent("com.moblee.demo.plist"), atomically: true, encoding: .utf8)
+            check("with its scheduler file, the tile carries the thing's own title",
+                  HomeModel.jobTitle(for: "demo", vault: jobWiki) == "Tide Times")
+            check("a key that is not a plain name is refused",
+                  HomeModel.jobTitle(for: "../demo", vault: jobWiki) == nil
+                  && HomeModel.jobTitle(for: "demo/x", vault: jobWiki) == nil)
+            try? "{\"name\": \"demo\"}\n".write(to: demo.appendingPathComponent("app.json"), atomically: true, encoding: .utf8)
+            check("a thing with no title in its record offers no tile",
+                  HomeModel.jobTitle(for: "demo", vault: jobWiki) == nil)
+            let jobTile = HomeModel.Tile(kind: .job, key: "demo", title: "Switch on Tide Times", why: "", detail: "",
+                                         how: .silent, paid: false)
+            check("a job tile has a symbol of its own", jobTile.symbol == "clock.badge.checkmark")
             check("a real AGENTS.md with CLAUDE.md a link to it is read as a wiki for ChatGPT",
                   Assistant.inferred(vault: forChatGPT) == .chatgpt)
             check("and so is a real AGENTS.md whose link a sync tool dropped",
@@ -278,8 +301,20 @@ enum LogicCheck {
                   && Trust.emptyUntilOpened == "Until a folder has been opened, ChatGPT's Hooks page is empty.")
         check("the five steps are word for word as verified",
               Trust.steps == ["Open the ChatGPT menu and choose Settings", "Choose Hooks, under the heading Coding",
-                              "Open “User config”", "Press Trust beside the hook that ends bash-guard.py",
-                              "Turn its switch on"])
+                              "Open “User config”",
+                              "Press Trust beside each hook Moblee has entered: one ends bash-guard.py, which is the delete guard, and one ends turn-end-commit.py, which saves your wiki",
+                              "Turn each of their switches on"])
+        // (v0.10.0) The sentence above the steps names both hooks and says what
+        // each does, so the owner is never asked to trust a file the screen has
+        // not explained.
+        check("the sentence above the steps names the save as well as the guard",
+              TrustScreen.reasonSentence.contains("delete guard")
+              && TrustScreen.reasonSentence.contains("every reply"))
+        // (v0.10.0) Both of Moblee's hooks are named on the screen the owner
+        // actually reads while trusting them. An owner told about one of the two
+        // leaves the other untrusted, and the end-of-reply save then never runs.
+        check("the Trust steps name both of the hooks Moblee enters",
+              Trust.steps.contains { $0.contains("bash-guard.py") && $0.contains("turn-end-commit.py") })
         check("a guard seen not running sends the owner to the folder first, then the five steps",
               TrustScreen.notRunningSentence == "The guard is not running in ChatGPT yet."
                   && Trust.folderThenSteps
@@ -456,10 +491,24 @@ enum LogicCheck {
         check("anything but a plain version is refused, including addresses, paths and commands",
               hostile.allSatisfy { NewerRelease.version(fromTag: $0) == nil })
         func answer(_ o: [String: Any]) -> Data { (try? JSONSerialization.data(withJSONObject: o)) ?? Data() }
-        let app = [["name": "Moblee-0.9.3.zip"]]
+        let app = [["name": "Moblee-0.9.3.zip"], ["name": "appcast.xml"]]
         check("GitHub's answer for the latest release is read for its tag",
               NewerRelease.version(fromResponse: answer(["tag_name": "v0.9.3", "draft": false, "prerelease": false,
                                                          "assets": app])) == "0.9.3")
+        // (v0.15.0) The updater installs from the release's signed appcast, so a
+        // release carrying the zip without the appcast is not offered.
+        check("a release with the app but no appcast is not offered, since Install would find nothing",
+              NewerRelease.version(fromResponse: answer(["tag_name": "v0.9.3", "assets": [["name": "Moblee-0.9.3.zip"]]])) == nil)
+        // (v0.15.0) The updater's own rule, never backwards, checked with both numbers.
+        check("the updater takes only a version newer in both its build number and its version",
+              Updater.isNewer(build: 19, version: "0.15.1", than: 18, "0.15.0")
+              && Updater.isNewer(build: 20, version: "0.16.0", than: 18, "0.15.0")
+              && !Updater.isNewer(build: 18, version: "0.15.1", than: 18, "0.15.0")
+              && !Updater.isNewer(build: 19, version: "0.14.9", than: 18, "0.15.0")
+              && !Updater.isNewer(build: 19, version: "0.15.0", than: 18, "0.15.0")
+              && !Updater.isNewer(build: 17, version: "0.14.0", than: 18, "0.15.0")
+              && !Updater.isNewer(build: 19, version: "0.15.x", than: 18, "0.15.0")
+              && Updater.isNewer(build: 19, version: "0.10.0", than: 18, "0.9.9"))
         check("a draft or a pre-release is never offered",
               NewerRelease.version(fromResponse: answer(["tag_name": "v0.9.3", "draft": true, "assets": app])) == nil
               && NewerRelease.version(fromResponse: answer(["tag_name": "v0.9.3", "prerelease": true, "assets": app])) == nil)
@@ -481,6 +530,13 @@ enum LogicCheck {
               NewerRelease.offer(latest: "0.9.2", current: "0.9.2", setAside: nil) == nil
               && NewerRelease.offer(latest: "0.9.1", current: "0.9.2", setAside: nil) == nil)
         check("0.10.0 counts as newer than 0.9.9", NewerRelease.offer(latest: "0.10.0", current: "0.9.9", setAside: nil) == "0.10.0")
+        // (v0.10.0) Both comparisons read a version as numbers, never as text, so the
+        // ten in 0.10.0 is ten and not a one followed by a nought. Said of this
+        // release and the one before it, which is the comparison every 0.9.6 app on
+        // an owner's Mac is about to make.
+        check("0.10.0 counts as newer than 0.9.6, in both places that compare versions",
+              HomeModel.isNewer("0.10.0", than: "0.9.6") && Placement.newer("0.10.0", than: "0.9.6")
+              && !HomeModel.isNewer("0.9.6", than: "0.10.0") && !Placement.newer("0.9.6", than: "0.10.0"))
         check("Not now keeps that version away, and a newer one is offered again",
               NewerRelease.offer(latest: "0.9.3", current: "0.9.2", setAside: "0.9.3") == nil
               && NewerRelease.offer(latest: "0.9.4", current: "0.9.2", setAside: "0.9.3") == "0.9.4")
@@ -1300,7 +1356,7 @@ enum LogicCheck {
         let dropWrote = String(whole.dropFirst(diaryBefore.count))
         check("a drop writes itself into the install diary, the way a repair does",
               whole.hasPrefix(diaryBefore) && dropWrote.contains("--- Moblee drop ---")
-                  && dropWrote.contains("drop: 1 thing(s) copied into the wiki's inbox")
+                  && dropWrote.contains("drop: 1 thing copied into the wiki's inbox")
                   && dropWrote.contains("drop: one thing was not taken: it is a folder, and Moblee takes files"))
         check("and the diary carries no file name of what was dropped, because that is the owner's own content",
               !dropWrote.contains("Confidential") && !dropWrote.contains("Zarquith")
@@ -2102,6 +2158,15 @@ enum LogicCheck {
                   // first word left the bare word "PARTIAL", which says nothing.
                   && ends.clinicFiles.count == 1
                   && ends.clinicFiles.first?.status == "EXECUTED 2026-09-24")
+        // (v0.11.0) The refresh line as the brain skill writes it, in words. The
+        // first owner's report back from a 0.10.0 wiki said a date Moblee could
+        // not read, because only 2026-10-19 was read and the line said
+        // "19 October 2026 20:30".
+        check("a refresh date written in words is read, and one in no known form is said to be unreadable",
+              Clinic.firstProseDate(in: "Last refreshed: 19 October 2026 20:30 +01 BST, for the workday") == "2026-10-19"
+                  && Clinic.firstProseDate(in: "Last refreshed: 1 may 2027") == "2027-05-01"
+                  && Clinic.firstProseDate(in: "Last refreshed: [Date], initial setup") == nil
+                  && Clinic.firstProseDate(in: "Last refreshed: 32 October 2026") == nil)
         // (v0.9.6) A report of Moblee's own is not a clinic note and is not
         // listed as one. The companion is told never to move a report out of
         // `raw/`, so without this every round would list the rounds before it as
@@ -2235,6 +2300,19 @@ enum LogicCheck {
                   && ClinicScreen.said(poorlyCard).contains(poorlyCard.wrong[0].line)
                   && ClinicScreen.said(poorlyCard).contains("and 1 more")
                   && ClinicScreen.said(poorlyCard).hasSuffix(Clinic.sendIt))
+        // (v0.10.0) The one line about the wiki saving itself after every reply.
+        // It comes out of the card the check-up hands over, in the check-up's
+        // own words, and the app writes none of it: a card that carries no such
+        // line is not given one here.
+        var savingCard = healthyCard
+        savingCard.saving = "The wiki saves itself after every reply."
+        check("the card's line about the wiki saving itself is shown and read out, in the check-up's own words",
+              ClinicScreen.said(savingCard).contains(savingCard.saving))
+        check("and a card the check-up gave no such line is not given one by the app",
+              healthyCard.saving.isEmpty && !ClinicScreen.said(healthyCard).contains("saves itself"))
+        check("the card as a program reads it carries that line",
+              Clinic.Card.read("{\"lines\": [\"one\"], \"saving\": \"The wiki saves itself after every reply.\"}")?.saving
+                  == "The wiki saves itself after every reply.")
         // (v0.9.6) It used to end "all of them in the report", and the report
         // does not hold all of them: the card the check-up hands over carries
         // five findings at most. The screen must not oversell the file the owner
@@ -2611,7 +2689,7 @@ enum LogicCheck {
             let wayIn = ring.firstIndex(of: "second-button") ?? -1
             let lastTile = ring.lastIndex { $0.hasPrefix("listen-tile-") } ?? -1
             let quietWords = ring.firstIndex(of: "quiet") ?? -1
-            check("on the home screen it is a second big button, which the keyboard reaches after the cards and before the quiet lines",
+            check("on the home screen the second big button (Add more, from 0.14.0) is reached after the cards and before the quiet lines",
                   wayIn > lastTile && lastTile >= 0 && wayIn < quietWords)
             let fromInstall = Flow()
             fromInstall.mode = .install
@@ -2641,6 +2719,278 @@ enum LogicCheck {
                       && !fm.fileExists(atPath: home.appendingPathComponent("Sam Wiki").path))
         } else {
             check("the example wiki is inside the app", false)
+        }
+
+        // --- (v0.13.0) the Hub: what counts as joined, who a check-up goes to, and the send ---
+        do {
+            let fm = FileManager.default
+            let yard = home.appendingPathComponent("logic-check/hub", isDirectory: true)
+            try? fm.createDirectory(at: yard, withIntermediateDirectories: true)
+            func gitRun(_ args: [String]) -> Bool {
+                let p = Process()
+                p.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+                p.arguments = args
+                var env = EngineTask.environment(home: home)
+                env["GIT_TERMINAL_PROMPT"] = "0"
+                p.environment = env
+                p.standardOutput = FileHandle.nullDevice
+                p.standardError = FileHandle.nullDevice
+                do { try p.run() } catch { return false }
+                p.waitUntilExit()
+                return p.terminationStatus == 0
+            }
+            func put(_ text: String, _ url: URL) {
+                try? fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try? text.write(to: url, atomically: true, encoding: .utf8)
+            }
+            let noHub = yard.appendingPathComponent("no-hub", isDirectory: true)
+            try? fm.createDirectory(at: noHub, withIntermediateDirectories: true)
+            check("hub: a wiki with no hub folder has no Hub", Hub.linked(vault: noHub) == nil)
+            let copied = yard.appendingPathComponent("copied", isDirectory: true)
+            put("{\"name\": \"Test Hub\", \"keeper\": \"keeper\"}", copied.appendingPathComponent("hub/hub.json"))
+            check("hub: a hub folder copied without its history is no Hub, so nothing is offered",
+                  Hub.linked(vault: copied) == nil)
+
+            // a stand-in for GitHub: a bare repository, and the keeper's seed in it
+            let seed = yard.appendingPathComponent("seed", isDirectory: true)
+            put("{\"name\": \"Test Hub\", \"keeper\": \"keeper\", \"version\": \"1.1.0\"}", seed.appendingPathComponent("hub.json"))
+            put("{\"id\": \"keeper\", \"name\": \"Kim\"}", seed.appendingPathComponent("members/keeper.json"))
+            put("app/state/\n", seed.appendingPathComponent(".gitignore"))
+            let bare = yard.appendingPathComponent("hub.git", isDirectory: true)
+            let ident = ["-c", "user.name=K", "-c", "user.email=k@x.invalid"]
+            let made = gitRun(["init", "-q", "-b", "main", seed.path])
+                && gitRun(["-C", seed.path] + ident + ["add", "-A"])
+                && gitRun(["-C", seed.path] + ident + ["commit", "-q", "-m", "seed"])
+                && gitRun(["clone", "-q", "--bare", seed.path, bare.path])
+            let wiki = yard.appendingPathComponent("wiki", isDirectory: true)
+            let clone = wiki.appendingPathComponent("hub").path
+            let cloned = made && gitRun(["clone", "-q", bare.path, clone])
+                && gitRun(["-C", clone, "config", "user.name", "Sam"])
+                && gitRun(["-C", clone, "config", "user.email", "sam@x.invalid"])
+            check("hub: the stand-in Hub was made and cloned", cloned)
+            let before = Hub.linked(vault: wiki)
+            check("hub: a real clone is the Hub, with its name and keeper read from hub.json",
+                  before?.name == "Test Hub" && before?.keeper == "keeper" && before?.keeperName == "Kim")
+            check("hub: before joining, no check-up can be sent (no member id on this Mac)",
+                  before != nil && before?.me == nil && Hub.recipient(before) == nil)
+            put("{\"id\": \"sam\"}", wiki.appendingPathComponent("hub/app/state/me.json"))
+            let joined = Hub.linked(vault: wiki)
+            check("hub: once joined, a check-up goes to the keeper, by the name the group calls them",
+                  Hub.recipient(joined)?.id == "keeper" && Hub.recipient(joined)?.name == "Kim"
+                      && Hub.sendTitle(to: "Kim") == "Send it to Kim")
+            if let j = joined {
+                let keeperSelf = Hub.Linked(folder: j.folder, name: j.name, me: "keeper", keeper: "keeper", keeperName: "Kim")
+                check("hub: the keeper's own Mac is not offered a note to itself", Hub.recipient(keeperSelf) == nil)
+                let noName = Hub.Linked(folder: j.folder, name: j.name, me: "sam", keeper: "keeper", keeperName: nil)
+                check("hub: a keeper with no member file is named by their id", Hub.recipient(noName)?.name == "keeper")
+            }
+            check("hub: an id with capitals, spaces or slashes is not an id",
+                  Hub.validId("Sam") == nil && Hub.validId("a b") == nil && Hub.validId("../x") == nil
+                      && Hub.validId("sam-2") == "sam-2")
+
+            let report = "---\ntype: Moblee clinic report\n---\n\n# Moblee check-up report\n\nThe wiki looks healthy.\n"
+            let when = Date(timeIntervalSince1970: 1_792_850_400)
+            let note = Hub.reportNote(report: report, me: "sam", to: "keeper", on: when)
+            check("hub: the note is a report from this member to the keeper, in the post office's format",
+                  note.text.hasPrefix("---\ntype: Moblee hub note\n") && note.text.contains("\nkind: report\n")
+                      && note.text.contains("\nfrom: sam\n") && note.text.contains("\nto: keeper\n")
+                      && note.text.contains("\ndo_not_ingest: true\n") && note.id.hasSuffix("-sam-checkup"))
+            check("hub: the note carries the saved report word for word", note.text.contains(report))
+
+            if let j = joined {
+                let first = Hub.send(report: report, hub: j, to: "keeper", home: home, on: when)
+                let second = Hub.send(report: report, hub: j, to: "keeper", home: home, on: when)
+                check("hub: the send reaches the stand-in GitHub", first == .sent && second == .sent)
+                let listed = Process()
+                listed.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+                listed.arguments = ["--git-dir", bare.path, "ls-tree", "-r", "--name-only", "main"]
+                let out = Pipe()
+                listed.standardOutput = out
+                listed.standardError = FileHandle.nullDevice
+                try? listed.run()
+                listed.waitUntilExit()
+                let names = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                check("hub: two sends in one minute are two notes, the second never over the first",
+                      names.contains("post/\(note.id).md") && names.contains("post/\(note.id)-2.md"))
+                check("hub: nothing else of the Hub was sent (the Mac's own member id stays on the Mac)",
+                      !names.contains("app/state"))
+                _ = gitRun(["-C", j.folder.path, "remote", "set-url", "origin",
+                            yard.appendingPathComponent("nowhere.git").path])
+                let offline = Hub.send(report: report, hub: j, to: "keeper", home: home, on: when)
+                check("hub: with GitHub out of reach, the note is kept on this Mac to go later, and the screen says so",
+                      offline == .savedNotSent
+                          && fm.fileExists(atPath: j.folder.appendingPathComponent("post/\(note.id)-3.md").path)
+                          && Hub.sentSentence(.savedNotSent, to: "Kim").contains("next time"))
+                check("hub: the sentence after a send names the keeper",
+                      Hub.sentSentence(.sent, to: "Kim") == "Sent to Kim through the Hub.")
+            }
+            let cardText = "{\"lines\": [\"Moblee health card\"], \"state\": \"healthy\", \"headline\": \"h\", \"saving\": \"\", \"hub\": \"The wiki is in Test Hub as sam; the Hub's page is version 1.1.0.\", \"wrong\": [], \"unchecked\": [], \"actions\": []}"
+            check("hub: the card's Hub line is read from the check-up",
+                  Clinic.Card.read(cardText)?.hub.contains("version 1.1.0") == true)
+            check("hub: and a card from an older check-up, with no Hub line, reads as none",
+                  Clinic.Card.read("{\"lines\": [\"x\"], \"state\": \"healthy\"}")?.hub == "")
+        }
+
+
+        // --- (v0.13.0) the two films offered at the end of the install ---
+        do {
+            let fm = FileManager.default
+            let hex = Set("0123456789abcdef")
+            check("films: two of them, each with a name, a size and a 64-character fingerprint",
+                  Films.all.count == 2 && Set(Films.all.map { $0.id }).count == 2
+                      && Films.all.allSatisfy { $0.sha256.count == 64 && $0.sha256.allSatisfy { hex.contains($0) }
+                          && $0.bytes > 1_000_000 && $0.id.hasSuffix(".mp4") })
+            check("films: each is fetched from the release of this app's own version",
+                  Films.url(for: Films.all[0], version: "0.13.0")?.absoluteString
+                      == "https://github.com/mosabs2/moblee/releases/download/v0.13.0/moblee-film-what-moblee-does.mp4")
+            check("films: no address is made from a version that is not a plain number",
+                  Films.url(for: Films.all[0], version: "") == nil && Films.url(for: Films.all[0], version: "0.13/../x") == nil)
+            check("films: the cards say how long and how big, in plain words",
+                  Films.length(Films.all[0]) == "1 minute" && Films.length(Films.all[1]) == "2 minutes"
+                      && Films.megabytes(Films.all[0]) == "27 MB" && Films.megabytes(Films.all[1]) == "85 MB")
+            check("films: the offer and the screen's sentence",
+                  Films.offerTitle == "Watch two short films"
+                      && HandoffScreen.filmsSentence == "Two short films about Moblee. Press one to watch it.")
+
+            let yard = home.appendingPathComponent("logic-check/films", isDirectory: true)
+            try? fm.createDirectory(at: yard, withIntermediateDirectories: true)
+            let bytes = Data("a film, for the check".utf8)
+            let sha = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+            let small = Films.Film(id: "check-film.mp4", title: "Check", what: "w", seconds: 5, bytes: bytes.count, sha256: sha)
+            try? bytes.write(to: yard.appendingPathComponent(small.id))
+            check("films: a file with the published bytes matches", Films.matches(yard.appendingPathComponent(small.id), small))
+            let other = yard.appendingPathComponent("other.mp4")
+            try? Data("a different film, same length!".utf8).write(to: other)
+            check("films: any other bytes do not", !Films.matches(other, small))
+
+            let practiceHome = yard.appendingPathComponent("home", isDirectory: true)
+            // The fingerprint is checked off the main thread, so each answer is waited for.
+            func settled(_ f: FilmFetch) -> FilmFetch.State {
+                let end = Date().addingTimeInterval(10)
+                while f.state == .checking && Date() < end { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+                return f.state
+            }
+            let f1 = FilmFetch()
+            f1.begin(small, home: practiceHome, version: "0.13.0", practice: true, source: nil)
+            check("films: a practice run with no films folder fetches nothing and says it could not",
+                  settled(f1) == .failed)
+            let f2 = FilmFetch()
+            f2.begin(small, home: practiceHome, version: "0.13.0", practice: true, source: yard)
+            check("films: a practice run plays the film from the folder it was given",
+                  settled(f2) == .ready(yard.appendingPathComponent(small.id)))
+            let wrong = yard.appendingPathComponent("wrong", isDirectory: true)
+            try? fm.createDirectory(at: wrong, withIntermediateDirectories: true)
+            try? Data("not the film".utf8).write(to: wrong.appendingPathComponent(small.id))
+            let f3 = FilmFetch()
+            f3.begin(small, home: practiceHome, version: "0.13.0", practice: true, source: wrong)
+            check("films: a film that differs from the published one is never played", settled(f3) == .failed)
+            let kept = Films.cache(home: practiceHome)
+            try? fm.createDirectory(at: kept, withIntermediateDirectories: true)
+            try? bytes.write(to: kept.appendingPathComponent(small.id))
+            let f4 = FilmFetch()
+            f4.begin(small, home: practiceHome, version: "0.13.0", practice: true, source: nil)
+            check("films: a film already fetched is played from the Mac's caches, with nothing fetched again",
+                  settled(f4) == .ready(kept.appendingPathComponent(small.id)))
+            check("films: the caches folder is the Mac's own, under Library/Caches",
+                  kept.path.hasSuffix("Library/Caches/moblee-films"))
+        }
+
+        // (0.14.0) The Add more screen: what it reads, what each row says, and
+        // which button each row carries. Read from the pack's real list.
+        do {
+            let report = Data("""
+            {"assistant": "claude", "vault": true, "checked": "20261026-1700",
+             "core": [{"key": "guard", "title": "The safety guard", "what": "w", "say": "", "open": "", "state": "in"},
+                      {"key": "galaxy", "title": "The wiki galaxy", "what": "w", "say": "galaxy", "open": "galaxy", "state": "missing"},
+                      {"key": "brain", "title": "Big questions", "what": "w", "say": "trace", "open": "", "state": "differs"},
+                      {"key": "odd", "title": "Odd", "what": "w", "say": "", "open": "", "state": "sideways"},
+                      {"title": "no key", "state": "in"}],
+             "extras": {"hub": "on", "reach": "off", "google": "unseen", "film": "unknown", "weird": 3}}
+            """.utf8)
+            let parts = Parts.parse(report)
+            check("add more: the parts report is read, a part with an unknown state or no name left out",
+                  parts?.core.map(\.key) == ["guard", "galaxy", "brain"] && parts?.checked == "20261026-1700")
+            check("add more: an extra whose state is not plain words is left out",
+                  parts?.extras["weird"] == nil && parts?.extras["hub"] == "on")
+            check("add more: a report that is not the expected shape is no report",
+                  Parts.parse(Data("[]".utf8)) == nil && Parts.parse(Data("{not json".utf8)) == nil)
+            check("add more: only the parts not in place count as missing",
+                  parts?.missing.map(\.key) == ["galaxy", "brain"])
+            check("add more: each part's state in plain words",
+                  parts.map { $0.core.map { AddMore.partWord($0) } } == ["In your wiki", "Missing", "An older or changed copy"])
+            if let p = parts {
+                check("add more: Open on a part the app opens, Put back on one that is missing, nothing on an older or changed copy",
+                      AddMore.partButton(p.core[0], newerWiki: false, busy: false) == nil
+                          && AddMore.partButton(Parts.Part(key: "dashboard", title: "", what: "", say: "", open: "dashboard", state: "in"),
+                                                newerWiki: false, busy: false) == "Open"
+                          && AddMore.partButton(p.core[1], newerWiki: false, busy: false) == "Put back"
+                          && AddMore.partButton(p.core[2], newerWiki: false, busy: false) == nil)
+                check("add more: no Put back while something is running, or on a wiki newer than this Moblee, which says what will",
+                      AddMore.partButton(p.core[1], newerWiki: false, busy: true) == nil
+                          && AddMore.partButton(p.core[1], newerWiki: true, busy: false) == nil
+                          && AddMore.partWord(p.core[1], newerWiki: true) == "Missing. A newer Moblee puts it back")
+            }
+            check("add more: a part entered for ChatGPT, which cannot be seen to run, is said so, with no button",
+                  Parts.parse(Data(#"{"core":[{"key":"guard","title":"t","state":"unseen"}],"extras":{}}"#.utf8))
+                      .map { AddMore.partWord($0.core[0]) } == "Moblee cannot see whether ChatGPT runs this")
+            check("add more: the last look is given as a day and a time, and an odd stamp gives nothing",
+                  AddMore.lastLooked("20261026-1700") == "Last looked: 26 October, 17:00."
+                      && AddMore.lastLooked("yesterday") == nil && AddMore.lastLooked(nil) == nil)
+            check("add more: a part says what to say to the assistant only where it has words for it",
+                  parts.map { AddMore.sayLine($0.core[1], talksTo: "Claude") } == "Say \u{201C}galaxy\u{201D} to Claude."
+                      && parts.map { AddMore.sayLine($0.core[0], talksTo: "Claude") } == .some(nil))
+
+            let model = HomeModel()
+            let list = Snapshots.packList()
+            model.useCatalogue(list)
+            model.parts = parts
+            check("add more: the pack's list is read in the pack's own order, the hub and phone reach in it",
+                  !list.isEmpty && model.catalogueOrder.first == (list.first?["key"] as? String)
+                      && model.catalogueOrder.contains("hub") && model.catalogueOrder.contains("reach"))
+            check("add more: an item the app cannot add (hidden) gets no row",
+                  model.itemTile("vault-fn", why: "") == nil && model.itemTile("hub", why: "") != nil)
+            check("add more: every item the app can add belongs to one of the checklist's four groups",
+                  model.catalogueOrder.filter { model.itemTile($0, why: "") != nil }
+                      .allSatisfy { ["Connect your life", "Read and make things", "Paid, or with a paid option",
+                                     "Looking after the wiki"].contains(model.itemGroup($0)) })
+            check("add more: each extra's state comes from the checklist's record",
+                  model.extraState("hub") == .on && model.extraState("reach") == .off
+                      && model.extraState("google") == .unseen && model.extraState("film") == .unknown)
+            check("add more: set up has no button; not set up has Add; cannot-be-seen offers the way, not an Add",
+                  AddMore.extraButton(.on) == nil && AddMore.extraButton(.off) == "Add"
+                      && AddMore.extraButton(.unseen) == "Show me how" && AddMore.extraButton(.adding) == nil
+                      && AddMore.extraButton(.failed("x")) == "Try again")
+            check("add more: an item finished by clicks inside Claude has a Done of its own here",
+                  AddMore.extraButton(.handedOver(.clicks)) == "Done" && AddMore.extraButton(.handedOver(.terminal)) == "Open it again")
+            check("add more: cannot be seen is never said as not set up",
+                  AddMore.extraWord(.unseen) == "Moblee cannot see whether this is set up" && AddMore.extraWord(.off) == "Not set up")
+            check("add more: an item the record never named is 'not looked at yet', even after a check",
+                  model.extraState("never-named") == .unknown)
+            model.parts = Parts(assistant: "claude", checked: nil, core: [], extras: [:])
+            check("add more: with no check on record an extra is 'not looked at yet', never 'not set up'",
+                  model.extraState("hub") == .unknown && AddMore.extraWord(.unknown) == "Not looked at yet")
+            var film = model.itemTile("film", why: "")
+            film?.state = .running
+            if let film { model.chosen = [film] }
+            check("add more: an item being added from the list says so, whatever the record says",
+                  model.extraState("film") == .adding)
+            check("add more: while anything is being added there is no Look again",
+                  !model.canLookAgain)
+            model.chosen = []
+            var tileVideos = model.itemTile("videos", why: "")
+            tileVideos?.state = .running
+            if let tileVideos { model.tiles = [tileVideos] }
+            model.addFromList("videos")
+            check("add more: an item already being added from a suggested tile shows as being added, and is not added twice",
+                  model.extraState("videos") == .adding && model.chosen.isEmpty)
+            model.tiles = []
+            check("add more: it is the home screen's second big button, and nothing was added to the keyboard's round for it",
+                  AddMore.wayIn == "Add more" && HomeScreen.busiest().contains("second-button")
+                      && !HomeScreen.busiest().contains("add-more"))
+            check("add more: the read-aloud says how many parts are in place and how many extras are set up",
+                  AddMore.speech(parts: parts, groups: [("Connect your life", ["hub", "reach"])],
+                                 word: { $0 == "hub" ? "Set up" : "Not set up" }, title: { $0 }).plain
+                      .contains("Connect your life: 1 of 2 set up."))
         }
 
         print(failed == 0 ? "logic: every check held" : "logic: \(failed) check(s) FAILED")

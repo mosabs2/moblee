@@ -52,9 +52,9 @@ export MOBLEE_PRACTICE=1
 defaults write moblee.practice moblee.textSize -int 0 2>/dev/null
 
 "$BIN" --home "$WORK/home-draw" --snapshot "$WORK/screens" > "$WORK/draw.txt" 2>&1
-[[ "$(ls "$WORK/screens" 2>/dev/null | grep -c '\.png$')" == "88" ]] && ok "eighty-eight screens drawn to picture files ($WORK/screens)" || bad "eighty-eight screens drawn (see $WORK/draw.txt)"
+[[ "$(ls "$WORK/screens" 2>/dev/null | grep -c '\.png$')" == "96" ]] && ok "ninety-six screens drawn to picture files ($WORK/screens)" || bad "ninety-six screens drawn (see $WORK/draw.txt)"
 "$BIN" --dark --home "$WORK/home-draw" --snapshot "$WORK/screens-dark" > "$WORK/draw-dark.txt" 2>&1
-[[ "$(ls "$WORK/screens-dark" 2>/dev/null | grep -c '\.png$')" == "88" ]] && ok "and the same eighty-eight in dark mode ($WORK/screens-dark)" || bad "eighty-eight dark screens drawn (see $WORK/draw-dark.txt)"
+[[ "$(ls "$WORK/screens-dark" 2>/dev/null | grep -c '\.png$')" == "96" ]] && ok "and the same ninety-six in dark mode ($WORK/screens-dark)" || bad "ninety-six dark screens drawn (see $WORK/draw-dark.txt)"
 # (v0.9.4) The eleven added: how the move ends, in each of its ways (none of
 # which had ever been drawn), how an UPDATE ends, in each of its four ways (only
 # the running state had been drawn), and a skill wearing a Moblee name that no
@@ -134,9 +134,9 @@ fi
 # than a list of its own; a later version puts both appearances and both
 # directions on one page from the same switch.
 "$BIN" --rtl --home "$WORK/home-draw" --snapshot "$WORK/screens-rtl" > "$WORK/draw-rtl.txt" 2>&1
-[[ "$(ls "$WORK/screens-rtl" 2>/dev/null | grep -c '\.png$')" == "88" ]] && ok "and all eighty-eight again laid out right to left ($WORK/screens-rtl)" || bad "eighty-eight mirrored screens drawn (see $WORK/draw-rtl.txt)"
+[[ "$(ls "$WORK/screens-rtl" 2>/dev/null | grep -c '\.png$')" == "96" ]] && ok "and all ninety-six again laid out right to left ($WORK/screens-rtl)" || bad "ninety-six mirrored screens drawn (see $WORK/draw-rtl.txt)"
 "$BIN" --rtl --dark --home "$WORK/home-draw" --snapshot "$WORK/screens-rtl-dark" > "$WORK/draw-rtl-dark.txt" 2>&1
-[[ "$(ls "$WORK/screens-rtl-dark" 2>/dev/null | grep -c '\.png$')" == "88" ]] && ok "  and in dark mode too ($WORK/screens-rtl-dark)" || bad "eighty-eight mirrored dark screens drawn (see $WORK/draw-rtl-dark.txt)"
+[[ "$(ls "$WORK/screens-rtl-dark" 2>/dev/null | grep -c '\.png$')" == "96" ]] && ok "  and in dark mode too ($WORK/screens-rtl-dark)" || bad "ninety-six mirrored dark screens drawn (see $WORK/draw-rtl-dark.txt)"
 # A switch that drew the same picture twice would pass every count above, so
 # the key screens are required to have really come out different. These are the
 # ones the eye was put on: the welcome picture, the check-up, the name with an
@@ -380,7 +380,7 @@ grep -q "^logic: ok: a page is read aloud in its own words, with its marker and 
 # and reading the whole of it touches not one byte of the app's own bundle.
 grep -q "^logic: ok: and not one word anywhere on the example offers to use it, copy it, or start a wiki from it" "$WORK/logic.txt" && grep -q "^logic: ok:   and that list really would catch it" "$WORK/logic.txt" && grep -q "^logic: ok: reading the whole example, and following every link in it, changed not one file in it" "$WORK/logic.txt" && grep -q "^logic: ok:   and there is no copy of the example anywhere in the practice home" "$WORK/logic.txt" && ok "  it is strictly a thing to read: nothing offers to use it, nothing is copied anywhere, and reading all of it changed not one file" || bad "  the example must be read-only and never a template"
 grep -q "^logic: ok: a link inside the words carries Moblee's own scheme, and no other address is ever acted on" "$WORK/logic.txt" && ok "  and a link inside the words can open nothing at all outside the app" || bad "  a link in the example must open nothing outside the app"
-grep -q "^logic: ok: the way into the example says the same four words in both places it appears" "$WORK/logic.txt" && grep -q "^logic: ok: on the home screen it is a second big button" "$WORK/logic.txt" && grep -q "^logic: ok: and closing it puts them back at the install, on the screen they left" "$WORK/logic.txt" && grep -q "^logic: ok: an owner who already has a wiki is put back on the home screen" "$WORK/logic.txt" && ok "  the way in says the same words in both places, and closing it puts an owner with no wiki back at the install and an owner with one back at home" || bad "  the two ways in, and where closing the example goes"
+grep -q "^logic: ok: the way into the example says the same four words in both places it appears" "$WORK/logic.txt" && grep -q "^logic: ok: on the home screen the second big button (Add more, from 0.14.0)" "$WORK/logic.txt" && grep -q "^logic: ok: and closing it puts them back at the install, on the screen they left" "$WORK/logic.txt" && grep -q "^logic: ok: an owner who already has a wiki is put back on the home screen" "$WORK/logic.txt" && ok "  the way in says the same words in both places, and closing it puts an owner with no wiki back at the install and an owner with one back at home" || bad "  the two ways in, and where closing the example goes"
 # And the words on the two ways in really are the words the app draws.
 grep -qF 'static let wayIn = "See an example wiki"' "$here/../Sources/Moblee/ExampleWiki.swift" && grep -qF 'static let chrome = "Example wiki. Sam is invented."' "$here/../Sources/Moblee/ExampleWiki.swift" && ok "  in the words the screens themselves hold" || bad "  the example's own words"
 
@@ -598,7 +598,7 @@ grep -q "^self-drive: ok: Escape does what Not now does" "$WORK/drive.txt" && gr
 grep -q "^self-drive: ok: Tab alone reaches the way into the example wiki" "$WORK/drive.txt" && grep -q "^self-drive: ok: and Space alone opens it, on the page it opens on and not on the catalogue" "$WORK/drive.txt" && ok "the way into the example wiki is reached by Tab and opened by Space, on its welcome page" || bad "  the way into the example wiki, from the keyboard"
 grep -q "^self-drive: ok: Tab alone reaches a link on the page" "$WORK/drive.txt" && grep -q "^self-drive: ok: and Space alone follows it to that page" "$WORK/drive.txt" && ok "  and a link on a page is reached by Tab and followed by Space, with no mouse at all" || bad "  following a link in the example from the keyboard"
 grep -q "^self-drive: ok: Tab reaches the way back inside the example" "$WORK/drive.txt" && grep -q "^self-drive: ok: and Space alone goes back to the page before, not back through the install" "$WORK/drive.txt" && grep -q "^self-drive: ok: Tab reaches the list of every page" "$WORK/drive.txt" && ok "  back inside the example goes back a page and never a screen of the install, and the list of every page opens" || bad "  back, and the list of pages, on the real window"
-grep -q "^self-drive: ok: nothing spoke inside the example unasked" "$WORK/drive.txt" && grep -q "^self-drive: ok: and the way out puts an owner who has a wiki back on the home screen" "$WORK/drive.txt" && ok "  nothing speaks inside the example unasked, and the way out puts an owner who has a wiki back on the home screen" || bad "  leaving the example on the real window"
+grep -q "^self-drive: ok: nothing spoke inside the example unasked" "$WORK/drive.txt" && grep -q "^self-drive: ok: and the way out puts an owner back on the Add more screen they came from" "$WORK/drive.txt" && grep -q "^self-drive: ok: and Done there puts them back on the home screen" "$WORK/drive.txt" && ok "  nothing speaks inside the example unasked, the way out goes back to Add more, and its Done to the home screen" || bad "  leaving the example on the real window"
 grep -q "^self-drive: ok: Tab reaches Bigger text" "$WORK/drive.txt" && grep -q "^self-drive: ok: the words can be brought back to normal by the keyboard alone" "$WORK/drive.txt" && grep -q "^self-drive: ok: and Space makes the words bigger" "$WORK/drive.txt" && grep -q "^self-drive: ok: a third press puts the words back to normal" "$WORK/drive.txt" && ok "  Bigger text is reached and pressed by the keyboard, and goes round its three sizes" || bad "  Bigger text by the keyboard"
 # (v0.9.4) The window itself: fixed at 720 by 520 with no way to make it, or
 # the words in it, any bigger at all.
@@ -739,7 +739,7 @@ done
 osascript -e 'tell application "Moblee" to quit' >/dev/null 2>&1
 sleep 2; pkill -f "$APP/Contents/MacOS/Moblee" >/dev/null 2>&1
 [[ -f "$V2/raw/Cold 1.pdf" && -f "$V2/raw/Cold 2.pdf" && -f "$V2/raw/Cold 3.pdf" ]] && ok "  three files let go over the Dock icon of a Moblee that was not even open all land" || bad "  three files let go over the Dock icon of a Moblee that was not open"
-sed -n "$((DIARY_WAS + 1)),\$p" "$DIARY" | grep -q "drop: 3 thing(s) copied into the wiki's inbox" && ok "    and the diary says three, in one drop, rather than one drop of one" || bad "    the cold drop's diary line must say three"
+sed -n "$((DIARY_WAS + 1)),\$p" "$DIARY" | grep -q "drop: 3 things copied into the wiki's inbox" && ok "    and the diary says three, in one drop, rather than one drop of one" || bad "    the cold drop's diary line must say three"
 cmp -s "$V2/raw/Cold 2.pdf" "$COLD/Cold 2.pdf" && [[ -f "$COLD/Cold 1.pdf" && -f "$COLD/Cold 2.pdf" && -f "$COLD/Cold 3.pdf" ]] && ok "    and every one of the three is the same bytes as the original, which is still where it was" || bad "    the cold drop's copies and originals"
 "$BIN" --self-drive > "$WORK/refuse2.txt" 2>&1 &
 PID=$!; sleep 3

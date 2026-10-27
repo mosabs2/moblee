@@ -51,13 +51,61 @@ identity="$(security find-identity -v -p codesigning | grep "Developer ID Applic
 if [ -z "$identity" ]; then echo "No Developer ID Application certificate was found in the keychain."; exit 1; fi
 echo "Signing as: $identity"
 
+# (v0.15.0) The updater's key. The public half is in Info.plist; the private half
+# is in this Mac's keychain, where generate_keys put it, and nowhere else. A build
+# whose Info.plist key is missing, or differs from the keychain's, would ship an
+# app that refuses every future update, so it is stopped here. So is any test
+# setting left in Info.plist, and any key-shaped file in the repository.
+if [ -n "${MOBLEE_TEST_ED_KEY:-}${MOBLEE_TEST_VERSION:-}" ]; then
+    echo "A test setting (MOBLEE_TEST_ED_KEY or MOBLEE_TEST_VERSION) is set in this Terminal. Close it and use a new window. Nothing was built."
+    exit 1
+fi
+plist_key="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$(dirname "$here")/Info.plist" 2>/dev/null || true)"
+if [ -z "$plist_key" ] || [ "$plist_key" = "SET-BY-MAINTAINER" ]; then
+    echo "Info.plist has no update key yet (SUPublicEDKey). Run app/scripts/make-update-key.sh once. Nothing was built."
+    exit 1
+fi
+if /usr/libexec/PlistBuddy -c 'Print :NSAppTransportSecurity' "$(dirname "$here")/Info.plist" >/dev/null 2>&1; then
+    echo "Info.plist allows plain local connections (a test setting). Take it out. Nothing was built."
+    exit 1
+fi
+if git -C "$pack_root" ls-files | grep -iE '(ed25519|eddsa|sparkle).*(key|private)|\.pem$|private.?key' ; then
+    echo "The files above look like keys and are in the repository. Take them out. Nothing was built."
+    exit 1
+fi
+
 bash "$here/build-app.sh" universal
 app="$(cat "$out/latest.txt")"
 version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
+build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Contents/Info.plist")"
+# (v0.15.0) The program must be the one this source makes: it must carry the
+# updater. Releases 0.10 to 0.14 shipped a program from 27 September under new
+# version numbers (see build-app.sh), and this is the check that would have
+# caught it.
+if ! otool -L "$app/Contents/MacOS/Moblee" | grep -q "Sparkle.framework"; then
+    echo "The program in the built app does not carry the updater, so it is not this version's program. Nothing was signed."
+    exit 1
+fi
+sparkle_bin="$(dirname "$(find "$out/swiftpm/artifacts" -name generate_keys -path '*/bin/*' -maxdepth 5 | head -1)")"
+if [ ! -x "$sparkle_bin/generate_appcast" ]; then echo "Sparkle's tools were not found under $out/swiftpm/artifacts. Nothing was signed."; exit 1; fi
+keychain_key="$("$sparkle_bin/generate_keys" -p 2>/dev/null || true)"
+if [ "$keychain_key" != "$plist_key" ]; then
+    echo "The update key in Info.plist is not the one in this Mac's keychain."
+    echo "  Info.plist: $plist_key"
+    echo "  keychain:   ${keychain_key:-none found}"
+    echo "Every owner's app trusts the Info.plist key, so updates signed with any other would be refused. Nothing was signed."
+    exit 1
+fi
 
 # The hardened runtime is required for notarisation. The app needs no
 # exceptions to it: it runs the Mac's own bash and python3 on the pack's
 # scripts, which are data to those programs.
+# (v0.15.0) Sparkle's two helpers and the framework are signed first, inside
+# out, as Sparkle's documentation sets out (never --deep).
+fw="$app/Contents/Frameworks/Sparkle.framework"
+codesign --force --options runtime --timestamp --sign "$identity" "$fw/Versions/B/Autoupdate"
+codesign --force --options runtime --timestamp --sign "$identity" "$fw/Versions/B/Updater.app"
+codesign --force --options runtime --timestamp --sign "$identity" "$fw"
 codesign --force --options runtime --timestamp --sign "$identity" "$app"
 codesign --verify --strict --verbose=2 "$app"
 lipo -archs "$app/Contents/MacOS/Moblee"
@@ -72,4 +120,24 @@ xcrun stapler validate "$app"
 spctl --assess --type execute --verbose=2 "$app"
 
 ditto -c -k --keepParent "$app" "$stage/Moblee-$version.zip"
+
+# (v0.15.0) The signed list of updates that every owner's Moblee reads. Made in a
+# folder holding only this release's zip and its notes, so the list names this
+# version alone; generate_appcast reads the private key from the keychain (macOS
+# may ask once to allow it: Always Allow), signs the zip and the list itself, and
+# embeds the notes so they are covered by the same signature.
+feed="$stage/appcast"
+mkdir -p "$feed"
+cp "$stage/Moblee-$version.zip" "$feed/"
+notes="$(awk -v v="## v$version " 'index($0, v) == 1 {on = 1; next} on && /^## / {exit} on' "$pack_root/CHANGELOG.md")"
+if [ -z "$notes" ]; then echo "CHANGELOG.md has no section for $version. The app is ready but no update list was made."; exit 1; fi
+printf '%s\n' "$notes" > "$feed/Moblee-$version.md"
+"$sparkle_bin/generate_appcast" --embed-release-notes \
+    --download-url-prefix "https://github.com/mosabs2/moblee/releases/download/v$version/" \
+    --link "https://github.com/mosabs2/moblee/releases/tag/v$version" \
+    "$feed"
+grep -q "sparkle:edSignature" "$feed/appcast.xml" || { echo "The update list has no signature for the zip. Not ready."; exit 1; }
+grep -qE "sparkle:version>$build<|sparkle:version=\"$build\"" "$feed/appcast.xml" || { echo "The update list does not name build $build. Not ready."; exit 1; }
+cp "$feed/appcast.xml" "$stage/appcast.xml"
 echo "Ready to share: $stage/Moblee-$version.zip"
+echo "Its update list: $stage/appcast.xml (attach both to the release)"

@@ -13,6 +13,9 @@ struct HandoffScreen: View {
     /// With both assistants: which of the two has been opened so far.
     @State private var openedApps: Set<Assistant> = []
     @State private var showingReceipt = false
+    /// (v0.13.0) The two short films, in place of the three pictures, while open.
+    @State private var showingFilms = false
+    @State private var filmChosen: Films.Film?
 
     private var wikiFolderName: String {
         guard let p = install.vaultPath else { return flow.wikiName }
@@ -38,11 +41,13 @@ struct HandoffScreen: View {
 
     private var sentence: String {
         if showingReceipt { return "This is everything Moblee made on your Mac." }
+        if showingFilms { return filmChosen?.title ?? Self.filmsSentence }
         return Self.sentence(for: assistant, opened: opened)
     }
 
     private var spoken: String? {
         if showingReceipt { return nil }
+        if showingFilms { return filmChosen?.title ?? Self.filmsSentence }
         return Self.spoken(for: assistant, wiki: wikiFolderName)
     }
 
@@ -149,15 +154,17 @@ struct HandoffScreen: View {
         }
     }
 
+    static let filmsSentence = "Two short films about Moblee. Press one to watch it."
+
     private var buttonTitle: String {
-        if showingReceipt { return "Back" }
+        if showingReceipt || showingFilms { return "Back" }
         if opened { return "Finish" }
         return assistant == .chatgpt ? "Open ChatGPT" : "Open Claude"
     }
 
     /// The second large button: with both assistants, the one not opened yet.
     private var secondTitle: String? {
-        guard assistant == .both, !showingReceipt else { return nil }
+        guard assistant == .both, !showingReceipt, !showingFilms else { return nil }
         if !opened { return "Open ChatGPT" }
         if !openedApps.contains(.chatgpt) { return "Open ChatGPT" }
         if !openedApps.contains(.claude) { return "Open Claude" }
@@ -169,7 +176,7 @@ struct HandoffScreen: View {
             sentence: sentence,
             buttonTitle: buttonTitle,
             showsBack: false,
-            quietTitle: showingReceipt ? "Show the folder" : "What did Moblee make?",
+            quietTitle: showingFilms ? nil : (showingReceipt ? "Show the folder" : "What did Moblee make?"),
             quietAction: {
                 if showingReceipt, let p = install.vaultPath, !flow.isTestMode {
                     NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: p)])
@@ -183,7 +190,9 @@ struct HandoffScreen: View {
             speech: headline,
             action: act
         ) {
-            if showingReceipt {
+            if showingFilms {
+                FilmsPanel(chosen: $filmChosen)
+            } else if showingReceipt {
                 HStack(alignment: .top, spacing: Theme.pt(18)) {
                     HandoffCard(number: 1, symbol: "folder.fill", title: "Your wiki",
                                 detail: "“\(wikiOnItsOwn)”, inside “Wiki” in your home folder",
@@ -223,6 +232,16 @@ struct HandoffScreen: View {
                                          what: "the line about plans", size: 14)
                         }
                     }
+                    // (v0.13.0) Offered, never played by itself: two short films,
+                    // fetched from this version's release only when pressed.
+                    HStack(spacing: Theme.pt(6)) {
+                        QuietButton(title: Films.offerTitle, id: "watch-films") {
+                            withAnimation(.easeInOut(duration: 0.25)) { showingFilms = true }
+                        }
+                        ListenButton(id: "listen-watch-films", speech: Speech(Films.offerSaid),
+                                     what: "the small button", size: 13)
+                    }
+                    .padding(.top, Theme.pt(2))
                 }
                 .padding(.horizontal, Theme.pt(30))
             }
@@ -238,6 +257,13 @@ struct HandoffScreen: View {
     }
 
     private func act() {
+        if showingFilms {
+            // Back from a film goes to the two cards; Back from the cards, to the last step.
+            withAnimation(.easeInOut(duration: 0.25)) {
+                if filmChosen != nil { filmChosen = nil } else { showingFilms = false }
+            }
+            return
+        }
         if showingReceipt {
             withAnimation(.easeInOut(duration: 0.25)) { showingReceipt = false }
             return
