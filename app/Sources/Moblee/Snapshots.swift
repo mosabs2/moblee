@@ -90,6 +90,37 @@ enum Snapshots {
     /// or an image file kept by hand. app/scripts/make-icon.sh turns it into
     /// the .icns the app carries. It is a picture and not a screen, so it is
     /// never mirrored: `--rtl` does not reach it, and must not. (v0.9.4)
+    /// (0.14.0) The checklist's list, from the pack inside the app, the way the
+    /// home screen reads it. Empty when there is no pack (a bare build).
+    static func packList() -> [[String: Any]] {
+        guard let pack = Flow().bundledPack else { return [] }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        p.arguments = [pack.appendingPathComponent("scripts/moblee-setup.py").path, "--list", "--json"]
+        let out = Pipe()
+        p.standardOutput = out
+        p.standardError = FileHandle.nullDevice
+        guard (try? p.run()) != nil else { return [] }
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        return ((try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]]) ?? []
+    }
+
+    /// (0.14.0) A wiki with most of its parts in place, the dashboard missing,
+    /// and its extras in each of the states a row can show.
+    static let sampleParts = Parts(
+        assistant: "claude", checked: "20261026-1700",
+        core: [
+            .init(key: "guard", title: "The safety guard", what: "Stops your assistant deleting or overwriting your files.", say: "", open: "", state: "in"),
+            .init(key: "save", title: "Saving after every reply", what: "The wiki saves its own history after each answer, so any change can be undone.", say: "", open: "", state: "in"),
+            .init(key: "companion", title: "The companion", what: "Sets things up with you and suggests what suits the way you work.", say: "review my setup", open: "", state: "in"),
+            .init(key: "brain", title: "Big questions to your wiki", what: "Traces an idea through your pages, connects two subjects and tests a view against what you wrote.", say: "trace this idea across my wiki", open: "", state: "in"),
+            .init(key: "galaxy", title: "The wiki galaxy", what: "Every page a star and every link a line between them, in 3D in your browser.", say: "galaxy", open: "galaxy", state: "in"),
+            .init(key: "dashboard", title: "The dashboard", what: "Your wiki at a glance in your browser, with charts and questions asked aloud.", say: "", open: "dashboard", state: "missing"),
+            .init(key: "wiki-to-pdf", title: "Pages as PDFs", what: "Turns a page of your wiki into a well-made PDF.", say: "make a PDF of…", open: "", state: "differs"),
+        ],
+        extras: ["hub": "on", "reach": "off", "google": "unseen", "voice": "on", "github": "on", "alerts": "off"])
+
     private static func drawIcon(to file: URL) {
         let icon = ZStack {
             RoundedRectangle(cornerRadius: 228, style: .continuous)
@@ -236,6 +267,25 @@ enum Snapshots {
             configure(f); return f
         }
         draw(homeScene { $0.homeModel.tiles = sample }, "08-home-waiting", to: folder)
+        // (0.14.0) The Add more screen, with the pack's own list when the app
+        // carries one (it always does when released), so that what is drawn is
+        // the real list and not a sample of it.
+        let realList = Self.packList()
+        func addMoreScene(_ configure: (Flow) -> Void) -> Flow {
+            homeScene { f in
+                f.homeModel.useCatalogue(realList)
+                f.homeModel.addMoreOpen = true
+                f.homeModel.parts = Self.sampleParts
+                configure(f)
+            }
+        }
+        draw(addMoreScene { f in
+            var film = f.homeModel.itemTile("film", why: "") ?? HomeModel.Tile(kind: .item, key: "film", title: "Video editing", why: "", detail: "", how: .terminal, paid: false)
+            film.state = .handedOver
+            f.homeModel.chosen = [film]
+        }, "26a-add-more", to: folder)
+        draw(addMoreScene { f in f.homeModel.parts = nil; f.homeModel.lookingAgain = true }, "26b-add-more-looking", to: folder)
+        draw(addMoreScene { f in f.homeModel.assistant = .chatgpt }, "26c-add-more-chatgpt", to: folder)
         draw(homeScene { f in
             var t = sample; t[0].state = .done; t[1].state = .handedOver; t[2].state = .failed
             f.homeModel.tiles = t
@@ -243,6 +293,13 @@ enum Snapshots {
         draw(homeScene { _ in }, "10-home-nothing-waiting", to: folder)
         draw(homeScene { $0.homeModel.tiles = sample; $0.homeModel.assistant = .both }, "08b-home-waiting-both", to: folder)
         draw(homeScene { $0.homeModel.assistant = .chatgpt }, "10b-home-chatgpt", to: folder)
+        // (v0.13.0) A wiki in the group's Hub: "Open the hub" in the corner,
+        // above "Check my wiki". Made up, as every scene here is.
+        let sampleHub = Hub.Linked(folder: URL(fileURLWithPath: "/tmp/moblee-gallery/Wiki/hub"), name: "Moblee Hub",
+                                   me: "sam", keeper: "kim", keeperName: "Kim")
+        draw(homeScene { f in
+            f.homeModel.hub = sampleHub
+        }, "10c-home-in-a-hub", to: folder)
         draw(homeScene { f in f.mode = .update; f.askingAssistant = true }, "15a-update-asks-assistant", to: folder)
         // a wiki that a newer Moblee made: no Change, and no Repair from this app
         draw(homeScene { f in
@@ -423,15 +480,22 @@ enum Snapshots {
             f.clinic.state = state
             return f
         }
+        // (v0.10.0) Both cards carry the end-of-reply save's line, because a
+        // line that no fixture sets is drawn in none of the gallery's screens
+        // and so is never looked at in any text size, mode or direction. The
+        // healthy card takes the longest of the three wordings, which is the
+        // one that would be cut off first.
         let healthyCard = Clinic.Card(
             lines: ["Moblee health card, 26 September 2026"],
             state: "healthy",
             headline: "This wiki looks healthy. Nothing was found to be wrong.",
+            saving: "Whether the wiki saves itself after every reply cannot be told from here.",
             actions: ["Nothing to do. Run the check-up again next month."])
         let poorlyCard = Clinic.Card(
             lines: ["Moblee health card, 26 September 2026"],
             state: "unwell",
             headline: "This wiki needs attention: 4 things to look at. 1 more could not be checked.",
+            saving: "The wiki does not save itself after every reply.",
             wrong: [.init(code: "F13", line: "The wiki is in the Desktop folder, which iCloud copies."),
                     .init(code: "F29", line: "macOS stops jobs that run on their own from reading that folder."),
                     .init(code: "F02", line: "The delete guard is an older copy than this Moblee's.")],
@@ -447,6 +511,19 @@ enum Snapshots {
                                          savedAs: "clinic-report-sam-checkup-2026-09-24.md"))),
              "24c-clinic-problems", to: folder)
         draw(clinicScene(.noWiki), "24d-clinic-no-wiki", to: folder)
+        // (v0.13.0) In a Hub: the card's Hub line, the send button under the
+        // card, and the two things the screen can say after the press.
+        var hubCard = healthyCard
+        hubCard.hub = "The wiki is in Moblee Hub as sam; the Hub's page is version 1.1.2."
+        func hubClinic(_ result: Hub.SendResult?) -> Flow {
+            let f = clinicScene(.finished(.init(card: hubCard, savedAs: "clinic-report-sam-checkup-2026-10-24.md")))
+            f.homeModel.hub = sampleHub
+            f.clinic.sendResult = result
+            return f
+        }
+        draw(hubClinic(nil), "24i-clinic-in-a-hub", to: folder)
+        draw(hubClinic(.sent), "24j-clinic-sent-to-keeper", to: folder)
+        draw(hubClinic(.savedNotSent), "24k-clinic-not-sent-yet", to: folder)
         draw(clinicScene(.couldNotCheck(.noCheckup, savedAs: "clinic-report-sam-checkup-2026-09-24.md")),
              "24e-clinic-no-checkup", to: folder)
         // And the home screen with a dropped file still copying, where "Check my
@@ -464,6 +541,9 @@ enum Snapshots {
         let started = TextSize.shared.step
         TextSize.shared.drawAt(.biggest)
         draw(homeScene { $0.homeModel.tiles = sample }, "19a-biggest-home-waiting", to: folder)
+        draw(homeScene { f in
+            f.homeModel.useCatalogue(Self.packList()); f.homeModel.addMoreOpen = true; f.homeModel.parts = Self.sampleParts
+        }, "19j-biggest-add-more", to: folder)
         draw(homeScene { $0.homeModel.tiles = sample; $0.homeModel.explaining = sample[1] },
              "19b-biggest-explain-terminal", to: folder)
         draw(updateScene { f in f.install.needsCommit = true; f.install.phase = .needsCommit },

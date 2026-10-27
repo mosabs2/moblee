@@ -44,7 +44,9 @@ enum NewerRelease {
         if (object["draft"] as? Bool) == true || (object["prerelease"] as? Bool) == true { return nil }
         guard let v = version(fromTag: tag) else { return nil }
         let names = (object["assets"] as? [[String: Any]] ?? []).compactMap { $0["name"] as? String }
-        return names.contains("Moblee-\(v).zip") ? v : nil
+        // (v0.15.0) The updater installs from the release's signed appcast, so
+        // a release without one is not offered: Install would find nothing.
+        return names.contains("Moblee-\(v).zip") && names.contains("appcast.xml") ? v : nil
     }
 
     /// Where a look goes, or nowhere. A released app always asks GitHub. A

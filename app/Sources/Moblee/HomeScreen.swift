@@ -39,17 +39,24 @@ struct HomeScreen: View {
     /// The Trust screen is open: because the step is waiting, or because the
     /// owner pressed "Prove the guard". It stays until the owner leaves it.
     @State private var trustOpen = false
+    /// (v0.13.0) "Open the hub" was just pressed: say so, and take no second press for a moment.
+    @State private var openingHub = false
 
     private var showsTrust: Bool { (home.trustPending && !home.trustSetAside) || trustOpen }
     private var showsMain: Bool {
         home.explaining == nil && !home.updateAvailable && !home.needsRepair
-            && !home.showsForeignSkills && !showsTrust
+            && !home.showsForeignSkills && !showsTrust && !home.addMoreOpen
     }
 
     var body: some View {
         ZStack {
             if let tile = home.explaining {
                 ExplainScreen(tile: tile)
+            } else if home.addMoreOpen {
+                // (0.14.0) Everything the wiki can have. Over the repair and the
+                // update prompts too: it is opened on purpose, and its own Put
+                // back starts the same update.
+                AddMoreScreen()
             } else if home.updateAvailable {
                 updatePrompt
             } else if home.repairIsForANewerMoblee {
@@ -66,7 +73,8 @@ struct HomeScreen: View {
                 .onAppear { trustOpen = true }
             } else if home.assistant == .chatgpt {
                 // (v0.9.6) On this screen and the two below it, the second big
-                // button opens the example wiki; see `exampleTitle`.
+                // button is the way into everything the wiki can have (0.14.0;
+                // the example wiki before it); see `secondTitle`.
                 // The tiles are extras that Moblee sets up for Claude only. An
                 // owner who uses ChatGPT alone is told so once, plainly, in
                 // their place, and is never offered something that would do
@@ -74,7 +82,7 @@ struct HomeScreen: View {
                 ScreenFrame(sentence: "Connections and other extras are set up for Claude. "
                                 + "Moblee does not set them up for ChatGPT yet.",
                             buttonTitle: "Open ChatGPT", showsBack: false,
-                            secondTitle: exampleTitle, secondAction: exampleAction,
+                            secondTitle: secondTitle, secondAction: secondAction,
                             action: openChatGPT) {
                     Image(systemName: "bubble.left.and.bubble.right.fill")
                         .font(Theme.font(96, .regular, .default)).foregroundStyle(Theme.accent)
@@ -91,7 +99,7 @@ struct HomeScreen: View {
                 ScreenFrame(sentence: home.tiles.isEmpty ? "Nothing is waiting. Talk to Claude."
                                                          : "All added. Tell Claude it is done.",
                             buttonTitle: "Open Claude", showsBack: false,
-                            secondTitle: exampleTitle, secondAction: exampleAction,
+                            secondTitle: secondTitle, secondAction: secondAction,
                             action: openClaude) {
                     Image(systemName: home.tiles.isEmpty ? "bubble.left.and.bubble.right.fill" : "checkmark.circle.fill")
                         .font(Theme.font(96, .regular, .default))
@@ -106,7 +114,7 @@ struct HomeScreen: View {
                             showsBack: false,
                             quietTitle: home.nextTile == nil ? nil : "Open Claude",
                             quietAction: home.nextTile == nil ? nil : openClaude,
-                            secondTitle: exampleTitle, secondAction: exampleAction,
+                            secondTitle: secondTitle, secondAction: secondAction,
                             // (v0.9.5) A skill Claude wrote wears the name the
                             // owner asked for, in their own words, so the list is
                             // read in pieces rather than in one voice.
@@ -211,9 +219,10 @@ struct HomeScreen: View {
                       newerRelease: Bool, showsExample: Bool = false) -> [String] {
         var ring = ["bigger-text", "read-aloud"]
         for tile in shown { ring += RequestTile.stops(tile) }
-        // (v0.9.6) "See an example wiki" is the second big button, in the row of
-        // big buttons, which the keyboard reaches after the cards above it and
-        // before the three quiet lines along the bottom. The first big button is
+        // (v0.9.6) The second big button, in the row of big buttons, which the
+        // keyboard reaches after the cards above it and before the three quiet
+        // lines along the bottom. "See an example wiki" until 0.14.0, "Add
+        // more" from then; the example is now inside the Add more screen. The first big button is
         // not on this round at all and never has been: it is the window's default
         // action, pressed by Return from anywhere. The second one is not, so it
         // takes the keyboard like every other control.
@@ -258,18 +267,19 @@ struct HomeScreen: View {
     static func busiest() -> [String] {
         stops(shown: busiestTiles(), nextTileWaiting: true,
               canChangeAssistant: true, wantsChatGPT: true, newerRelease: true,
-              // (v0.9.6) A released Moblee always carries the example, so the
-              // busiest screen always has the way into it on it.
+              // (0.14.0) The second big button is "Add more", on every home
+              // screen of this kind, with or without the example.
               showsExample: true)
     }
 
-    /// (v0.9.6) The second big button on the ordinary home screen: the way into
-    /// the example wiki for an owner who already HAS a wiki. It is the same four
-    /// words as the way in on the welcome screen, and it is here as well as there
-    /// because knowing what a wiki is for is not something an install teaches. A
-    /// build with no pack behind it has no example, and then there is no button.
-    private var exampleTitle: String? { flow.hasExample ? ExampleReader.wayIn : nil }
-    private var exampleAction: (() -> Void)? { flow.hasExample ? { flow.openExample() } : nil }
+    /// (0.14.0) The second big button on the ordinary home screen: everything
+    /// the wiki can have, and what is in place. It took the place of the way
+    /// into the example wiki (v0.9.6), on Mohammed's word of 26 October 2026,
+    /// rather than add one more control to a screen already at the twenty the
+    /// check allows; the example is now the Add more screen's own second big
+    /// button, and still the welcome screen's for an owner with no wiki.
+    private var secondTitle: String? { AddMore.wayIn }
+    private var secondAction: (() -> Void)? { { home.openAddMore() } }
 
     static let claudeOnly = "These are set up for Claude. Moblee does not set them up for ChatGPT yet."
 
@@ -440,6 +450,24 @@ struct HomeScreen: View {
             // run under the quiet words in the middle of the window, and the two
             // touched. Above, it sits at the same height as those quiet words and
             // well clear of them, in the corner the reading ends at.
+            // (v0.13.0) On a wiki whose hub/ is a real clone, and nowhere
+            // else: the Hub's own page, started the way its README says. It
+            // opens in the browser and stops by itself when the tab closes.
+            if let hub = home.hub {
+                if openingHub {
+                    Text(Hub.openingSentence)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, Theme.pt(9)).padding(.vertical, Theme.pt(6))
+                } else {
+                    cornerButton(Hub.openTitle, id: "open-hub") {
+                        Hub.open(hub, vault: hub.folder.deletingLastPathComponent(), home: flow.home, practice: flow.isTestMode)
+                        openingHub = true
+                        // The page opens in the browser by itself; a second press
+                        // in the meantime would start a second page.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { openingHub = false }
+                    }
+                }
+            }
             cornerButton(Self.checkWiki, id: "check-wiki",
                          enabled: flow.canBeginClinic) { flow.beginClinic() }
             HStack(spacing: Theme.pt(2)) {
@@ -478,6 +506,7 @@ struct HomeScreen: View {
         // (v0.9.6) The check-up is on this line too, and this is the only thing
         // on the screen that says what its words do.
         said += " And a button: \(Self.checkWiki). It looks at your wiki and saves a report you can send."
+        if home.hub != nil { said += " And a button: \(Hub.openTitle). It opens the group's hub in your browser." }
         return Speech(said)
     }
 
@@ -487,12 +516,14 @@ struct HomeScreen: View {
     static let checkWiki = "Check my wiki"
 
     static func newerReleaseSaid(_ version: String) -> String {
-        "Moblee \(version) is out. There are two buttons beside it: Download, and Not now."
+        "Moblee \(version) is out. There are two buttons beside it: Install, and Not now."
     }
 
-    /// "Moblee 0.9.3 is out." with Download (the app itself, opened in the
-    /// browser; nothing is downloaded or run by this app) and Not now (this
-    /// version is not offered again).
+    /// "Moblee 0.9.3 is out." with Install and Not now (this version is not
+    /// offered again). (v0.15.0) Install hands over to the updater (`Updater`),
+    /// which shows what is new and, on the owner's Install there, replaces this
+    /// app and opens the new one. Until 0.14 the button was Download and opened
+    /// the zip in the browser, leaving the owner to put it in place.
     private func newerReleaseLine(_ version: String) -> some View {
         HStack(spacing: Theme.pt(2)) {
             // (v0.9.5) One control for the whole line, as the other corner has.
@@ -514,12 +545,10 @@ struct HomeScreen: View {
             Text("Moblee \(version) is out.")
                 .foregroundStyle(.secondary)
                 .padding(.trailing, Theme.pt(6))
-            cornerButton("Download", id: "download-newer") {
-                if !flow.isTestMode, let url = NewerRelease.downloadURL(for: version) {
-                    NSWorkspace.shared.open(url)
-                }
+            cornerButton("Install", id: "download-newer") {
+                if !flow.isTestMode || Updater.shared.practiceFeed != nil { Updater.shared.checkForUpdates() }
             }
-            .accessibilityLabel("Download Moblee \(version)")
+            .accessibilityLabel("Install Moblee \(version)")
             cornerButton("Not now", id: "newer-not-now") { home.setAsideNewerRelease() }
                 .accessibilityLabel("Not now, do not offer Moblee \(version) again")
         }
@@ -704,12 +733,12 @@ struct RequestTile: View {
                     // size these were the only small words left on the screen.
                     // (v0.9.4)
                     Button(action: press) {
-                        Text(tile.kind == .skill ? "Look" : "Add").font(Theme.font(14, .semibold))
+                        Text(tile.kind == .skill ? "Look" : (tile.kind == .job ? "Switch on" : "Add")).font(Theme.font(14, .semibold))
                     }
                     .buttonStyle(.borderedProminent).tint(Theme.accent).controlSize(.large)
                     .keyboardReachable(Self.buttonId(tile), corner: 6, press: press)
                 case .running:
-                    Label("Adding…", systemImage: "arrow.triangle.2.circlepath")
+                    Label(tile.kind == .job ? "Switching on…" : "Adding…", systemImage: "arrow.triangle.2.circlepath")
                         .foregroundStyle(Theme.waitingText)
                 case .handedOver:
                     HStack(spacing: Theme.pt(8)) {
@@ -926,8 +955,13 @@ struct UpdateScreen: View {
     @EnvironmentObject var home: HomeModel
     @EnvironmentObject var install: InstallRun
     @Environment(\.stillPicture) private var still
+    /// (v0.13.0) The two short films, offered once the update has finished, in
+    /// place of the tiles while open, as at the end of an install.
+    @State private var showingFilms = false
+    @State private var filmChosen: Films.Film?
 
     private var failed: Bool { if case .failed = install.phase { return true }; return false }
+    private var done: Bool { install.phase == .finished || install.phase == .needsCommit }
 
     var body: some View {
         ScreenFrame(
@@ -936,7 +970,8 @@ struct UpdateScreen: View {
             // refused, so "up to date" would be a lie — and it was the one the
             // owner used to be told, over a wiki whose update was never saved
             // into its history and whose own next commit would be refused too.
-            sentence: install.phase == .needsCommit
+            sentence: showingFilms ? (filmChosen?.title ?? HandoffScreen.filmsSentence)
+                : install.phase == .needsCommit
                 ? "Your wiki is updated, but the change was not saved into its history. Open your assistant and say: the Moblee update did not commit, please look and commit it."
                 // (v0.9.2) A step can finish while one part inside it does not,
                 // and the run used to end on a flat "up to date" over exactly
@@ -946,21 +981,36 @@ struct UpdateScreen: View {
                         ? "Your wiki is up to date, but one or two things in the update did not finish. Press Show what happened."
                         : "Your wiki is up to date.")
                 : (failed ? "The update stopped. Your pages were not touched." : "Updating your wiki…")),
-            buttonTitle: failed ? "Try again" : "Done",
+            buttonTitle: showingFilms ? "Back" : (failed ? "Try again" : "Done"),
             buttonEnabled: install.phase == .finished || install.phase == .needsCommit || failed,
             showsBack: false,
-            quietTitle: failed ? "Not now" : nil,
-            quietAction: failed ? { home.updateSetAside = true; backHome() } : nil,
+            // (0.14.0) Once it has finished, the way to everything else the wiki
+            // can have, which an update used to offer only as a question in a
+            // Terminal window.
+            // Not when the update has just asked for ChatGPT's trust: that
+            // screen comes first, and this one must not open over it.
+            quietTitle: failed ? "Not now" : (install.phase == .finished && !showingFilms && !install.trustNeeded ? AddMore.updateWayIn : nil),
+            quietAction: failed ? { home.updateSetAside = true; backHome() }
+                : (install.phase == .finished && !showingFilms && !install.trustNeeded ? { backHome(); home.openAddMore() } : nil),
             // Nine small pictures need a little less room than the six large
             // ones a first build shows, and giving back what they do not need
             // is what keeps this screen — which has the longest sentence in
             // the app — inside the window at the biggest size. (v0.9.4)
             pictureHeight: install.items.count > 6 ? 268 : 280,
             action: {
+                if showingFilms {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        if filmChosen != nil { filmChosen = nil } else { showingFilms = false }
+                    }
+                    return
+                }
                 if failed { start(); return }
                 backHome()
             }
         ) {
+            if showingFilms {
+                FilmsPanel(chosen: $filmChosen)
+            } else {
             VStack(spacing: Theme.pt(8)) {
                 LazyVGrid(columns: Array(repeating: GridItem(.fixed(Theme.pt(150)), spacing: Theme.pt(16)), count: 3), spacing: Theme.pt(8)) {
                     ForEach(install.items) { item in BuildTile(item: item, small: true) }
@@ -969,12 +1019,24 @@ struct UpdateScreen: View {
                 // offered whenever there is something to read about, not only on
                 // a failure. Before v0.9.1 a refused commit reached the owner as
                 // a green screen with no way through to the one file that said so.
-                if failed || install.phase == .needsCommit || install.partial {
+                if failed || install.phase == .needsCommit || install.partial || done {
                     HStack(spacing: Theme.pt(6)) {
-                        QuietButton(title: "Show what happened", action: { install.showDiary() })
-                        ListenButton(id: "listen-show-what-happened",
-                                     speech: Speech("Show what happened"),
-                                     what: "the small button", size: 13)
+                        if failed || install.phase == .needsCommit || install.partial {
+                            QuietButton(title: "Show what happened", action: { install.showDiary() })
+                            ListenButton(id: "listen-show-what-happened",
+                                         speech: Speech("Show what happened"),
+                                         what: "the small button", size: 13)
+                        }
+                        // (v0.13.0) Every owner who updates is offered the two
+                        // films, as a new owner is at the end of the install.
+                        if done {
+                            QuietButton(title: Films.offerTitle, id: "watch-films-update") {
+                                withAnimation(.easeInOut(duration: 0.25)) { showingFilms = true }
+                            }
+                            .padding(.leading, Theme.pt(8))
+                            ListenButton(id: "listen-watch-films-update", speech: Speech(Films.offerSaid),
+                                         what: "the small button", size: 13)
+                        }
                     }
                 }
             }
@@ -985,6 +1047,7 @@ struct UpdateScreen: View {
                 ListenButton(id: BuildScreen.listenId, speech: BuildScreen.listSpeech(install),
                              what: "the list")
                     .frame(width: Theme.pt(BuildScreen.stripWidth), alignment: .trailing)
+            }
             }
         }
         .onAppear {
