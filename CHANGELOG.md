@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.15.2 (28 October 2026)
+
+**Moblee no longer says something is missing when it is there.** Nothing changes in how you use Moblee, and your wiki is not touched.
+
+- **The safety guard shows as in your wiki.** On every Mac, the "Everything your wiki can have" screen said the safety guard was Missing, and Put back did not change it, although the guard was in place and working. The screen now reads the guard the way Moblee installs it.
+- **GitHub shows as set up when it is.** GitHub's tool is found wherever it was installed, including where the Hub's join note puts it. A sign-in GitHub no longer takes still shows as needing a new sign-in; but when GitHub cannot be reached, Moblee says it could not tell, rather than "not signed in".
+- **The Hub shows as joined when it is**, even if your copy still uses the Hub's address from before it moved (GitHub forwards it), or was joined over SSH.
+- **Plugins** show as set up from Claude's own record, even when Moblee cannot find Claude; **Mac apps** are found where Node from nodejs.org puts them; and **PDFs** count with the Python recorded for them, not only Homebrew's.
+- **"Could not check" is no longer "not set up".** When Moblee cannot ask (no connection, Claude not answering, a check that breaks), the screen says it cannot see, and offers to show you how rather than to install it again.
+- **The screen looks again by itself**, once each time Moblee is opened, when its last look is more than a day old or has never seen an item, so something you set up another way does not stay "Not set up". "Last looked" now shows the day and time. If a look does not finish, it says so; and Looking at everything stops after ten minutes rather than waiting for ever.
+- **Open the hub** appears as soon as you join the Hub, without going home or reopening Moblee.
+
+### For assistants and maintainers
+
+- `moblee-setup.py`: `_names_file` expands `$HOME` (the installer writes the guard as `python3 "$HOME/.claude/hooks/bash-guard.py"`); `gh_tool` also finds `~/Apps/github-cli/*/bin/gh`, newest by date (`newest_first`, also for the Claude app's engine); `gh_signed_in` checks a kept sign-in with `gh auth status` and, when that fails, `github_reachable` tells a revoked sign-in (False) from being offline (None); `same_address` compares GitHub owner/name, and `repo_slug` reads `ssh://`; `check_hub` counts an old address GitHub confirms as moved, unseen only when GitHub cannot be reached; `plugin_installed` reads `~/.claude/plugins/installed_plugins.json` first, counting only `scope: user`, and gives None only when it has neither that record nor a claude to ask; `weasyprint_ok` tries Homebrew's Python and the one in `~/.config/moblee/pdf-python` (`pdf_pythons`), while `install_documents` sets up and records Homebrew's only when it renders; `orchard_entry` looks in `/usr/local/lib/node_modules`; `env_with_brew` appends `/usr/local/bin`, `~/.local/bin` and the Claude app's engine folder after the PATH; `Item.check` turns an exception into unseen.
+- `moblee-doctor.py`: `hub_norm` reads SSH and https GitHub addresses as one.
+- App: `AddMore.needsFreshLook` and `AddMore.lookFailed`; `AddMore.stampDate` reads the pack's stamp to the second (`YYYYMMDD-HHMMSS`; only the minute form was read before, so "Last looked" never showed); a report that cannot be read after a look counts as a failed look; extras show no word or button until the report is read; `HomeModel.refreshHub` on becoming active; `EngineTask.output` takes a timeout (120 seconds for the parts report, 600 for Look again) and lets go of the program's error output.
+- Tests: `tools/test-parts.py` runs the real `safety/install-safety.py` in a throwaway home and reads what it wrote (the fixtures had written a full path, which is how the guard fault was missed); new `tools/test-false-missing.py`; three new logic checks. A cold review of the first draft found eight faults, among them a revoked sign-in reading as signed in and the stamp format; all eight are fixed and covered here.
+- Known and left for later: a hand-damaged permission rules file can still make the home screen say the guard is off; with `CODEX_HOME` set, the ChatGPT guard is looked for in `~/.codex`.
+
 ## v0.15.1 (27 October 2026)
 
 **Small repairs, found by a full review of the app.** Nothing changes in how you use Moblee, and your wiki is not touched. This is also the first update most owners will install with one button.

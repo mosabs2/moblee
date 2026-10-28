@@ -261,12 +261,20 @@ final class HomeModel: ObservableObject {
             activeObserver = NotificationCenter.default.addObserver(
                 forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
             ) { [weak self] _ in
-                Task { @MainActor in self?.checkSafety(); self?.readRequests() }
+                // (0.15.2) The Hub too: joined while Moblee was open, "Open the
+                // hub" stayed missing until the owner went home or relaunched.
+                Task { @MainActor in self?.checkSafety(); self?.readRequests(); self?.refreshHub() }
             }
         }
     }
 
     func stopWatching() { timer?.invalidate(); timer = nil }
+
+    func refreshHub() {
+        guard let vault else { return }
+        let now = Hub.linked(vault: vault)
+        if now != hub { hub = now }
+    }
 
     private static func read(_ url: URL) -> String {
         ((try? String(contentsOf: url, encoding: .utf8)) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -651,20 +659,27 @@ final class HomeModel: ObservableObject {
 
     /// (0.14.0) Ask the pack what is in place. Read only and quick: nothing is
     /// run but the report itself.
-    func loadParts() {
+    func loadParts(afterLook: (code: Int32, before: String?)? = nil) {
         guard let pack else { return }
         EngineTask.output(of: "/usr/bin/python3",
                           [pack.appendingPathComponent("scripts/moblee-setup.py").path, "--parts"],
-                          home: home) { [weak self] code, data in
+                          home: home, timeout: 120) { [weak self] code, data in
             guard let self else { return }
             if code == 0, let fresh = Parts.parse(data) {
                 self.partsUnreadable = false
                 if fresh != self.parts { self.parts = fresh }
+                if let look = afterLook { self.lookFailed = AddMore.lookFailed(code: look.code, before: look.before, after: fresh.checked) }
                 // A wiki the checklist has never looked at: look now, once, so
                 // that "not set up" is never said of something that is.
-                if fresh.checked == nil && !self.lookedThisOpening { self.lookAgain() }
-            } else if self.parts == nil {
-                self.partsUnreadable = true
+                // (0.15.2) Likewise a record more than a day old, or one that has
+                // never seen an item: something added another way (the Hub's own
+                // join note, GitHub's tool from Homebrew) showed as "Not set up".
+                if AddMore.needsFreshLook(fresh, now: Date()) && !self.lookedThisOpening { self.lookAgain() }
+            } else {
+                // (0.15.2) After a look, a report that could not be read means the
+                // screen is still showing the old one: say so.
+                if afterLook != nil { self.lookFailed = true }
+                if self.parts == nil { self.partsUnreadable = true }
             }
         }
     }
@@ -681,15 +696,23 @@ final class HomeModel: ObservableObject {
         // A practice run asks nothing of the real Mac's tools.
         guard !Practice.on else { return }
         lookingAgain = true
+        lookFailed = false
+        let before = parts?.checked
+        // (0.15.2) Stopped after ten minutes, so the screen never waits for ever.
         EngineTask.output(of: "/usr/bin/python3",
                           [pack.appendingPathComponent("scripts/moblee-setup.py").path, "--check"],
-                          home: home) { [weak self] _, _ in
+                          home: home, timeout: 600) { [weak self] code, _ in
             guard let self else { return }
             self.lookingAgain = false
             self.refreshStates()
-            self.loadParts()
+            self.loadParts(afterLook: (code: code, before: before))
         }
     }
+
+    /// (0.15.2) True when the last Look again did not finish (it broke, or was
+    /// stopped), so the screen says Moblee could not look just now instead of
+    /// showing the old record as if it were new.
+    @Published var lookFailed = false
 
     /// (0.14.0) Something is being added, from a suggested tile or this screen.
     /// (0.15.1) Or in a Terminal window the app opened, which writes the same
