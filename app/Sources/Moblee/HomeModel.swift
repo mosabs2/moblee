@@ -76,6 +76,17 @@ final class HomeModel: ObservableObject {
     /// what is in place and what is not. Opened from the home screen and from
     /// the end of an update; closed by its own Done.
     @Published var addMoreOpen = false
+    /// (0.16.0) Which part of Add more is showing: Claude's suggestions, one of
+    /// the checklist's groups, or what is in the wiki. Opens on the suggestions.
+    @Published var addMoreSection: AddMoreSection = .forYou
+    /// (0.16.0) The one row on an Add more page whose detail is open, if any.
+    @Published var addMoreOpenRow: String?
+    /// (0.16.0) The home screen's one corner menu is open.
+    @Published var menuOpen = false
+    /// The Trust screen was opened from the menu ("Prove the guard"). It stays
+    /// until the owner leaves it. (0.16.0: kept here rather than on the screen,
+    /// so the window's top strip can tell the home screen is not showing.)
+    @Published var trustOpen = false
     /// (0.14.0) What `moblee-setup.py --parts` last said: the parts every wiki
     /// comes with and whether each is in place, and what the checklist's own
     /// record last saw of each extra. Nil until it has answered once.
@@ -300,41 +311,17 @@ final class HomeModel: ObservableObject {
         let onRecord = Assistant.onRecord(home: home)
         if onRecord != assistant { assistant = onRecord }
         refreshTrust(home: home)
-        var claudeOff = false, chatgptOff = false
-        if assistant.wantsClaude {
-            let guardThere = FileManager.default.fileExists(
-                atPath: home.appendingPathComponent(".claude/hooks/bash-guard.py").path)
-            var switchedOn = false
-            if let settings = Self.json(home.appendingPathComponent(".claude/settings.json")),
-               let hooks = (settings["hooks"] as? [String: Any])?["PreToolUse"] as? [[String: Any]] {
-                for entry in hooks {
-                    for h in (entry["hooks"] as? [[String: Any]] ?? []) {
-                        if (h["command"] as? String ?? "").contains("bash-guard.py") { switchedOn = true }
-                    }
-                }
-            }
-            var rules = 0
-            for name in ["settings.local.json", "settings.json"] {
-                if let s = Self.json(vault.appendingPathComponent(".claude/\(name)")),
-                   let allow = (s["permissions"] as? [String: Any])?["allow"] as? [Any] { rules += allow.count }
-            }
-            claudeOff = !(guardThere && switchedOn && rules >= 10)
-        }
-        if assistant.wantsChatGPT {
-            let guardThere = FileManager.default.fileExists(
-                atPath: home.appendingPathComponent(".codex/hooks/bash-guard.py").path)
-            var entered = false
-            if let file = Self.json(home.appendingPathComponent(".codex/hooks.json")),
-               let hooks = (file["hooks"] as? [String: Any])?["PreToolUse"] as? [[String: Any]] {
-                for entry in hooks where Self.coversBothWays(entry["matcher"] as? String) {
-                    for h in (entry["hooks"] as? [[String: Any]] ?? []) {
-                        if (h["command"] as? String ?? "").contains(".codex/hooks/bash-guard.py") { entered = true }
-                    }
-                }
-            }
-            chatgptOff = !(guardThere && entered)
-        }
-        safetyOff = claudeOff || chatgptOff
+        let claude: GuardReading? = assistant.wantsClaude ? Self.claudeGuardReading(home: home, vault: vault) : nil
+        let chatgpt: GuardReading? = assistant.wantsChatGPT
+            ? Self.chatgptGuardReading(codex: Self.codexFolder(home: home), home: home) : nil
+        // (0.16.0) A file that cannot be read says nothing either way, so it
+        // never makes the screen claim the guard is off. Only a reading that
+        // really found it off does.
+        safetyOff = claude == .off || chatgpt == .off
+        let unsure: String? = safetyOff ? nil
+            : (claude == .cannotTell ? "Claude" : (chatgpt == .cannotTell ? "ChatGPT" : nil))
+        if unsure != unreadableSettingsOf { unreadableSettingsOf = unsure }
+        safetyUnknown = unsure != nil
         // The guard and the skills are compared with this app's pack only when
         // the wiki and the pack are the SAME version. While an update is pending
         // they are expected to differ, and the update brings them level. And when
@@ -350,6 +337,132 @@ final class HomeModel: ObservableObject {
         let skills = versionsLevel ? surveySkills() : (put: false, foreign: [])
         if foreignSkills != skills.foreign { foreignSkills = skills.foreign }
         needsRepair = safetyOff || guardStale || (skills.put && !repairSetAside)
+    }
+
+    /// (0.16.0) What one assistant's files say about the guard. A settings file
+    /// that is there but cannot be read (damaged by hand, or half-written) is
+    /// `cannotTell`: until 0.16.0 it was read as no hook and no rules, and the
+    /// home screen told the owner the guard was off when nothing said so.
+    enum GuardReading: Equatable { case on, off, cannotTell }
+
+    /// (0.16.0) Set when a file the guard check needs could not be read, and
+    /// nothing else found the guard off. Nothing is claimed either way.
+    @Published var safetyUnknown = false
+    /// (0.16.0) Whose settings file could not be read ("Claude" or "ChatGPT"),
+    /// which the home screen names in its one quiet line about it.
+    @Published var unreadableSettingsOf: String?
+
+    /// A file read as a JSON object: the object, `nil` when there is no file at
+    /// all, and `.unreadable` when the file is there but is not one.
+    enum Settings { case absent, unreadable, read([String: Any]) }
+
+    static func settings(_ url: URL) -> Settings {
+        guard FileManager.default.fileExists(atPath: url.path) else { return .absent }
+        guard let data = try? Data(contentsOf: url),
+              let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return .unreadable }
+        return .read(o)
+    }
+
+    /// The same three tests the check-up makes for Claude: the guard file is
+    /// there, Claude's settings run it before every command, and the wiki's own
+    /// settings carry Moblee's permission rules.
+    static func claudeGuardReading(home: URL, vault: URL) -> GuardReading {
+        var unsure = false
+        guard FileManager.default.fileExists(atPath: home.appendingPathComponent(".claude/hooks/bash-guard.py").path)
+        else { return .off }
+        switch settings(home.appendingPathComponent(".claude/settings.json")) {
+        case .absent: return .off
+        case .unreadable: unsure = true
+        case .read(let s):
+            let hooks = ((s["hooks"] as? [String: Any])?["PreToolUse"] as? [[String: Any]]) ?? []
+            let switchedOn = hooks.contains { entry in
+                (entry["hooks"] as? [[String: Any]] ?? []).contains { ($0["command"] as? String ?? "").contains("bash-guard.py") }
+            }
+            if !switchedOn { return .off }
+        }
+        var rules = 0
+        var rulesUnreadable = false
+        for name in ["settings.local.json", "settings.json"] {
+            switch settings(vault.appendingPathComponent(".claude/\(name)")) {
+            case .absent: break
+            case .unreadable: rulesUnreadable = true
+            case .read(let s): rules += ((s["permissions"] as? [String: Any])?["allow"] as? [Any])?.count ?? 0
+            }
+        }
+        if rules < 10 {
+            if rulesUnreadable { unsure = true } else { return .off }
+        }
+        return unsure ? .cannotTell : .on
+    }
+
+    /// (0.16.0) Where ChatGPT keeps its settings: `CODEX_HOME` when that is set
+    /// in the environment the app sees, as ChatGPT's own agent and the pack's
+    /// installer read it, and `~/.codex` otherwise. Until 0.16.0 only
+    /// `~/.codex` was looked in, so an owner with `CODEX_HOME` set was told the
+    /// guard was off. A practice run reads no environment of the real Mac.
+    ///
+    /// (0.16.0, later) An app opened from Finder or the Dock sees none of the
+    /// shell's variables, so `CODEX_HOME` set in a shell profile never reached
+    /// it. The pack's installer therefore writes the folder it installed the
+    /// guard into to `~/.config/moblee/codex-home` (one line, an absolute
+    /// path), and that is read next. The order: the app's own environment,
+    /// then that file, then `~/.codex`.
+    nonisolated static func codexHomeSetting(home: URL, environment: [String: String]) -> String? {
+        let set = (environment["CODEX_HOME"] ?? "").trimmingCharacters(in: .whitespaces)
+        if !set.isEmpty { return set }
+        return codexHomeFromFile(home: home)
+    }
+
+    /// The installer's note of where ChatGPT's folder is, or nil for no note,
+    /// or one that is not exactly one absolute path.
+    nonisolated static func codexHomeFromFile(home: URL) -> String? {
+        let file = home.appendingPathComponent(".config/moblee/codex-home")
+        guard let text = try? String(contentsOf: file, encoding: .utf8) else { return nil }
+        let lines = text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        guard lines.count == 1, let path = lines.first, path.hasPrefix("/"), !path.contains("\0") else { return nil }
+        return path
+    }
+
+    nonisolated static func codexFolder(home: URL, environment: [String: String]) -> URL {
+        let set = codexHomeSetting(home: home, environment: environment) ?? ""
+        guard !set.isEmpty else { return home.appendingPathComponent(".codex", isDirectory: true) }
+        if set == "~" { return home }
+        if set.hasPrefix("~/") { return home.appendingPathComponent(String(set.dropFirst(2)), isDirectory: true) }
+        if set.hasPrefix("/") { return URL(fileURLWithPath: set, isDirectory: true).standardizedFileURL }
+        return URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent(set, isDirectory: true).standardizedFileURL
+    }
+
+    static func codexFolder(home: URL) -> URL {
+        codexFolder(home: home, environment: Practice.on ? [:] : ProcessInfo.processInfo.environment)
+    }
+
+    /// The guard is there, and entered in ChatGPT's hooks file for both of the
+    /// ways ChatGPT can delete, by the full path of the guard in that folder (or
+    /// the `$HOME/.codex/…` spelling, where the folder is the usual one), as the
+    /// installer itself looks for it.
+    static func chatgptGuardReading(codex: URL, home: URL) -> GuardReading {
+        let guardFile = codex.appendingPathComponent("hooks/bash-guard.py")
+        guard FileManager.default.fileExists(atPath: guardFile.path) else { return .off }
+        var marks = [guardFile.path]
+        if codex.standardizedFileURL.path == home.appendingPathComponent(".codex").standardizedFileURL.path {
+            marks.append(".codex/hooks/bash-guard.py")
+        }
+        switch settings(codex.appendingPathComponent("hooks.json")) {
+        case .absent: return .off
+        case .unreadable: return .cannotTell
+        case .read(let file):
+            let hooks = ((file["hooks"] as? [String: Any])?["PreToolUse"] as? [[String: Any]]) ?? []
+            let entered = hooks.contains { entry in
+                coversBothWays(entry["matcher"] as? String)
+                    && (entry["hooks"] as? [[String: Any]] ?? []).contains { h in
+                        let command = h["command"] as? String ?? ""
+                        return marks.contains { command.contains($0) }
+                    }
+            }
+            return entered ? .on : .off
+        }
     }
 
     /// A skill wearing one of Moblee's names that Moblee did not put there.
@@ -423,8 +536,9 @@ final class HomeModel: ObservableObject {
         // One copy for each assistant in use: Claude's, ChatGPT's, or both.
         var places: [String] = []
         if assistant.wantsClaude { places.append(".claude/hooks/bash-guard.py") }
-        if assistant.wantsChatGPT { places.append(".codex/hooks/bash-guard.py") }
-        return places.allSatisfy { (try? Data(contentsOf: home.appendingPathComponent($0))) == ours }
+        var files = places.map { home.appendingPathComponent($0) }
+        if assistant.wantsChatGPT { files.append(Self.codexFolder(home: home).appendingPathComponent("hooks/bash-guard.py")) }
+        return files.allSatisfy { (try? Data(contentsOf: $0)) == ours }
     }
 
     /// Every pack Moblee has settled on this Mac. The app copies the pack it
@@ -612,7 +726,8 @@ final class HomeModel: ObservableObject {
     /// Plain words only on a tile: a request cannot put anything else there.
     static func plain(_ s: String, limit: Int) -> String {
         let kept = s.unicodeScalars.filter {
-            CharacterSet.alphanumerics.contains($0) || " .,'!?-:()&".unicodeScalars.contains($0)
+            // (0.16.0) ";" and "/" kept: dropping the semicolon turned "It drafts; you send." into "It drafts you send."
+            CharacterSet.alphanumerics.contains($0) || " .,;/'!?-:()&".unicodeScalars.contains($0)
         }
         return String(String(String.UnicodeScalarView(kept)).prefix(limit))
     }
@@ -740,8 +855,66 @@ final class HomeModel: ObservableObject {
 
     /// (0.14.0) Opened from the home screen or the end of an update.
     func openAddMore() {
+        menuOpen = false
+        // Claude's suggestions and the checklist's groups are Claude's: a wiki
+        // for ChatGPT alone opens on what it comes with.
+        addMoreSection = assistant == .chatgpt ? .inWiki : .forYou
+        addMoreOpenRow = nil
         addMoreOpen = true
         loadParts()
+    }
+
+    /// (0.16.0) The ordinary home screen is showing: no explanation, update,
+    /// repair, Trust step or Add more in its place. Only then does the window's
+    /// corner hold the home screen's own read-aloud and menu.
+    var showsMainHome: Bool {
+        explaining == nil && !addMoreOpen && !updateAvailable && !repairIsForANewerMoblee
+            && !needsRepair && !showsForeignSkills && !((trustPending && !trustSetAside) || trustOpen)
+    }
+
+    /// (0.16.0) "For you" in Add more: the checklist's own items among Claude's
+    /// suggestions, in the order the home screen shows them, three at most. The
+    /// same tiles the home screen draws, from the same request list.
+    var forYou: [Tile] {
+        Array(tiles.filter { $0.kind == .item }
+            .sorted { Self.rank($0.state) < Self.rank($1.state) }
+            .prefix(3))
+    }
+
+    /// The order suggestions are shown in: what can simply be added first, what
+    /// was sent elsewhere next, what cannot be added after, and what is done last.
+    nonisolated static func rank(_ s: TileState) -> Int {
+        switch s {
+        case .running: return 0
+        case .waiting, .failed: return 1
+        case .handedOver: return 2
+        case .blocked: return 3
+        case .done: return 4
+        }
+    }
+
+    /// (0.16.0) The plain facts about one of the checklist's items, for its row
+    /// in Add more: how it is added, how long it takes, the room it takes, and
+    /// whether it can cost money.
+    struct Facts: Equatable { let how: String; let minutes: String; let size: String?; let paid: Bool }
+
+    func itemFacts(_ key: String) -> Facts? {
+        guard let c = catalogue[key] else { return nil }
+        let how = How(rawValue: c["how"] as? String ?? "terminal") ?? .terminal
+        let mb = c["space_mb"] as? Int ?? 0
+        return Facts(how: Self.howWords(how),
+                     minutes: "About \(c["minutes"] as? Int ?? 1) min",
+                     size: mb > 0 ? (mb >= 1000 ? String(format: "%.1f GB", Double(mb) / 1000) : "\(mb) MB") : nil,
+                     paid: c["paid"] as? Bool ?? false)
+    }
+
+    static func howWords(_ how: How) -> String {
+        switch how {
+        case .silent: return "Adds itself"
+        case .terminal: return "In a Terminal window"
+        case .clicks: return "A few clicks in Claude"
+        case .hidden: return ""
+        }
     }
 
     /// (0.14.0) The owner pressed Add on one of the checklist's items in the Add
@@ -757,6 +930,13 @@ final class HomeModel: ObservableObject {
         // tile again, exactly as the tile's own button does on the home screen.
         // Before, this returned early and the button did nothing.
         if let t = tiles.first(where: { $0.kind == .item && $0.key == key && $0.state == .handedOver }) {
+            press(t)
+            return
+        }
+        // (0.16.0) An item Claude suggested and still waiting is added through
+        // its own tile, so the card on the home screen moves with the row.
+        if let t = tiles.first(where: { $0.kind == .item && $0.key == key && ($0.state == .waiting || $0.state == .failed) }),
+           !chosen.contains(where: { $0.key == key }) {
             press(t)
             return
         }

@@ -279,13 +279,49 @@ enum Snapshots {
                 configure(f)
             }
         }
+        // (0.16.0) Add more as two panes: opening on For you, with Claude's
+        // own suggestions (the same tiles the home screen draws).
+        draw(addMoreScene { f in f.homeModel.tiles = sample }, "26a-add-more", to: folder)
+        draw(addMoreScene { f in
+            f.homeModel.parts = nil; f.homeModel.lookingAgain = true
+            f.homeModel.addMoreSection = .group("Connect your life")
+        }, "26b-add-more-looking", to: folder)
+        draw(addMoreScene { f in f.homeModel.assistant = .chatgpt }, "26c-add-more-chatgpt", to: folder)
+        // One group, one row opened in place: what it is, and what adding it
+        // takes. An item handed over to a Terminal window is in it too.
         draw(addMoreScene { f in
             var film = f.homeModel.itemTile("film", why: "") ?? HomeModel.Tile(kind: .item, key: "film", title: "Video editing", why: "", detail: "", how: .terminal, paid: false)
             film.state = .handedOver
             f.homeModel.chosen = [film]
-        }, "26a-add-more", to: folder)
-        draw(addMoreScene { f in f.homeModel.parts = nil; f.homeModel.lookingAgain = true }, "26b-add-more-looking", to: folder)
-        draw(addMoreScene { f in f.homeModel.assistant = .chatgpt }, "26c-add-more-chatgpt", to: folder)
+            f.homeModel.addMoreSection = .group("Connect your life")
+            f.homeModel.addMoreOpenRow = "google"
+        }, "26d-add-more-group-row-open", to: folder)
+        // What every wiki comes with, with one part missing: the one warning,
+        // naming it, with Put back.
+        draw(addMoreScene { f in
+            var parts = Self.sampleParts
+            parts.core = parts.core.map { p in
+                p.key == "wiki-to-pdf" ? .init(key: p.key, title: p.title, what: p.what, say: p.say, open: p.open, state: "in") : p
+            }
+            f.homeModel.parts = parts
+            f.homeModel.addMoreSection = .inWiki
+        }, "26e-add-more-in-your-wiki", to: folder)
+        // For you with nothing suggested: one line that points at the groups.
+        draw(addMoreScene { _ in }, "26f-add-more-for-you-empty", to: folder)
+        // A part read from a settings file nobody can read, beside an older
+        // copy: one warning, for the unreadable one only, with Check my wiki.
+        draw(addMoreScene { f in
+            var parts = Self.sampleParts
+            parts.core = parts.core.map { p in
+                switch p.key {
+                case "guard": return .init(key: p.key, title: p.title, what: p.what, say: p.say, open: p.open, state: "unreadable")
+                case "dashboard": return .init(key: p.key, title: p.title, what: p.what, say: p.say, open: p.open, state: "in")
+                default: return p
+                }
+            }
+            f.homeModel.parts = parts
+            f.homeModel.addMoreSection = .inWiki
+        }, "26g-add-more-cannot-read", to: folder)
         draw(homeScene { f in
             var t = sample; t[0].state = .done; t[1].state = .handedOver; t[2].state = .failed
             f.homeModel.tiles = t
@@ -300,6 +336,19 @@ enum Snapshots {
         draw(homeScene { f in
             f.homeModel.hub = sampleHub
         }, "10c-home-in-a-hub", to: folder)
+        // (0.16.0) The corner menu, open, with everything it can hold at once:
+        // the hub, Check my wiki, the assistant with Change and Prove the
+        // guard, a newer Moblee, Bigger text and the example wiki.
+        draw(homeScene { f in
+            f.homeModel.tiles = sample; f.homeModel.assistant = .both
+            f.homeModel.hub = sampleHub; f.homeModel.newerRelease = "0.9.3"
+            f.homeModel.menuOpen = true
+        }, "10d-home-menu-open", to: folder)
+        // (0.16.0) Claude's settings file cannot be read: one quiet line under
+        // the sentence, with Check my wiki, and no claim that the guard is off.
+        draw(homeScene { f in
+            f.homeModel.tiles = sample; f.homeModel.unreadableSettingsOf = "Claude"; f.homeModel.safetyUnknown = true
+        }, "10e-home-cannot-tell", to: folder)
         draw(homeScene { f in f.mode = .update; f.askingAssistant = true }, "15a-update-asks-assistant", to: folder)
         // a wiki that a newer Moblee made: no Change, and no Repair from this app
         draw(homeScene { f in
@@ -385,8 +434,11 @@ enum Snapshots {
         // a 16-point symbol has to be seen in light and in dark, and it has to
         // clear the card's own edge and the words beside it, and no picture file
         // could show either until now.
-        FocusedControl.drawnRing = RequestTile.listenId(sample[1])
-        draw(homeScene { $0.homeModel.tiles = sample }, "22a-keyboard-ring-listen-tile", to: folder)
+        // (0.16.0) The cards have no speaker of their own now; the ring is
+        // drawn on the one read-aloud in the corner, the smallest control on
+        // the home screen.
+        FocusedControl.drawnRing = "read-aloud"
+        draw(homeScene { $0.homeModel.tiles = sample }, "22a-keyboard-ring-corner", to: folder)
         FocusedControl.drawnRing = TrustSteps.listenId(step: 3)
         draw(scene(.trust) { f in
             f.assistant = .chatgpt; f.trustStart = .steps
@@ -531,7 +583,9 @@ enum Snapshots {
         // meet and the only one worth looking at, since a repair takes the whole
         // corner away instead.
         AppDelegate.dropsInFlight += 1
-        draw(homeScene { $0.homeModel.tiles = sample }, "24f-home-check-my-wiki-while-busy", to: folder)
+        // (0.16.0) "Check my wiki" is inside the corner menu, so it is drawn open.
+        draw(homeScene { $0.homeModel.tiles = sample; $0.homeModel.menuOpen = true },
+             "24f-home-check-my-wiki-while-busy", to: folder)
         AppDelegate.dropsInFlight -= 1
 
         // (v0.9.4) And the same screens at the biggest size an owner can set,
@@ -543,6 +597,7 @@ enum Snapshots {
         draw(homeScene { $0.homeModel.tiles = sample }, "19a-biggest-home-waiting", to: folder)
         draw(homeScene { f in
             f.homeModel.useCatalogue(Self.packList()); f.homeModel.addMoreOpen = true; f.homeModel.parts = Self.sampleParts
+            f.homeModel.addMoreSection = .group("Connect your life"); f.homeModel.addMoreOpenRow = "google"
         }, "19j-biggest-add-more", to: folder)
         draw(homeScene { $0.homeModel.tiles = sample; $0.homeModel.explaining = sample[1] },
              "19b-biggest-explain-terminal", to: folder)

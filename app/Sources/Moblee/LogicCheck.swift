@@ -867,17 +867,16 @@ enum LogicCheck {
               Layout.side(of: Layout.leaves, mirrored: false) == .left
                   && Layout.side(of: Layout.leaves, mirrored: true) == .right
                   && Layout.arrives != Layout.leaves)
-        check("which assistant sits in the far bottom corner, and a newer Moblee in the near one, and they swap over together",
+        // (0.16.0) The two quiet lines that sat in the home screen's bottom
+        // corners are inside the corner menu now, and the menu sits where
+        // "Bigger text" sits on every other screen.
+        check("the home screen's read-aloud and menu sit in the top corner the reading ends at, and swap over with it",
+              Layout.side(ofCorner: Layout.homeMenuCorner, mirrored: false) == .right
+                  && Layout.side(ofCorner: Layout.homeMenuCorner, mirrored: true) == .left
+                  && Layout.homeMenuCorner == Layout.biggerTextCorner)
+        check("the example's quiet line sits in the bottom corner the reading ends at, whichever way the words run",
               Layout.side(ofCorner: Layout.assistantCorner, mirrored: false) == .right
-                  && Layout.side(ofCorner: Layout.newerReleaseCorner, mirrored: false) == .left
-                  && Layout.side(ofCorner: Layout.assistantCorner, mirrored: true) == .left
-                  && Layout.side(ofCorner: Layout.newerReleaseCorner, mirrored: true) == .right)
-        check("the two quiet lines at the bottom are never in the same corner, whichever way the words run",
-              Layout.assistantCorner != Layout.newerReleaseCorner
-                  && [false, true].allSatisfy {
-                      Layout.side(ofCorner: Layout.assistantCorner, mirrored: $0)
-                          != Layout.side(ofCorner: Layout.newerReleaseCorner, mirrored: $0)
-                  })
+                  && Layout.side(ofCorner: Layout.assistantCorner, mirrored: true) == .left)
         check("\"Bigger text\" is in the corner the reading ends at, which is the other corner from the one it is in here",
               Layout.side(ofCorner: Layout.biggerTextCorner, mirrored: false) == .right
                   && Layout.side(ofCorner: Layout.biggerTextCorner, mirrored: true) == .left)
@@ -1806,48 +1805,46 @@ enum LogicCheck {
         }
         let onTheHomeScreen = HomeScreen.busiest()
         check("every control on the busiest screen has a name of its own, listening and doing alike",
-              Set(onTheHomeScreen).count == onTheHomeScreen.count && onTheHomeScreen.count >= 17)
+              Set(onTheHomeScreen).count == onTheHomeScreen.count && onTheHomeScreen.count >= 6)
         check("and the busiest screen really is the one with a Done button on every tile that has one",
               onTheHomeScreen.filter { $0.hasSuffix("-done") }.count == 2
-                  && HomeScreen.busiest().count
-                      > HomeScreen.stops(shown: threeThatAreWaiting, nextTileWaiting: true,
-                                         canChangeAssistant: true, wantsChatGPT: true,
-                                         newerRelease: true).count)
+                  && HomeScreen.busiest().count > HomeScreen.stops(shown: threeThatAreWaiting).count)
         check("and a listen control is never called the same thing as the control it stands beside",
-              RequestTile.listenId(spokenTile) != RequestTile.buttonId(spokenTile)
-                  && RequestTile.listenId(spokenTile) != RequestTile.doneId(spokenTile)
+              !onTheHomeScreen.dropFirst().contains("read-aloud")
                   && NeedTile.listenId(Checkup.need(.claude)) != Checkup.need(.claude).getId
                   && AssistantChoice.listenId(.claude) != "assistant-" + Assistant.claude.rawValue)
-        // (v0.9.5) Each listen control stands NEXT TO the words it reads on the
-        // keyboard's round. The three tile speakers used to come as a run of
-        // three before any of the three Add buttons, so an owner pressing Tab
-        // could not tell from where they were which speaker belonged to which
-        // tile. Asserted as adjacency and not as membership, and measured again
-        // on the real window in the walk.
-        func nextTo(_ ring: [String], _ listen: String, _ words: [String]) -> Bool {
-            guard let at = ring.firstIndex(of: listen) else { return false }
-            let beside = [at - 1, at + 1].filter { ring.indices.contains($0) }.map { ring[$0] }
-            return words.isEmpty ? true : words.contains { beside.contains($0) }
+        // (0.16.0) One read-aloud for the whole home screen, in the corner, and
+        // first on the keyboard's round, beside the one menu. Every card's own
+        // speaker, the quiet words' speaker and the two corner lines' speakers
+        // have gone; what they read, the corner's one reads, card by card.
+        check("the home screen has one read-aloud, first on the round, with the one menu beside it",
+              onTheHomeScreen.prefix(2) == ["read-aloud", HomeMenu.buttonId]
+                  && onTheHomeScreen.filter { $0.hasPrefix("listen-") || $0 == "read-aloud" } == ["read-aloud"])
+        do {
+            let model = HomeModel()
+            model.tiles = HomeScreen.busiestTiles().enumerated().map { i, t in
+                var tile = t; tile.title = "Card \(i + 1)"; tile.why = "Reason \(i + 1)"; tile.detail = "About 1 min · free"
+                return tile
+            }
+            let said = HomeScreen.speech(model).plain
+            check("and it reads the whole screen: the sentence, every card with its reason and cost, and the two buttons",
+                  said.hasPrefix(HomeScreen.sentence(model))
+                      && (1...3).allSatisfy { said.contains("Card \($0). Reason \($0)") }
+                      && said.contains("About 1 min · free")
+                      && said.contains("Open Claude") && said.contains(AddMore.wayIn))
         }
-        check("every tile's listen control stands next to that tile's own buttons on the keyboard's round",
-              HomeScreen.busiestTiles().allSatisfy { tile in
-                  nextTo(onTheHomeScreen, RequestTile.listenId(tile),
-                         [RequestTile.buttonId(tile), RequestTile.doneId(tile)])
-              })
-        check("and a tile's listen control never stands next to another tile's",
-              HomeScreen.busiestTiles().allSatisfy { tile in
-                  let at = onTheHomeScreen.firstIndex(of: RequestTile.listenId(tile)) ?? -1
-                  let beside = [at - 1, at + 1].filter { onTheHomeScreen.indices.contains($0) }
-                      .map { onTheHomeScreen[$0] }
-                  return !beside.contains { $0.hasPrefix("listen-tile-") }
-              })
-        check("the quiet words and the two corner lines each have their listen control beside them too",
-              nextTo(onTheHomeScreen, "listen-quiet", ["quiet"])
-                  && nextTo(onTheHomeScreen, "listen-newer-line", ["download-newer", "newer-not-now"])
-                  // (v0.9.6) "Check my wiki" joined this line, so it is one of the
-                  // controls the line's listen control may stand beside.
-                  && nextTo(onTheHomeScreen, "listen-assistant-line",
-                            ["change-assistant", "prove-guard", "check-wiki"]))
+        check("each card's own buttons come card by card on the round, and Add more after them",
+              onTheHomeScreen == ["read-aloud", HomeMenu.buttonId, "tile-one", "tile-two-done", "tile-two",
+                                  "tile-three-done", "tile-three", "quiet"])
+        // Everything that used to sit round the foot of the screen is inside the
+        // menu, and every one of them still has its own name.
+        let inTheMenu = HomeMenu.stops(hub: true, canChangeAssistant: true, wantsChatGPT: true,
+                                       newerRelease: true, showsExample: true)
+        check("the corner menu holds every control that was round the foot, each by its old name",
+              ["open-hub", "check-wiki", "change-assistant", "prove-guard", "download-newer",
+               "newer-not-now", "bigger-text", HomeMenu.exampleId].allSatisfy { inTheMenu.contains($0) }
+                  && Set(inTheMenu).count == inTheMenu.count
+                  && Set(inTheMenu).isDisjoint(with: onTheHomeScreen))
         // The keyboard has to cross the screen in a sensible number of presses.
         // v0.9.4 made every control reachable by Tab; putting a listen control
         // beside every block of words is exactly the change that could turn that
@@ -1875,8 +1872,11 @@ enum LogicCheck {
         // a new owner meets it), or to put the bottom corner's three controls
         // behind one stop. Raising the ceiling every time it is reached is how it
         // stops meaning anything.
+        // (0.16.0) The answer the paragraph above asked for: the bottom
+        // corner's controls are behind one stop, the menu, and the card
+        // speakers are one read-aloud. The busiest screen is eight stops.
         check("the busiest screen stays at twenty controls or fewer, listening and doing together",
-              onTheHomeScreen.count <= 20
+              onTheHomeScreen.count <= 20 && onTheHomeScreen.count <= 8
                   && onTheHomeScreen.filter { $0.hasPrefix("listen-") }.count * 2 <= onTheHomeScreen.count)
         check("the five Trust steps have a listen control each, named by which step it is",
               Set(Trust.steps.indices.map { TrustSteps.listenId(step: $0 + 1) }).count == Trust.steps.count
@@ -2343,7 +2343,9 @@ enum LogicCheck {
         check("and it never promises the report holds every finding, because the card it is built from does not",
               !(ClinicScreen.andMore(shown: 3, of: 9) ?? "").contains("all of them"))
         check("and the button that starts it all is on the home screen's own keyboard round",
-              HomeScreen.busiest().contains("check-wiki"))
+              HomeMenu.stops(hub: false, canChangeAssistant: false, wantsChatGPT: false,
+                             newerRelease: false, showsExample: false).contains("check-wiki")
+                  && HomeScreen.busiest().contains(HomeMenu.buttonId))
 
         // --- the button while Moblee is already busy with the wiki ---
         //
@@ -2664,8 +2666,10 @@ enum LogicCheck {
                       && onAPage.last(where: { $0.hasPrefix("example-link-") })
                           .flatMap { onAPage.firstIndex(of: $0) }
                           .map { onAPage[$0 + 1] } == ExampleScreen.linksListenId)
-            check("and the keyboard crosses a page of the example in far fewer presses than the home screen",
-                  onAPage.count < HomeScreen.busiest().count)
+            // (0.16.0) The home screen is far the shorter of the two now, so a
+            // page of the example is held to the same twenty as every screen.
+            check("and the keyboard crosses a page of the example in twenty presses or fewer",
+                  onAPage.count <= 20)
 
             // --- the words are read aloud, like every other block of words ---
             check("a page is read aloud in its own words, with its marker and its markup gone",
@@ -2704,12 +2708,16 @@ enum LogicCheck {
             // --- the two ways in, and the way out of each ---
             check("the way into the example says the same four words in both places it appears",
                   ExampleReader.wayIn == "See an example wiki")
+            // (0.16.0) On the home screen Add more is the quiet line under the
+            // one big button, reached after the cards; the example is in the
+            // corner menu, and no longer inside Add more.
             let ring = HomeScreen.busiest()
-            let wayIn = ring.firstIndex(of: "second-button") ?? -1
-            let lastTile = ring.lastIndex { $0.hasPrefix("listen-tile-") } ?? -1
+            let lastTile = ring.lastIndex { $0.hasPrefix("tile-") } ?? -1
             let quietWords = ring.firstIndex(of: "quiet") ?? -1
-            check("on the home screen the second big button (Add more, from 0.14.0) is reached after the cards and before the quiet lines",
-                  wayIn > lastTile && lastTile >= 0 && wayIn < quietWords)
+            check("on the home screen Add more (the quiet line, from 0.16.0) is reached after the cards, and the example is in the menu",
+                  quietWords > lastTile && lastTile >= 0 && !ring.contains("second-button")
+                      && HomeMenu.stops(hub: false, canChangeAssistant: false, wantsChatGPT: false,
+                                        newerRelease: false, showsExample: true).last == HomeMenu.exampleId)
             let fromInstall = Flow()
             fromInstall.mode = .install
             fromInstall.step = .welcome
@@ -2956,7 +2964,7 @@ enum LogicCheck {
             check("add more: only the parts not in place count as missing",
                   parts?.missing.map(\.key) == ["galaxy", "brain"])
             check("add more: each part's state in plain words",
-                  parts.map { $0.core.map { AddMore.partWord($0) } } == ["In your wiki", "Missing", "An older or changed copy"])
+                  parts.map { $0.core.map { AddMore.partWord($0) } } == ["In place", "Missing", "An older or changed copy"])
             if let p = parts {
                 check("add more: Open on a part the app opens, Put back on one that is missing, nothing on an older or changed copy",
                       AddMore.partButton(p.core[0], newerWiki: false, busy: false) == nil
@@ -2972,6 +2980,10 @@ enum LogicCheck {
             check("add more: a part entered for ChatGPT, which cannot be seen to run, is said so, with no button",
                   Parts.parse(Data(#"{"core":[{"key":"guard","title":"t","state":"unseen"}],"extras":{}}"#.utf8))
                       .map { AddMore.partWord($0.core[0]) } == "Moblee cannot see whether ChatGPT runs this")
+            check("add more: a part read from a settings file that will not parse says nobody can tell, with no Put back (0.16.0)",
+                  Parts.parse(Data(#"{"core":[{"key":"guard","title":"The safety guard","state":"unreadable"}],"extras":{}}"#.utf8))
+                      .map { AddMore.partWord($0.core[0]) == "Moblee cannot read the settings file to tell"
+                          && AddMore.partButton($0.core[0], newerWiki: false, busy: false) == nil } == true)
             // (0.15.2) Add more looks again by itself on a stale or incomplete record,
             // and says when a look did not finish.
             if let p = parts, let stamp = AddMore.stampDate("20261026-1700") {
@@ -2984,7 +2996,7 @@ enum LogicCheck {
                           && { var none = fresh; none.checked = nil; return AddMore.needsFreshLook(none, now: stamp) }())
             }
             check("add more: the checklist's stamp is read to the second, as the pack writes it, and to the minute",
-                  AddMore.stampDate("20261026-170012") != nil && AddMore.lastLooked("20261026-170012") == "Last looked: 26 October, 17:00."
+                  AddMore.stampDate("20261026-170012") != nil && AddMore.lastLooked("20261026-170012") == "Looked 26 October, 17:00"
                       && AddMore.stampDate("2026102-17001") == nil
                       && { if let s = AddMore.stampDate("20261026-170012") { return !AddMore.needsFreshLook(
                             Parts(assistant: "claude", checked: "20261026-170012", core: [], extras: ["hub": "on"]),
@@ -2994,7 +3006,7 @@ enum LogicCheck {
                       && AddMore.lookFailed(code: 1, before: "a", after: "a")
                       && !AddMore.lookFailed(code: 1, before: "a", after: "b") && !AddMore.lookFailed(code: 0, before: "a", after: "a"))
             check("add more: the last look is given as a day and a time, and an odd stamp gives nothing",
-                  AddMore.lastLooked("20261026-1700") == "Last looked: 26 October, 17:00."
+                  AddMore.lastLooked("20261026-1700") == "Looked 26 October, 17:00"
                       && AddMore.lastLooked("yesterday") == nil && AddMore.lastLooked(nil) == nil)
             check("add more: a part says what to say to the assistant only where it has words for it",
                   parts.map { AddMore.sayLine($0.core[1], talksTo: "Claude") } == "Say \u{201C}galaxy\u{201D} to Claude."
@@ -3044,13 +3056,209 @@ enum LogicCheck {
             check("add more: an item already being added from a suggested tile shows as being added, and is not added twice",
                   model.extraState("videos") == .adding && model.chosen.isEmpty)
             model.tiles = []
-            check("add more: it is the home screen's second big button, and nothing was added to the keyboard's round for it",
-                  AddMore.wayIn == "Add more" && HomeScreen.busiest().contains("second-button")
-                      && !HomeScreen.busiest().contains("add-more"))
+            check("add more: it is the quiet line under the home screen's one big button, and nothing was added to the keyboard's round for it",
+                  AddMore.wayIn == "Add more" && HomeScreen.busiest().last == "quiet"
+                      && !HomeScreen.busiest().contains("second-button") && !HomeScreen.busiest().contains("add-more"))
             check("add more: the read-aloud says how many parts are in place and how many extras are set up",
                   AddMore.speech(parts: parts, groups: [("Connect your life", ["hub", "reach"])],
                                  word: { $0 == "hub" ? "Set up" : "Not set up" }, title: { $0 }).plain
                       .contains("Connect your life: 1 of 2 set up."))
+
+            // (0.16.0) The two panes.
+            if let p = parts {
+                check("add more: the one warning names the one part not in place, and offers Put back only for a missing one",
+                      AddMore.banner(Parts(assistant: "claude", checked: nil, core: [p.core[1]], extras: [:]), newerWiki: false)
+                          == "The wiki galaxy is missing."
+                          && AddMore.bannerButton(p, newerWiki: false, busy: false) == "Put back"
+                          && AddMore.bannerButton(Parts(assistant: "claude", checked: nil, core: [p.core[0], p.core[2]], extras: [:]),
+                                                  newerWiki: false, busy: false) == nil
+                          && AddMore.bannerButton(p, newerWiki: false, busy: true) == nil)
+                let two = Parts(assistant: "claude", checked: nil, core: [
+                    .init(key: "guard", title: "The safety guard", what: "", say: "", open: "", state: "unreadable"),
+                    .init(key: "dashboard", title: "The dashboard", what: "", say: "", open: "dashboard", state: "missing"),
+                    p.core[2]], extras: [:])
+                check("add more: with several parts not in place the warning counts them and names each, in lower case mid-sentence",
+                      AddMore.banner(two, newerWiki: false) == "2 parts are not as they should be: the safety guard, the dashboard.")
+                check("add more: with every part in place there is no warning, and the left says so with the count",
+                      AddMore.banner(Parts(assistant: "claude", checked: nil, core: [p.core[0]], extras: [:]), newerWiki: false) == nil
+                          && AddMore.inWikiCount(Parts(assistant: "claude", checked: nil, core: [p.core[0]], extras: [:])) == "1"
+                          && AddMore.inWikiCount(p) == "2 of 3" && AddMore.inWikiCount(nil) == "")
+                // An older or changed copy, and ChatGPT's hooks (which the pack
+                // always reports as unseen), are not faults: no warning for ever.
+                let chatgptHooks = Parts(assistant: "chatgpt", checked: nil, core: [
+                    p.core[0],
+                    .init(key: "guard-chatgpt", title: "The safety guard", what: "", say: "", open: "", state: "unseen"),
+                    p.core[2]], extras: [:])
+                check("add more: ChatGPT's unseen hooks and an older or changed copy raise no warning, and count as they should be",
+                      AddMore.banner(chatgptHooks, newerWiki: false) == nil && chatgptHooks.faults.isEmpty
+                          && AddMore.inWikiCount(chatgptHooks) == "3" && AddMore.bannerButton(chatgptHooks, newerWiki: false, busy: false) == nil
+                          && !Parts.isFault("unseen") && !Parts.isFault("differs") && Parts.isFault("unreadable") && Parts.isFault("missing"))
+                check("add more: a part nobody can read is warned of, with Check my wiki as its one button",
+                      AddMore.bannerButton(Parts(assistant: "claude", checked: nil, core: [two.core[0]], extras: [:]),
+                                           newerWiki: false, busy: false) == "Check my wiki"
+                          && AddMore.bannerButton(two, newerWiki: false, busy: false) == "Put back")
+            }
+            let picks = HomeModel()
+            picks.useCatalogue(list)
+            picks.tiles = ["trips", "videos", "google", "hub"].compactMap { picks.itemTile($0, why: "Because") }
+            var made = HomeModel.Tile(kind: .skill, key: "gym-log", title: "A skill", why: "", detail: "", how: .silent, paid: false)
+            made.state = .waiting
+            picks.tiles.append(made)
+            picks.tiles[0].state = .done
+            check("add more: For you is the home screen's own suggestions, the checklist's items only, three at most, done last",
+                  picks.forYou.count == 3 && picks.forYou.allSatisfy { $0.kind == .item }
+                      && !picks.forYou.contains { $0.key == "trips" })
+            check("add more: a row's facts say how it is added, how long, how big, and whether it can cost money",
+                  picks.itemFacts("videos") == HomeModel.Facts(how: "In a Terminal window", minutes: "About 4 min", size: "200 MB", paid: false)
+                      && picks.itemFacts("google")?.how == "A few clicks in Claude" && picks.itemFacts("google")?.size == nil
+                      && picks.itemFacts("generation")?.paid == true && picks.itemFacts("nothing-of-the-kind") == nil)
+            check("add more: a row that needs something done says so under its title; one set up or not set up says nothing more",
+                  AddMore.extraNote(.failed("x")) != nil && AddMore.extraNote(.handedOver(.clicks)) != nil
+                      && AddMore.extraNote(.on) == nil && AddMore.extraNote(.off) == nil)
+            check("add more: the read-aloud reads the page that is showing, row by row",
+                  AddMore.pageSpeech(title: "Connect your life", lead: "1 of 2 set up.", banner: nil,
+                                     rows: [("The Moblee Hub", "Set up"), ("GitHub", "button, Add")]).plain
+                      == "Connect your life. 1 of 2 set up. The Moblee Hub: Set up. GitHub: button, Add.")
+            picks.openAddMore()
+            check("add more: it opens on For you, with no row open",
+                  picks.addMoreSection == .forYou && picks.addMoreOpenRow == nil && picks.addMoreOpen)
+            // A row under For you does exactly what the same item's row in its
+            // group does: Add on a suggested item that is waiting goes through
+            // its own tile, so the card on the home screen moves with it.
+            picks.addMoreOpen = false
+            picks.addFromList("hub")
+            check("add more: Add on a suggested item goes through its own tile, and nothing is added twice",
+                  picks.explaining?.key == "hub" && picks.chosen.isEmpty)
+            picks.explaining = nil
+            picks.parts = Parts(assistant: "claude", checked: "20261026-1700", core: [], extras: ["google": "unseen"])
+            check("add more: an item nobody can see says so under For you as in its group, with Show me how",
+                  AddMore.extraButton(picks.extraState("google")) == "Show me how"
+                      && AddMore.extraWord(picks.extraState("google")) == "Moblee cannot see whether this is set up")
+            picks.assistant = .chatgpt
+            picks.openAddMore()
+            check("add more: a wiki for ChatGPT alone opens on In your wiki, not on Claude's suggestions",
+                  picks.addMoreSection == .inWiki)
+            picks.assistant = .claude
+
+            // (0.16.0) The home screen's read-aloud says what the menu holds when it
+            // needs the owner, and the quiet line about a file nobody can read.
+            let said = HomeModel()
+            said.newerRelease = "0.16.1"
+            check("home: the read-aloud says a newer Moblee is out, and where to install it",
+                  HomeScreen.speech(said).plain.contains(HomeScreen.newerReleaseSpoken("0.16.1"))
+                      && HomeScreen.newerReleaseSpoken("0.16.1").contains("menu"))
+            said.newerRelease = nil
+            check("home: with nothing unread, no line under the sentence and nothing extra on the round",
+                  HomeScreen.unknownSentence(said) == nil
+                      && !HomeScreen.stops(shown: []).contains(HomeScreen.unknownCheckId))
+            said.unreadableSettingsOf = "Claude"
+            check("home: a settings file nobody can read gets one quiet line, read aloud, with Check my wiki beside it",
+                  HomeScreen.unknownSentence(said)
+                      == "Moblee cannot read Claude's settings file, so it cannot tell whether the safety guard is on."
+                      && HomeScreen.speech(said).plain.contains("cannot tell whether the safety guard is on")
+                      && HomeScreen.speech(said).plain.contains(HomeScreen.checkWiki)
+                      && HomeScreen.stops(shown: [], unknownLine: true).contains(HomeScreen.unknownCheckId))
+        }
+
+        // (0.16.0) Two faults left from 0.15.2 in how the home screen reads the
+        // guard. A settings file damaged by hand made the screen say the guard
+        // was off; and ChatGPT's guard was looked for only in ~/.codex.
+        do {
+            let fm = FileManager.default
+            // Made-up homes in a folder of the check's own, inside the practice home.
+            let base = home.appendingPathComponent("logic-check/guard-reading-\(UUID().uuidString)", isDirectory: true)
+            let someHome = base.appendingPathComponent("home", isDirectory: true)
+            let wiki = someHome.appendingPathComponent("Wiki/Sam Wiki", isDirectory: true)
+            func put(_ text: String, _ path: URL) {
+                try? fm.createDirectory(at: path.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try? text.write(to: path, atomically: true, encoding: .utf8)
+            }
+            let hooked = #"{"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "python3 \"$HOME/.claude/hooks/bash-guard.py\""}]}]}}"#
+            let rules = #"{"permissions": {"allow": ["a","b","c","d","e","f","g","h","i","j","k"]}}"#
+            put("# guard", someHome.appendingPathComponent(".claude/hooks/bash-guard.py"))
+            put(hooked, someHome.appendingPathComponent(".claude/settings.json"))
+            put(rules, wiki.appendingPathComponent(".claude/settings.json"))
+            check("guard reading: the guard there, entered, and the rules in place reads as on",
+                  HomeModel.claudeGuardReading(home: someHome, vault: wiki) == .on)
+            put("{\"hooks\": {\"PreToolUse\": [ broken by hand", someHome.appendingPathComponent(".claude/settings.json"))
+            check("guard reading: Claude's settings damaged by hand read as cannot tell, never as off",
+                  HomeModel.claudeGuardReading(home: someHome, vault: wiki) == .cannotTell)
+            // And the home screen itself, read over that made-up wiki: no repair,
+            // and the quiet line naming whose file it is.
+            put(wiki.path + "\n", someHome.appendingPathComponent(".config/moblee/vault-path"))
+            put("# rules\n", wiki.appendingPathComponent("CLAUDE.md"))
+            try? fm.createDirectory(at: wiki.appendingPathComponent("wiki"), withIntermediateDirectories: true)
+            let reading = HomeModel()
+            reading.load(home: someHome, bundledPack: nil)
+            check("guard reading: the home screen over a damaged settings file offers no repair, and says it cannot tell",
+                  !reading.safetyOff && !reading.needsRepair && reading.safetyUnknown
+                      && reading.unreadableSettingsOf == "Claude" && HomeScreen.unknownSentence(reading) != nil)
+            put(hooked, someHome.appendingPathComponent(".claude/settings.json"))
+            put("{\"permissions\": ", wiki.appendingPathComponent(".claude/settings.json"))
+            check("guard reading: the wiki's permission rules damaged by hand read as cannot tell, never as off",
+                  HomeModel.claudeGuardReading(home: someHome, vault: wiki) == .cannotTell)
+            put(rules, wiki.appendingPathComponent(".claude/settings.local.json"))
+            check("guard reading: and a readable second rules file that holds the rules is enough to read on",
+                  HomeModel.claudeGuardReading(home: someHome, vault: wiki) == .on)
+            put(#"{"hooks": {}}"#, someHome.appendingPathComponent(".claude/settings.json"))
+            check("guard reading: settings that read and carry no guard entry are still off",
+                  HomeModel.claudeGuardReading(home: someHome, vault: wiki) == .off)
+            put(hooked, someHome.appendingPathComponent(".claude/settings.json"))
+            try? fm.removeItem(at: someHome.appendingPathComponent(".claude/hooks/bash-guard.py"))
+            put("{ damaged", someHome.appendingPathComponent(".claude/settings.json"))
+            check("guard reading: with the guard file gone it is off, however the settings read",
+                  HomeModel.claudeGuardReading(home: someHome, vault: wiki) == .off)
+
+            // ChatGPT's folder: CODEX_HOME when set, ~/.codex when not.
+            let usual = someHome.appendingPathComponent(".codex", isDirectory: true)
+            let moved = base.appendingPathComponent("elsewhere/codex", isDirectory: true)
+            check("codex home: with CODEX_HOME unset or empty, ChatGPT's settings are looked for in ~/.codex",
+                  HomeModel.codexFolder(home: someHome, environment: [:]).path == usual.path
+                      && HomeModel.codexFolder(home: someHome, environment: ["CODEX_HOME": "  "]).path == usual.path)
+            check("codex home: with CODEX_HOME set, that folder is the one looked in, a ~ in it read as the home folder",
+                  HomeModel.codexFolder(home: someHome, environment: ["CODEX_HOME": moved.path]).path == moved.path
+                      && HomeModel.codexFolder(home: someHome, environment: ["CODEX_HOME": "~/codex-two"]).path
+                          == someHome.appendingPathComponent("codex-two").path)
+            // An app opened from Finder or the Dock sees no shell variables, so
+            // the installer's note in ~/.config/moblee/codex-home comes next.
+            let note = someHome.appendingPathComponent(".config/moblee/codex-home")
+            let noted = base.appendingPathComponent("noted/codex", isDirectory: true)
+            put(noted.path + "\n", note)
+            check("codex home: with no CODEX_HOME, the installer's note names the folder, and the scripts are told it",
+                  HomeModel.codexFolder(home: someHome, environment: [:]).path == noted.path
+                      && HomeModel.codexHomeSetting(home: someHome, environment: [:]) == noted.path)
+            check("codex home: the app's own CODEX_HOME comes before the note",
+                  HomeModel.codexFolder(home: someHome, environment: ["CODEX_HOME": moved.path]).path == moved.path
+                      && HomeModel.codexHomeSetting(home: someHome, environment: ["CODEX_HOME": moved.path]) == moved.path)
+            put("codex-somewhere\n", note)
+            check("codex home: a note that is not an absolute path is ignored, and ~/.codex is used",
+                  HomeModel.codexFolder(home: someHome, environment: [:]).path == usual.path
+                      && HomeModel.codexHomeSetting(home: someHome, environment: [:]) == nil)
+            put(noted.path + "\n" + moved.path + "\n", note)
+            check("codex home: a note of more than one line is ignored, and nothing is passed to the scripts",
+                  HomeModel.codexFolder(home: someHome, environment: [:]).path == usual.path
+                      && HomeModel.codexHomeSetting(home: someHome, environment: [:]) == nil)
+            try? fm.removeItem(at: note)
+            check("codex home: with neither, nothing is passed to the scripts, which then use ~/.codex",
+                  HomeModel.codexHomeSetting(home: someHome, environment: [:]) == nil)
+            func entry(_ command: String) -> String {
+                #"{"hooks": {"PreToolUse": [{"matcher": "Bash|apply_patch", "hooks": [{"type": "command", "command": ""# + command + #""}]}]}}"#
+            }
+            put("# guard", moved.appendingPathComponent("hooks/bash-guard.py"))
+            put(entry("python3 " + moved.appendingPathComponent("hooks/bash-guard.py").path),
+                moved.appendingPathComponent("hooks.json"))
+            check("codex home: a guard entered by its full path in the CODEX_HOME folder reads as on",
+                  HomeModel.chatgptGuardReading(codex: moved, home: someHome) == .on)
+            put(entry("python3 $HOME/.codex/hooks/bash-guard.py"), moved.appendingPathComponent("hooks.json"))
+            check("codex home: an entry naming the usual ~/.codex guard does not count for a moved folder",
+                  HomeModel.chatgptGuardReading(codex: moved, home: someHome) == .off)
+            put("# guard", usual.appendingPathComponent("hooks/bash-guard.py"))
+            put(entry("python3 $HOME/.codex/hooks/bash-guard.py"), usual.appendingPathComponent("hooks.json"))
+            check("codex home: in the usual folder the $HOME/.codex spelling still counts",
+                  HomeModel.chatgptGuardReading(codex: usual, home: someHome) == .on)
+            put("not json at all", usual.appendingPathComponent("hooks.json"))
+            check("codex home: ChatGPT's hooks file damaged by hand reads as cannot tell, never as off",
+                  HomeModel.chatgptGuardReading(codex: usual, home: someHome) == .cannotTell)
         }
 
         print(failed == 0 ? "logic: every check held" : "logic: \(failed) check(s) FAILED")

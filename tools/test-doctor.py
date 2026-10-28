@@ -683,7 +683,7 @@ def test_guard_version(doctor, work):
           bool(said) and re.fullmatch(r"v\d+(\.\d+)*", said or "") is not None, str(said))
     # Bump this with the guard: it is the one place that says, in a test, which
     # guard this release ships.
-    check("guardver", "and this release ships v5.2", said == "v5.2", str(said))
+    check("guardver", "and this release ships v5.3", said == "v5.3", str(said))
 
     # 2. A guard that is the pack's own copy: the version said once, beside the
     #    comparison and not instead of it.
@@ -1872,6 +1872,146 @@ def test_rules(doctor, work):
           and "None of its sections still match" in said)
 
 
+def test_damaged_and_codex_home(doctor, work):
+    """(0.16.0) A settings or rules file damaged by hand says nothing either way,
+    so the guard is 'cannot tell', never 'not switched on'; and ChatGPT's files
+    are read from CODEX_HOME when that is set."""
+    home = work / "damaged-home"
+    (home / ".claude").mkdir(parents=True, exist_ok=True)
+    settings = home / ".claude" / "settings.json"
+    settings.write_text('{"hooks": {"PreToolUse": [ broken')
+    guard = installed_guard(work, "damaged-guard", "# the guard\n")
+    was = doctor.SETTINGS, doctor.GUARD
+    try:
+        doctor.SETTINGS, doctor.GUARD = settings, guard
+        f = doctor.Findings()
+        got = doctor.check_settings(f, None)
+        doctor.check_guard(f, got, PACK)
+    finally:
+        doctor.SETTINGS, doctor.GUARD = was
+    said = " ".join(r["text"] for r in f.rows)
+    check("damaged", "an unparseable Claude settings file is still reported as not loading",
+          any(r["level"] == doctor.PROBLEM and "does not load" in r["text"] for r in f.rows), said[:90])
+    check("damaged", "and the guard is 'cannot tell', not 'not switched on'",
+          any(r["level"] == doctor.UNSURE and "cannot be told" in r["text"] for r in f.rows)
+          and "not switched on" not in said, said[-120:])
+
+    # the wiki's own rules file damaged: cannot tell, not "the rules are not there"
+    vault = work / "damaged-rules-wiki"
+    (vault / ".claude").mkdir(parents=True, exist_ok=True)
+    (vault / ".claude" / "settings.local.json").write_text('{"permissions": {"allow": [')
+    settings.write_text(json.dumps({"permissions": {}}))
+    try:
+        doctor.SETTINGS = settings
+        f = doctor.Findings()
+        doctor.check_settings(f, vault)
+    finally:
+        doctor.SETTINGS = was[0]
+    said = " ".join(r["text"] for r in f.rows)
+    check("damaged", "a damaged rules file in the wiki is 'cannot tell', not 'the rules are not in place'",
+          any(r["level"] == doctor.UNSURE and "settings.local.json" in r["text"] for r in f.rows)
+          and "are not in the wiki's settings" not in said, said[:140])
+    (vault / ".claude" / "settings.local.json").write_text(json.dumps({"permissions": {"allow": []}}))
+    f = doctor.Findings()
+    try:
+        doctor.SETTINGS = settings
+        doctor.check_settings(f, vault)
+    finally:
+        doctor.SETTINGS = was[0]
+    check("damaged", "a readable rules file without Moblee's rules is still told they are missing",
+          any(r["guide"] == "F01" and r["level"] == doctor.PROBLEM for r in f.rows))
+
+    # ChatGPT's folder moved by CODEX_HOME
+    moved = work / "codex-moved"
+    (moved / "hooks").mkdir(parents=True, exist_ok=True)
+    (moved / "hooks" / "bash-guard.py").write_text((PACK / "safety" / "bash-guard.py").read_text())
+    entry = {"hooks": {"PreToolUse": [{"matcher": "Bash|apply_patch", "hooks": [
+        {"type": "command", "command": f'python3 "{moved}/hooks/bash-guard.py"'}]}]}}
+    (moved / "hooks.json").write_text(json.dumps(entry))
+    before = os.environ.get("CODEX_HOME")
+    os.environ["CODEX_HOME"] = str(moved)
+    try:
+        d2 = load_doctor()
+    finally:
+        if before is None:
+            os.environ.pop("CODEX_HOME", None)
+        else:
+            os.environ["CODEX_HOME"] = before
+    check("codexhome", "with CODEX_HOME set, the check-up looks for ChatGPT's guard there",
+          d2.CODEX_GUARD == moved / "hooks" / "bash-guard.py" and d2.CODEX_HOOKS == moved / "hooks.json")
+    f = d2.Findings()
+    in_place = d2.check_codex_guard(f, PACK)
+    said = " ".join(r["text"] for r in f.rows)
+    check("codexhome", "and finds it installed, entered and the pack's own copy",
+          in_place and "is this Moblee's own copy" in said, said[:120])
+    check("codexhome", "and names no account folder in what it prints", "/Users/" not in said, said[:80])
+    (moved / "hooks.json").write_text("{")
+    f = d2.Findings()
+    in_place = d2.check_codex_guard(f, PACK)
+    said = " ".join(r["text"] for r in f.rows)
+    check("codexhome", "a damaged ChatGPT hooks file is 'cannot tell', not 'not switched on'",
+          not in_place and f.rows and f.rows[0]["level"] == d2.UNSURE and "cannot be told" in said
+          and "is not switched on" not in said, said[:120])
+    check("codexhome", "without CODEX_HOME, ~/.codex is the folder",
+          doctor.CODEX_DIR == doctor.HOME / ".codex" or os.environ.get("CODEX_HOME"))
+
+
+def test_tour(doctor, work):
+    """(0.16.0) The first-week tour: the wiki's scripts/first-days.py entered as
+    Claude's SessionStart hook, read from the hook entries by full path, as the
+    end-of-reply save is."""
+    vault = work / "tour-wiki"
+    (vault / "scripts").mkdir(parents=True, exist_ok=True)
+    (vault / "scripts" / "first-days.py").write_text("# tour\n")
+    settings = work / "tour-home" / ".claude" / "settings.json"
+    settings.parent.mkdir(parents=True, exist_ok=True)
+
+    def rows(text, assistant="claude", where=vault):
+        if text is None:
+            if settings.exists():
+                settings.rename(settings.with_name("settings.json.moved-%d" % len(list(settings.parent.iterdir()))))
+        else:
+            settings.write_text(text)
+        was = doctor.SETTINGS
+        try:
+            doctor.SETTINGS = settings
+            f = doctor.Findings()
+            doctor.check_tour(f, where, assistant)
+        finally:
+            doctor.SETTINGS = was
+        return f.rows
+
+    def entry(path):
+        return json.dumps({"hooks": {"SessionStart": [{"hooks": [
+            {"type": "command", "timeout": 10, "command": "python3 " + shlex.quote(str(path))}]}]}})
+
+    r = rows(entry(vault / "scripts" / "first-days.py"))
+    check("tour", "entered by its full path (with a space-free or quoted path): OK, switched on",
+          len(r) == 1 and r[0]["level"] == doctor.OK and "switched on" in r[0]["text"], str(r)[:120])
+    spaced = work / "tour wiki spaced"
+    (spaced / "scripts").mkdir(parents=True, exist_ok=True)
+    (spaced / "scripts" / "first-days.py").write_text("# tour\n")
+    r = rows(entry(spaced / "scripts" / "first-days.py"), where=spaced)
+    check("tour", "a wiki whose path holds a space is read as a shell reads it",
+          len(r) == 1 and r[0]["level"] == doctor.OK, str(r)[:120])
+    r = rows(entry(work / "elsewhere" / "scripts" / "first-days.py"))
+    check("tour", "entered for another folder: LOOK, and says so",
+          len(r) == 1 and r[0]["level"] == doctor.LOOK and "different folder" in r[0]["text"], str(r)[:120])
+    r = rows(json.dumps({"permissions": {"allow": ["Bash(python3 scripts/first-days.py)"]}, "hooks": {}}))
+    check("tour", "named only in a permission rule: not entered, LOOK with a code",
+          len(r) == 1 and r[0]["level"] == doctor.LOOK and r[0]["guide"] and "never runs" in r[0]["text"], str(r)[:120])
+    r = rows('{"hooks": {"SessionStart": [')
+    check("tour", "an unparseable settings file: cannot tell, never 'not entered'",
+          len(r) == 1 and r[0]["level"] == doctor.UNSURE and "cannot be told" in r[0]["text"], str(r)[:120])
+    r = rows(entry(vault / "scripts" / "first-days.py"), assistant="chatgpt")
+    check("tour", "an owner on ChatGPT alone is told nothing about it (entered for Claude only)", r == [])
+    r = rows(entry(vault / "scripts" / "first-days.py"), where=work / "tour-old-wiki")
+    check("tour", "a wiki from before 0.16.0, with no tour in it, adds no line (its version line covers it)", r == [])
+    r = rows(None)
+    check("tour", "no settings file at all: LOOK, not entered",
+          len(r) == 1 and r[0]["level"] == doctor.LOOK, str(r)[:120])
+
+
 def test_permissions(doctor, work):
     # (0.12.0) The builder's rules, the working mode and auto mode's exceptions,
     # read from the wiki's settings and from Claude's own settings file.
@@ -2469,6 +2609,8 @@ def main():
     test_app(doctor, work)
     test_leftovers(doctor, work)
     test_guard_version(doctor, work)
+    test_damaged_and_codex_home(doctor, work)
+    test_tour(doctor, work)
     test_saving(doctor, work)
     test_prove_saving(doctor, work)
     test_mods(doctor, work)

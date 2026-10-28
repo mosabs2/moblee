@@ -1,6 +1,12 @@
 # 15. What runs by itself, and what it needs from you
 
-Nothing in Moblee runs by itself until you have chosen it, and everything that does is made for a laptop that is closed for much of the day: a job that missed its hour runs once at the next wake, however many days were missed, and says so in its own record. Here is the whole list, in the order most owners take it.
+Nothing in Moblee runs on a timer until you have chosen it, and everything that does is made for a laptop that is closed for much of the day: a job that missed its hour runs once at the next wake, however many days were missed, and says so in its own record. Here is the whole list, in the order most owners take it.
+
+## Three things that come with every wiki
+
+Three small things run without being chosen, and none of them runs on a timer. **The delete guard** runs each time your assistant is about to run a command. **The end-of-reply save** runs each time a reply finishes, and saves the wiki's history. **The first-week tour** (from 0.16.0, with Claude) runs when a conversation starts: on your first five days of use it asks your assistant to offer one thing the wiki can do at the end of its first answer that day, and after that it says nothing. It reads and writes one small file, `~/.config/moblee/state/first-days.json`, uses no network, and if anything goes wrong it stays silent rather than hold a conversation up. "Stop the tour" ends it early.
+
+**The mail pass is not on this list.** It runs only when you say "orient", and only once you have said yes to it.
 
 ## The Saturday check
 

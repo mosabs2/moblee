@@ -151,9 +151,16 @@ enum Layout {
     /// The corner each of the two quiet lines at the bottom of the home screen
     /// sits in, and the corner "Bigger text" sits in at the top. Written as
     /// SwiftUI's own alignments, so they mirror themselves.
-    static let assistantCorner: Alignment = .bottomTrailing
-    static let newerReleaseCorner: Alignment = .bottomLeading
     static let biggerTextCorner: Alignment = .trailing
+    /// The bottom corner the reading ends at: the example wiki's one quiet
+    /// line. (Until 0.16.0 the line about the assistant on the home screen sat
+    /// here too, with the newer-Moblee line in the other bottom corner.)
+    static let assistantCorner: Alignment = .bottomTrailing
+    /// (0.16.0) The home screen's read-aloud and its one menu. They take the
+    /// place "Bigger text" has on every other screen (it is inside the menu
+    /// there), so they are in the same corner and mirror with it. The two quiet
+    /// lines that used to sit in the bottom corners are inside the menu too.
+    static let homeMenuCorner: Alignment = .trailing
 
     /// Which side of the window a semantic edge, or a corner, really is.
     static func side(of edge: Edge, mirrored: Bool) -> Side {
@@ -377,6 +384,19 @@ enum FocusedControl {
     static var drawnRing: String?
 }
 
+/// (0.16.0) True for everything under the home screen's menu while the menu is
+/// open. Those controls then take no keyboard focus and the big button gives up
+/// Return, so Tab and the arrows stay inside the menu and Return presses the
+/// menu item the keyboard is on, or nothing, never the button underneath.
+private struct KeyboardHeldByMenuKey: EnvironmentKey { static let defaultValue = false }
+
+extension EnvironmentValues {
+    var keyboardHeldByMenu: Bool {
+        get { self[KeyboardHeldByMenuKey.self] }
+        set { self[KeyboardHeldByMenuKey.self] = newValue }
+    }
+}
+
 /// A control the keyboard can reach: it takes focus in the order it is drawn,
 /// it shows a ring that can be seen in light and in dark, it can be found by
 /// name, and in a practice run it says when the keyboard is on it.
@@ -388,16 +408,30 @@ struct KeyboardReachable: ViewModifier {
     /// done here. Return is deliberately left alone, so that the big button's
     /// own Return goes on working wherever the keyboard happens to be.
     var press: (() -> Void)?
+    /// (0.16.0) Return presses it too (the menu's items, where the big
+    /// button's Return is switched off while the menu is open).
+    var returnPresses = false
+    /// (0.16.0) Takes the keyboard as it appears (the menu's first item).
+    var takesFocus = false
     @FocusState private var focused: Bool
+    @Environment(\.keyboardHeldByMenu) private var held
 
     func body(content: Content) -> some View {
         content
-            .focusable()
+            .focusable(!held)
             .focused($focused)
             .onKeyPress(.space) {
                 guard let press else { return .ignored }
                 press()
                 return .handled
+            }
+            .onKeyPress(.return) {
+                guard returnPresses, let press else { return .ignored }
+                press()
+                return .handled
+            }
+            .onAppear {
+                if takesFocus { DispatchQueue.main.async { focused = true } }
             }
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.pt(corner) + 3, style: .continuous)
@@ -420,8 +454,10 @@ struct KeyboardReachable: ViewModifier {
 
 extension View {
     func keyboardReachable(_ id: String, corner: CGFloat = 10,
-                           press: (() -> Void)? = nil) -> some View {
-        modifier(KeyboardReachable(id: id, corner: corner, press: press))
+                           press: (() -> Void)? = nil, returnPresses: Bool = false,
+                           takesFocus: Bool = false) -> some View {
+        modifier(KeyboardReachable(id: id, corner: corner, press: press,
+                                   returnPresses: returnPresses, takesFocus: takesFocus))
     }
 }
 
@@ -899,12 +935,22 @@ struct ScreenFrame<Picture: View>: View {
     /// The room the picture is given. One screen (the proof that found the
     /// guard not running) has a one-line sentence and a taller picture.
     var pictureHeight: CGFloat = 280
+    /// (0.16.0) The screen's one read-aloud control is in the window's top
+    /// corner rather than beside the sentence, and it reads the whole screen;
+    /// so neither the sentence nor the quiet words carry one of their own.
+    /// The home screen is the screen that does this.
+    var listenInCorner: Bool = false
+    /// (0.16.0) One quiet line under the sentence, where the screen has
+    /// something small but true to say (the home screen, when a settings file
+    /// cannot be read). The picture gives up the room it takes.
+    var subline: AnyView? = nil
     let action: () -> Void
     @ViewBuilder let picture: () -> Picture
 
     @EnvironmentObject var flow: Flow
     @ObservedObject private var speaker = Speaker.shared
     @ObservedObject private var textSize = TextSize.shared
+    @Environment(\.keyboardHeldByMenu) private var keyboardHeldByMenu
 
     var body: some View {
         VStack(spacing: 0) {
@@ -935,15 +981,22 @@ struct ScreenFrame<Picture: View>: View {
                 // likely to want it read to them; it had no way to the keyboard.
                 // (v0.9.5) It is now one of many on a screen rather than the
                 // only one, so it is the same control as the rest, drawn larger.
-                ListenButton(id: "read-aloud",
-                             speech: Headline.speech(sentence: sentence, spoken: spoken, speech: speech),
-                             what: reads, size: 22)
+                if !listenInCorner {
+                    ListenButton(id: "read-aloud",
+                                 speech: Headline.speech(sentence: sentence, spoken: spoken, speech: speech),
+                                 what: reads, size: 22)
+                }
             }
             .padding(.horizontal, Theme.pt(48))
+            if let subline {
+                subline
+                    .padding(.horizontal, Theme.pt(48))
+                    .padding(.top, Theme.pt(6))
+            }
             Spacer(minLength: Theme.pt(10))
             picture()
                 .frame(maxWidth: .infinity)
-                .frame(height: Theme.pt(pictureHeight))
+                .frame(height: Theme.pt(pictureHeight - (subline == nil ? 0 : 34)))
             Spacer(minLength: Theme.pt(10))
             HStack {
                 if showsBack {
@@ -982,7 +1035,9 @@ struct ScreenFrame<Picture: View>: View {
                 // can never be moved on to would say something untrue. macOS
                 // gives a greyed-out button nothing, so Return does nothing on
                 // a screen that has not been answered yet. (v0.9.4)
-                .keyboardShortcut(.defaultAction)
+                // (0.16.0) Not while the home screen's menu is open over it:
+                // Return then belongs to the menu (see `KeyboardHeldByMenu`).
+                .keyboardShortcut(keyboardHeldByMenu ? nil : .defaultAction)
                 .accessibilityIdentifier("main-button")
                 // (v0.9.4) The big button says where it really is, so that the
                 // self-drive walk presses the button rather than the place the
@@ -1020,8 +1075,10 @@ struct ScreenFrame<Picture: View>: View {
                     HStack(spacing: Theme.pt(6)) {
                         QuietButton(title: quietTitle, cancels: QuietWords.escapeCancels(quietTitle),
                                     action: { speaker.stop(); quietAction() })
-                        ListenButton(id: "listen-quiet", speech: Speech(quietTitle),
-                                     what: "the small button", size: 14)
+                        if !listenInCorner {
+                            ListenButton(id: "listen-quiet", speech: Speech(quietTitle),
+                                         what: "the small button", size: 14)
+                        }
                     }
                 } else {
                     Color.clear
@@ -1073,15 +1130,48 @@ struct QuietButton: View {
     }
 }
 
+/// (0.16.0) The small button on a card or a row: Add, Done, Try again, Open,
+/// Put back. Drawn by SwiftUI itself rather than by AppKit, so a picture file
+/// shows it as it is (AppKit's bordered buttons came out as a blank sign in
+/// every drawn screen), and sized from `Theme`, so it grows with the words.
+/// Outlined by default; `filled` for the one that finishes something.
+struct SmallButtonStyle: ButtonStyle {
+    var tint: Color = Theme.accent
+    var filled = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        let colour = isEnabled ? tint : Color.secondary
+        return configuration.label
+            .font(Theme.font(13, .semibold))
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, Theme.pt(13)).padding(.vertical, Theme.pt(4))
+            .foregroundStyle(filled ? Color.white : colour)
+            .background(
+                RoundedRectangle(cornerRadius: Theme.pt(7), style: .continuous)
+                    .fill(filled ? colour : Theme.card))
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.pt(7), style: .continuous)
+                    .strokeBorder(colour, lineWidth: filled ? 0 : 1))
+            .contentShape(Rectangle())
+            .opacity(configuration.isPressed ? 0.75 : 1)
+    }
+}
+
 struct BigButtonStyle: ButtonStyle {
+    /// (0.16.0) Add more's Done is the screen's one primary button but sits in
+    /// a foot rather than on its own, so it is drawn smaller there.
+    var corner: CGFloat = 16
+    var sidePadding: CGFloat = 26
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .padding(.horizontal, Theme.pt(26))
+            .padding(.horizontal, Theme.pt(sidePadding))
             .foregroundStyle(.white)
             .background(
-                RoundedRectangle(cornerRadius: Theme.pt(16), style: .continuous)
+                RoundedRectangle(cornerRadius: Theme.pt(corner), style: .continuous)
                     .fill(isEnabled ? Theme.accent : Color.gray.opacity(0.45)))
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)

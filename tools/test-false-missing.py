@@ -19,6 +19,8 @@ nothing reaches the network: GitHub's tool and Claude are stand-ins.
   6. The guard's hook as the installer writes it, with $HOME.
   7. The usual tool folders (~/.local/bin) are on the PATH checks use.
   8. The check-up reads an SSH Hub address as the same Hub.
+  9. (0.16.0) Claude's settings file damaged by hand: the checks that read it
+     say they cannot tell, never "off".
 
 Run from the Moblee folder: python3 tools/test-false-missing.py
 """
@@ -186,6 +188,22 @@ def main() -> int:
     print("\n8. The check-up")
     check(d.hub_norm("git@github.com:Moblee-Main-Devs/moblee-hub.git") == d.hub_norm(https),
           "reads an SSH Hub address as the same Hub")
+
+    print("\n9. Claude's settings file damaged by hand (0.16.0)")
+    settings = home / ".claude" / "settings.json"
+    check(m.SETTINGS == settings, "the checks read Claude's settings in this home")
+    check(m.deny_rules_present(["Bash(rm:*)"]) is False and m.recall_hook_registered() is False,
+          "with no settings file, the rules and memory search's hook are plainly not there")
+    settings.write_text('{"permissions": {"deny": ["Bash(rm:*)"]')
+    check(m.deny_rules_present(["Bash(rm:*)"]) is None, "an unparseable file: whether the delete rules are in it cannot be told")
+    check(m.recall_hook_registered() is None, "nor whether memory search is switched on")
+    ok, words = m.check_voice()
+    check(ok is None and "cannot be told" in words, "nor whether the voice is on: unseen, not off (" + words + ")")
+    settings.write_text(json.dumps({"permissions": {"deny": ["Bash(rm:*)"]}}))
+    check(m.deny_rules_present(["Bash(rm:*)"]) is True and m.deny_rules_present(["Bash(x:*)"]) is False,
+          "a readable file still answers yes and no")
+    settings.write_text(json.dumps(["not", "settings"]))
+    check(m.deny_rules_present(["Bash(rm:*)"]) is False, "a file of the wrong shape holds no rules, and nothing breaks")
 
     print(f"\n{PASSED} passed, {len(FAILED)} failed")
     for what in FAILED:

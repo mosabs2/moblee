@@ -27,6 +27,8 @@
     "Bash(git config --get:*)",
     "Bash(git --version:*)",
     "Bash(git init:*)",
+    "Bash(osascript scripts/mail-list-unread.applescript:*)",
+    "Bash(osascript scripts/mail-tidy.applescript:*)",
     "Bash(git clone:*)",
     "Bash(git switch:*)",
     "Bash(git checkout -b:*)",

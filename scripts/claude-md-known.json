@@ -8,7 +8,10 @@
   "digest is in this list, so an owner's own addition is never overwritten.",
   "GENERATED FILE. Do not edit by hand. Regenerate from the repo root with:",
   "    python3 tools/claude-md-corpus/build-corpus.py",
-  "The key '(file preamble)' is the text above the first '## ' heading."
+  "The key '(file preamble)' is the text above the first '## ' heading.",
+  "(0.16.0) The rebuild for 0.16.0 no longer produced six digests the 0.12.0 build had",
+  "(two under 'Things built for the owner', four under 'Tools'); they were put back,",
+  "because a body Moblee once shipped must stay recognised. Check for the same after any rebuild."
  ],
  "headings": {
   "(file preamble)": [
@@ -107,17 +110,31 @@
    "2150cc3690af971e709aa1bcb08efb025a96f151abf4f536355d28f3abe82c30"
   ],
   "The \"orient\" command": [
+   "1c62ec768737d70e1fa62ff361268c6b770bfe48f26fc9152c2be5df8355ed12",
+   "23ad4b11904efc7488b3bbf985247f03162a7a531810a0b4ee6b3c2c1feebdbe",
    "60326b05c6b9f496ba835fb5b5ec85eaef83e52e311cc172e9652548780706b7",
    "6c3bdf6a4862d0fdd83fdce581f87b864ff7f18dab4983e25312c20d40060bdb",
+   "7c78965cd85cb78d6238d6795455815b46179bedd6b321d84fe48ff645c10a55",
+   "bf18e3efc1bcae46c1dcc1eb9aa81120919c9a859cb449ac37c0b28227c270c5",
    "d81247afddfe8239ee74241460f16c828ca19de8c447898a84b0f8d5cd56eb1b",
+   "dec59609e615b05bcf935febf406f4c89775b15a39126294d7829c4c45a231c5",
    "ef8ec00925fe4996e12c8a5df0a1dba5cadd53eab11f3a2b1c67cb656b6171de",
    "fc65d6a2dc7e2c2780aa3d72ae7f3069774a86d38adc7a136211cb77feb4cff6"
   ],
   "The companion": [
+   "1cf64532832ef5db1825386f1bbb8662045f365d8819ff5d2a1ac2e2487d0f36",
    "207fc3a79061052ad0d111fe00d0b04e26d501a3ff8026020b385203b97f177b",
+   "38bf8da02456098ad6fde2890d592e1e92c79a2f9c5bc6ee900e7be1d93acb9e",
    "4183834e054e763e0cfca05de844cecb3d24bfcfc1b9a3e7ff11cbef823ab51e",
+   "4609bf0621b3ab3e335b0d3a53b17d5ed305041b18178fd420c7a47feb62823f",
+   "49421a901cdf4fe310293686c4905d446695940cd429290ad359791d3d424141",
+   "599059bd8a9c3158703965054667033ea524c964f8970aecb274c218ded9f845",
+   "5b92feffbfbdf7b74f3e8ac4bd71f55e1c87980a8320e8f29b72c058b2e4e394",
+   "60d9f1abb61b0134202f3d84e84adc4cbd93cea6f6968e95f61f127e5a54cdf5",
    "7d6bb2bed62e8aac4ea438a2f107b94c95e73fb0a0bdecf3acc13c73f6d91d18",
+   "97cd6644c490827eab40c679ed62692bfd49e26dc5578a99ab4d82844dd69afd",
    "9d34e4f17c1fbb27c94bd04be0acc5f292c98c26fbc9a9a03dc731326dca198b",
+   "a339bbc5a7d0cdfae0028e8e72149f255fbb5075eea0f08a236b2c0c97e183ec",
    "b1d8015bf7d75f20cbfe2f2c0f96dc69e7251980b267a83d3fbba085a45b6cc2",
    "cff3007610a7d475ff3bde32cf57d46c8b8116d61e3b77557e9cc75d3ff6dd32",
    "de1d50cb41a3b921f736ae088c597705e288639d87081f4915431aeae7b78b57"
@@ -154,6 +171,7 @@
   "Things built for the owner": [
    "09c57c5097fbf380a0f9823d18f12ae5e8f3888ee5d76b73027fb23b0e56697e",
    "65c1aed26c24a5cf677c1dad1896e87144d29ea6989c201a235260e273560f5b",
+   "933531d83f5041e76901e4ee7239f3b0a80d875d3db1b3c7291866ae6f8bcf42",
    "d6f8794e51e404f38dc4a1fc6a27ec517e243670ac8524cc1e159a4bd4df5ddb",
    "eed159d451ae34fda5a122debbc0a21d2a89c6d3c710913e29c36cda3d917fd2"
   ],
