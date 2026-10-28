@@ -46,6 +46,22 @@ CONFIG_DIR = HOME / ".config" / "moblee"
 BACKUP_ROOT = CONFIG_DIR / "backups"
 STATE_FILE = CONFIG_DIR / "setup-state.json"
 SETTINGS = HOME / ".claude" / "settings.json"
+# (0.16.0) ChatGPT keeps its settings in CODEX_HOME when that is set, else
+# ~/.codex, and the safety installer puts the guard and hooks.json there.
+_CODEX_HOME = os.environ.get("CODEX_HOME", "").strip()
+
+
+def _recorded_codex_dir():
+    """The folder the safety installer noted in ~/.config/moblee/codex-home, or None."""
+    try:
+        line = (CONFIG_DIR / "codex-home").read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        return None
+    return Path(line) if line and "\n" not in line and line.startswith("/") else None
+
+
+CODEX_DIR = (Path(_CODEX_HOME).expanduser().absolute() if _CODEX_HOME
+             else (_recorded_codex_dir() or HOME / ".codex"))
 SKILLS_DST = HOME / ".claude" / "skills"
 EXTRA_SKILLS = PACKAGE_ROOT / "extras" / "skills"
 STAMP = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -621,12 +637,16 @@ def add_deny_rules(rules: list, kind: str = "deny") -> bool:
     return True
 
 
-def deny_rules_present(rules: list, kind: str = "deny") -> bool:
+def deny_rules_present(rules: list, kind: str = "deny") -> bool | None:
+    """(0.16.0) None when Claude's settings file is there and cannot be read:
+    whether the rules are in it cannot be told, which is not the same as no."""
     try:
-        listed = load_settings().get("permissions", {}).get(kind, [])
-    except json.JSONDecodeError:
-        return False
-    return all(r in listed for r in rules)
+        data = load_settings()
+    except (OSError, ValueError):
+        return None
+    perms = data.get("permissions") if isinstance(data, dict) else None
+    listed = perms.get(kind) if isinstance(perms, dict) else None
+    return all(r in listed for r in rules) if isinstance(listed, list) else not rules
 
 
 # ----------------------------------------------------------------------------
@@ -701,7 +721,10 @@ def check_mac_apps():
         return False, "installed, but not connected to Claude"
     if "Connected" not in out or "✘" in out:
         return False, "registered with Claude, but it does not start; run the checklist item again"
-    if not deny_rules_present(ORCHARD_DENY):
+    blocked = deny_rules_present(ORCHARD_DENY)
+    if blocked is None:
+        return None, "connected; Claude's settings file could not be read, so whether its delete tools are blocked cannot be told"
+    if not blocked:
         return False, "connected, but its delete tools are not blocked"
     return True, "connected: Claude can read Calendar, Reminders, Mail and Notes when you ask"
 
@@ -1434,11 +1457,14 @@ def ollama_has_model() -> bool:
         return False
 
 
-def recall_hook_registered() -> bool:
+def recall_hook_registered() -> bool | None:
+    """None when Claude's settings file is there and cannot be read (0.16.0)."""
+    if not SETTINGS.exists():
+        return False
     try:
         settings = json.loads(SETTINGS.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return False
+        return None
     hooks = settings.get("hooks") if isinstance(settings, dict) else None
     ups = hooks.get("UserPromptSubmit") if isinstance(hooks, dict) else None
     for g in ups or []:
@@ -1452,7 +1478,10 @@ def check_recall():
     v = vault_path()
     if not v or not (v / "scripts" / "recall" / "recall.py").exists():
         return False, "not set up"
-    if not recall_hook_registered():
+    told = recall_hook_registered()
+    if told is None:
+        return None, "set up; Claude's settings file could not be read, so whether Claude uses it cannot be told"
+    if not told:
         return False, "set up, but Claude has not been told to use it (choose this item again)"
     if not ollama_present():
         return False, "set up, but the small model's program (Ollama) is not on this Mac (choose this item again)"
@@ -1582,8 +1611,8 @@ def install_lessons():
 def check_voice():
     try:
         hooks = load_settings().get("hooks", {})
-    except json.JSONDecodeError:
-        return False, "settings could not be read"
+    except (OSError, ValueError, AttributeError):
+        return None, "Claude's settings file could not be read, so whether the voice is on cannot be told"
     blob = json.dumps(hooks)
     if "speak-elevenlabs.py" in blob:
         return True, "Claude reads its replies aloud"
@@ -2576,6 +2605,10 @@ CORE_PARTS = [
      "what": "Stops your assistant deleting or overwriting your files.", "say": "", "open": ""},
     {"key": "save", "title": "Saving after every reply",
      "what": "The wiki saves its own history after each answer, so any change can be undone.", "say": "", "open": ""},
+    # (0.16.0) Claude only: the installer enters it for Claude alone, so for an
+    # owner on ChatGPT alone it is not listed.
+    {"key": "tour", "title": "The first-week tour",
+     "what": "For your first five days of use, Claude offers one thing your wiki can do each day.", "say": "", "open": ""},
     {"key": "companion", "title": "The companion",
      "what": "Sets things up with you and suggests what suits the way you work.", "say": "review my setup", "open": ""},
     {"key": "brain", "title": "Big questions to your wiki",
@@ -2687,8 +2720,10 @@ def parts_report() -> dict:
     def combine(states: list) -> str:
         """Every assistant the owner uses must have it. ChatGPT runs a hook only
         once the owner has trusted it, which cannot be seen from here, so a hook
-        entered for ChatGPT is 'unseen', never 'in' (the check-up says the same)."""
-        for word in ("missing", "unseen"):
+        entered for ChatGPT is 'unseen', never 'in' (the check-up says the same).
+        (0.16.0) A settings file that is there and cannot be read is
+        'unreadable': what it says cannot be told, so it is never 'missing'."""
+        for word in ("missing", "unreadable", "unseen"):
             if word in states:
                 return word
         return "in"
@@ -2697,11 +2732,14 @@ def parts_report() -> dict:
         states = []
         for on, script, settings, trusted in (
                 (claude, HOME / ".claude" / "hooks" / "bash-guard.py", HOME / ".claude" / "settings.json", True),
-                (chatgpt, HOME / ".codex" / "hooks" / "bash-guard.py", HOME / ".codex" / "hooks.json", False)):
+                (chatgpt, CODEX_DIR / "hooks" / "bash-guard.py", CODEX_DIR / "hooks.json", False)):
             if not on:
                 continue
-            commands = _hook_commands(settings, "PreToolUse") or []
-            entered = script.is_file() and any(_names_file(c, script) for c in commands)
+            commands = _hook_commands(settings, "PreToolUse")
+            if commands is None and script.is_file():
+                states.append("unreadable")
+                continue
+            entered = script.is_file() and any(_names_file(c, script) for c in commands or [])
             states.append(("in" if trusted else "unseen") if entered else "missing")
         return combine(states)
 
@@ -2711,13 +2749,27 @@ def parts_report() -> dict:
         wanted = v / "scripts" / "turn-end-commit.py"
         states = []
         for on, settings, trusted in ((claude, HOME / ".claude" / "settings.json", True),
-                                      (chatgpt, HOME / ".codex" / "hooks.json", False)):
+                                      (chatgpt, CODEX_DIR / "hooks.json", False)):
             if not on:
                 continue
-            commands = _hook_commands(settings, "Stop") or []
+            commands = _hook_commands(settings, "Stop")
+            if commands is None:
+                states.append("unreadable")
+                continue
             entered = any(_names_file(c, wanted) for c in commands)
             states.append(("in" if trusted else "unseen") if entered else "missing")
         return combine(states)
+
+    def tour() -> str:
+        """(0.16.0) The first-week tour: the wiki's scripts/first-days.py entered
+        as Claude's SessionStart hook by its full path, read as the save is."""
+        wanted = v / "scripts" / "first-days.py" if v is not None else None
+        if wanted is None or not wanted.is_file():
+            return "missing"
+        commands = _hook_commands(HOME / ".claude" / "settings.json", "SessionStart")
+        if commands is None:
+            return "unreadable"
+        return "in" if any(_names_file(c, wanted) for c in commands) else "missing"
 
     core = []
     for part in CORE_PARTS:
@@ -2726,6 +2778,10 @@ def parts_report() -> dict:
             state = guard()
         elif key == "save":
             state = save()
+        elif key == "tour":
+            if not claude:
+                continue      # entered for Claude only; nothing to show an owner on ChatGPT alone
+            state = tour()
         elif key == "dashboard":
             state = "in" if v is not None and (v / "dashboard" / "server.py").is_file() else "missing"
         elif key == "galaxy":

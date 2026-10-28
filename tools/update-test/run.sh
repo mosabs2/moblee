@@ -382,8 +382,9 @@ case_shrink() {
   run_update "$HOME_DIR" "$SBX"; local rc=$RC
   same "$rc" "0" "the updater exits cleanly"
   local after; after=$(( $(wc -c < "$SBX/CLAUDE.md") / 4 ))
-  if [[ "$after" -lt 4600 ]]; then ok "the rules file is under 4,600 tokens (was $before, now $after)";
-  else bad "the rules file is under 4,600 tokens — was $before, now $after"; fi
+  # (0.16.0) 5,000, as in scripts/test-patch-claude-md.py: the orient section took in the day's Plan and the mail pass
+  if [[ "$after" -lt 5000 ]]; then ok "the rules file is under 5,000 tokens (was $before, now $after)";
+  else bad "the rules file is under 5,000 tokens — was $before, now $after"; fi
   # the four pages the content moved to
   for p in "Wiki Conventions" "Git and Commits" "Tools and Connections" "Readwise"; do
     isfile "$SBX/wiki/Wiki Operations/$p.md" "the $p page arrived"

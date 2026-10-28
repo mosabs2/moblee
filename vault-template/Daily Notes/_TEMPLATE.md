@@ -8,6 +8,10 @@ created:
 
 ## Plan
 
+### Waiting on others
+
+### Standing
+
 ## Scheduled
 
 ## Body

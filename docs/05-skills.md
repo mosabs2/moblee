@@ -10,6 +10,10 @@ In a new wiki it holds the first conversation, one question at a time. It asks w
 
 On any later day, say "guide me" and it offers one next step, with the reason: something you agreed that is still waiting to be added, something you have now done by hand three times that an item would do for you, something you asked to be held to that is slipping, a part of the wiki you have not tried, or a small tool built for you. It offers one thing in a session unless you ask for more. A no is written down with the date and is not raised again for ninety days.
 
+**The first week (from 0.16.0).** For your first five days of using the wiki, your assistant speaks first, a little: at the end of its first answer each day, it adds one line offering one thing the wiki can do, picked to fit what you have been doing, and offers to show you. On the first day it also gives a three-line map of what there is. A day counts only when you use the wiki, so a week away does not use the tour up, and a wiki from before 0.16.0 starts its tour the day you first use it after updating. Nothing you have already got, nothing you said no to, and nothing already offered is offered again. Say "stop the tour" to end it early. After day five it goes quiet again, and offers only when you say "guide me". **With ChatGPT:** there is no tour yet.
+
+**Show me everything.** Say it any time and your assistant brings the page `What Your Wiki Can Do` (in `wiki/Wiki Operations/`) up to date and reads it out, briefly, in four groups: what is already in your wiki, what Moblee adds by itself in one press, what opens a Terminal window or needs a few clicks, and what is paid or has a paid option. The page is made from Moblee's own list, so it never goes stale by more than an update; the updater refreshes it too.
+
 **Adding something.** **With Claude:** what you agree is written on the `Habits and Tools` page under "Waiting in Moblee" and in a small file in your wiki, `.moblee/requests.json`, which the Moblee app reads. The item then waits as a tile in the app, and you press Add. If you installed from Terminal and have no app, Claude gives you one command to run in a Terminal window of your own. When you come back, Claude tests the item and records whether it is working. **With ChatGPT:** Moblee does not set this up for ChatGPT yet.
 
 **Made to measure.** When you need something no checklist item provides, the companion builds it small, inside your wiki, by the method in its own folder (`method.md` and `builders-rules.md`): notice the need, propose the smallest useful version, build it, prove it works in front of you, record it under "Made for the owner", and look at it again in a month. A page, a template or a script in the wiki's `scripts/` folder is made directly. A new skill is drafted under `made-for-you/skills/` in the wiki and reaches Claude through the app, like everything else that changes what Claude can do.
@@ -20,13 +24,14 @@ On any later day, say "guide me" and it offers one next step, with the reason: s
 
 **Setup review.** When you ask, or when the weekly health check says one is due (more than ninety days since the last), it tells you in two or three sentences what your use looks like and asks, item by item, whether you want a change. Nothing is removed by Moblee.
 
-**What it never does.** It never runs the installer, the updater or the checklist (the read-only `--check` and `--list` excepted), never copies anything into `~/.claude/` (for ChatGPT, `~/.codex/` and `~/.agents/`), and never edits your assistant's settings. The one exception is the brand file, `brand.css` in the `wiki-to-pdf` skill's folder, which the `design-your-brand` skill edits after telling you; you may be asked to approve that one edit. If you ask it to do any of the rest, it explains that these are yours to do in the Moblee app or in a Terminal window of your own. It never starts a conversation unasked, and it leaves any password, recovery phrase, card number or code it finds in your material out of the wiki and tells you.
+**What it never does.** It never runs the installer, the updater or the checklist (the read-only `--check` and `--list` excepted), never copies anything into `~/.claude/` (for ChatGPT, `~/.codex/` and `~/.agents/`), and never edits your assistant's settings. The one exception is the brand file, `brand.css` in the `wiki-to-pdf` skill's folder, which the `design-your-brand` skill edits after telling you; you may be asked to approve that one edit. If you ask it to do any of the rest, it explains that these are yours to do in the Moblee app or in a Terminal window of your own. It never starts a conversation unasked (the first week's one line a day is the only time it speaks first), and it leaves any password, recovery phrase, card number or code it finds in your material out of the wiki and tells you.
 
 **Trigger phrases.**
 
 - "Get me started." / "Guide me."
 - "What next?" / "What should I add?"
 - "Review my setup."
+- "Show me everything." / "Stop the tour."
 - "Something is wrong." / "Run a check-up."
 - "Can it do X every week?" / "I keep doing Y by hand."
 

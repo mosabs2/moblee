@@ -134,7 +134,14 @@ import shlex
 import sys
 import unicodedata
 
-VERSION = "v5.2"
+VERSION = "v5.3"
+# v5.3 (October 2026, Moblee 0.16.0): the guard and hooks.json under
+# CODEX_HOME, where ChatGPT keeps them when that is set, are protected as those
+# under ~/.codex are; and Python's os.rename( is a clobber primitive like
+# os.replace( (os.rename("wiki", "/tmp/gone") used to pass), with the same
+# temp-file exemption. The Moblee Hub's own tools get no allowance of their
+# own: they come from other members, and its update tool passes the ordinary
+# scan as written.
 MAX_DEPTH = 6
 MAX_FILE_BYTES = 512 * 1024
 MAX_HASH_BYTES = 4 * 1024 * 1024
@@ -148,8 +155,8 @@ KNOWN_SAFE_SHA256 = {
     "0da0d35e4131214cac6564771278bf44f726ac30f672fdf6d5882e8cc720be9a": "extras/recall/recall-inject.py",
     "1f6251657d9ac39d61f342e2739ceab9268e88fe56a47f2327798454bad05f69": "extras/recall/recall.py",
     "a4294253dcd091c30997668bd55ce359076597de23e4bf341e690168373ea65c": "learning-path/moblee-tip.sh",
-    "9b4500ffcbd523cc46bc40a4676ceb328c2272df6b3a210b3bb46828e20573ec": "safety/install-safety.py",
-    "839b16abae93385eceb46c30cbfa1fab1938020d591b266ccd613bb341f805e8": "safety/test-guard.py",
+    "c8b1fe1138bf1ef1f06271f8207d72a4be337fde990dcea0dfe16c9858a8c974": "safety/install-safety.py",
+    "aeb0093b0be66953ca0d0e7d67dcc1e44eccbf7b3278b37c326d255bcc226857": "safety/test-guard.py",
     "8a5524c075c8643ba9606bcf6243bd94523078dd504d76b52f0b629296be5ad0": "scripts/add-habits-page.py",
     "4b2f688c92a7b56fb2fc98c25a922ecf958b77b13659173e0b86cfa336aff211": "scripts/add-identity.py",
     "e0a74cf640a0a76f0bfedade668fe7cf65042e3c790c0c2e4b4ccbc6525b65ab": "scripts/add-reference-pages.py",
@@ -160,17 +167,17 @@ KNOWN_SAFE_SHA256 = {
     "41f250df9ce19f0b0118ea0775877732102b5da4864531e72321c7587678ba79": "scripts/install-learning-path.py",
     "e6526d9d84ff88e7c3c581064c67fbcd71c94ffeaf69b439e48b7413f40148ba": "scripts/install-schedule.sh",
     "e311dbe293d6d31dcbf4405e1083c18148cc11e68fc274a121272f37e1b01326": "scripts/install-skills.sh",
-    "01f3aefa92b7bfc4b35ce773469230ca56d4813fec2403078f2b85728eaf8fa3": "scripts/install.sh",
+    "d0a61439d5a4a903635720f456dd5478e3de2e57369146ace68594b97c0ab9d4": "scripts/install.sh",
     "1b790b84e08e7f116346feed1201660d2cd6d15bbca7f12e7e0474e3bd8adcb4": "scripts/job-switch.py",
     "aea04e2f4b23d1fe669649f7b7847fec941de0dfa8ed54a799739c72b8dcdc73": "scripts/lint-v2.py",
     "3dc036a7fd72607eae7eb8adfdefd749858205ba6aac05d604373a1714a56f57": "scripts/log-append.py",
-    "b38f3cf0b77e27fe43a00ef555cdf16e50837e7e06a76beddf63756d0e37c735": "scripts/moblee-doctor.py",
-    "fa4b24a326e7634564e9bc22a1e3e568ad05f2b4638d2b3d5f9557c0afe4de2a": "scripts/moblee-setup.py",
-    "898106b72683e1387031535b1510a448bf38330ca9751258f66a0b748c5542f3": "scripts/patch-claude-md.py",
+    "c0c13b4020f68152e7321084fdb9348ec91b66828da58f4a92c8df2842e84cf9": "scripts/moblee-doctor.py",
+    "d6112e5047a9dc3097a3d3106a56dfb51b276f58fc6e02863f1951851822c5f6": "scripts/moblee-setup.py",
+    "2aa32e2a012bb26fce8c6fc49406c38e660d3170f8a97f3d0315b6517ca287f0": "scripts/patch-claude-md.py",
     "8d1c998cdd9208de0909e6c4b4d68b5ac667466ce2acb3c1a9ba81fbef3febda": "scripts/seed-memory.py",
-    "c6860063b170bd3019dd319081c0992a2401cd5aacf99b6e4b56b2c729734d21": "scripts/test-patch-claude-md.py",
+    "a9adc180414697c74b671809222155e048cac776dda5dd5f165fdf7d382f2a24": "scripts/test-patch-claude-md.py",
     "631a9c1d17b75715643d07b0b9fdbaccd89ba6c5995f84065a5b0988cdec1d4f": "scripts/turn-end-commit.py",
-    "6f2789d0510c35b61a64d8d0404a00a29fe142d927c35e48bdb2cea52e3bb0c8": "scripts/update.sh",
+    "859ca89816444357ea8ee121cf391ff3e99c160eea7762c5ef96f558d8e3a97e": "scripts/update.sh",
     "56f68e1a9c981abedca1d35bd06d1e20bdd0c60574ec79e04313a1806507d303": "scripts/vault-gate.py",
     "ebecd70937e2dc3b7f31e15877d0e718df2d4bf532146878c9f832e5a6998414": "scripts/vault-orient-preflight.sh",
     "5506f733bb7c75c57fb3f5cc534696bb5a0180719b7f1d060815bf035acf1eba": "scripts/vault.sh",
@@ -281,6 +288,23 @@ PROTECTED_FILES_REL = ((".claude", "settings.json"),
                        # into either widens or narrows what may be deleted
                        (".config", "moblee", "vault-path"),
                        (".config", "moblee", "build-roots"))
+
+
+def _codex_home():
+    """(v5.3) ChatGPT keeps its settings in CODEX_HOME when that is set, and the
+    installer puts the guard and hooks.json there; protect them there too."""
+    ch = os.environ.get("CODEX_HOME", "").strip()
+    if not ch:
+        return None
+    d = os.path.abspath(os.path.expanduser(ch))
+    return None if d == os.path.join(os.path.expanduser("~"), ".codex") else d
+
+
+CODEX_HOME_DIR = _codex_home()
+# absolute extras: (folders, files) protected as the hooks folders and hooks files are
+CODEX_HOME_PROTECTED = (((os.path.join(CODEX_HOME_DIR, "hooks"),),
+                         (os.path.join(CODEX_HOME_DIR, "hooks.json"),))
+                        if CODEX_HOME_DIR else ((), ()))
 SETTINGS_RE = re.compile(r"(?:^|/)\.claude/settings[^/]*\.json$")
 PROTECTED_SPELL_RE = re.compile(
     r"\.claude/+(?:settings[^/\s'\"]*\.json|hooks(?:/|$|[\s'\"]))|\.codex/+hooks"
@@ -308,7 +332,7 @@ _WRITEFILESYNC_RE = re.compile(r"writefilesync\([^()]*,\s*(\"\"|'')")
 LANGS = {
     "python": {
         "del": ("rmtree", "os.remove", "os.unlink", "os.rmdir", "removedirs",
-                "shutil.rm", "shutil.move(", "os.replace(", "os.truncate(",
+                "shutil.rm", "shutil.move(", "os.replace(", "os.rename(", "os.truncate(",
                 ".truncate(", "unlink", "send2trash", "__dict__[",
                 "import_module(", "write_text(\"\")", "write_text('')"),
         "shellout": ("os.system", "subprocess.", "os.popen", "system(", "exec("),
@@ -859,7 +883,8 @@ SELF_PATHS = tuple(os.path.join(os.path.expanduser("~"), *parts) for parts in (
     (".claude", "settings.json"),
     (".codex", "hooks", "bash-guard.py"),
     (".codex", "hooks.json"),
-))
+)) + ((os.path.join(CODEX_HOME_DIR, "hooks", "bash-guard.py"),
+       os.path.join(CODEX_HOME_DIR, "hooks.json")) if CODEX_HOME_DIR else ())
 
 
 def is_self_path(path_raw):
@@ -903,6 +928,7 @@ def protected_concrete():
     for h in _homes():
         for rel in PROTECTED_FILES_REL + PROTECTED_DIRS_REL:
             out.append(os.path.join(h, *rel))
+    out.extend(CODEX_HOME_PROTECTED[0] + CODEX_HOME_PROTECTED[1])
     for root in _vault_roots():
         out.append(os.path.join(root, ".claude", "settings.json"))
         out.append(os.path.join(root, ".claude", "settings.local.json"))
@@ -921,6 +947,13 @@ def _protected_by_name(f):
         for rel in PROTECTED_FILES_REL:
             if f == _fold(os.path.join(h, *rel)):
                 return True
+    for d in CODEX_HOME_PROTECTED[0]:
+        for c in {d, _real(d)}:
+            if f == _fold(c) or f.startswith(_fold(c) + "/"):
+                return True
+    for p in CODEX_HOME_PROTECTED[1]:
+        if f in (_fold(p), _fold(_real(p))):
+            return True
     return False
 
 
@@ -942,6 +975,12 @@ def _same_file_as_protected(resolved):
                 cands.extend(os.path.join(d, x) for x in os.listdir(d))
             except OSError:
                 pass
+    cands.extend(CODEX_HOME_PROTECTED[1])
+    for d in CODEX_HOME_PROTECTED[0]:
+        try:
+            cands.extend(os.path.join(d, x) for x in os.listdir(d))
+        except OSError:
+            pass
     for c in cands:
         try:
             cs = os.stat(c)
@@ -1689,7 +1728,7 @@ def keyword_hit(body, lang=None, is_file=False, assigns=None):
     low = body.lower()
     if lang in ("python", "unknown"):
         if _ATOMIC_WRITE_RE.search(low):
-            low = low.replace("os.replace(", " ")
+            low = low.replace("os.replace(", " ").replace("os.rename(", " ")
         if not is_file:
             low = drop_safe_open_w(low)
     for k in spec["del"]:

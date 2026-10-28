@@ -690,6 +690,11 @@ struct RootView: View {
                 topStrip
                 screen
             }
+            .modifier(HoldKeyboardWhileMenuOpen(flow: flow, home: flow.homeModel))
+        }
+        // (0.16.0) The home screen's menu, when open, over whatever is under it.
+        .overlay(alignment: Layout.homeMenuCorner == .trailing ? .topTrailing : .topLeading) {
+            HomeMenuLayer(flow: flow, home: flow.homeModel)
         }
         // (v0.9.5) A drop anywhere on the window lands in the wiki's inbox. It
         // goes here, on the whole of the window's contents, because an owner
@@ -761,7 +766,10 @@ struct RootView: View {
                     .background(.orange.opacity(0.85), in: Capsule())
                     .foregroundStyle(.white)
             }
-            BiggerTextButton()
+            // (0.16.0) On the ordinary home screen the corner holds that
+            // screen's one read-aloud and one menu, and "Bigger text" is inside
+            // the menu; on every other screen it is "Bigger text", as before.
+            StripCorner(flow: flow, home: flow.homeModel)
                 .frame(maxWidth: .infinity, alignment: Layout.biggerTextCorner)
         }
         .frame(height: Theme.topStrip)

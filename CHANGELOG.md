@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.16.0 (28 October 2026)
+
+**A calmer app, a first week that shows you what your wiki can do, and a morning orient that writes your day's list.**
+
+- **The home screen is calmer.** One big button, "Add more" under it, and everything else (Check my wiki, your assistant, Bigger text, the example wiki, a newer Moblee) in one "…" menu in the top corner. One read-aloud button in the corner reads the whole screen.
+- **Each suggestion card has its own small Add button.**
+- **Add more is easier to find your way round.** It opens on "For you", Claude's picks for you, with the other groups listed down the left and how many of each are set up. Press any row to see what it does, how long it takes, how much room it needs and whether it can cost money. "In your wiki" only speaks up when something is missing, with one Put back button.
+- **Your first week.** For your first five days of use, your assistant ends its first answer each day with one thing your wiki can do, picked to fit what you have been doing, and offers to show you. Nothing you already have, or have said no to, is offered. Say "stop the tour" to end it early. Owners who update start their five days on the day they update.
+- **"Show me everything"** lists all your wiki can do, in four groups, kept on the page What Your Wiki Can Do.
+- **Orient writes the day's to-do list** at the top of your daily note: your to-dos first, then what you are waiting on, then standing items, ticked off as they are done. Updating keeps your own words in your rules file; the new orient rule is added after them.
+- **Your mail, sorted at orient, if you want it.** If your mail is in Apple Mail, your assistant offers once to sort your unread mail at each orient, by sender and subject only. It never deletes, sends, unsubscribes or junks anything.
+- **Recipe updates from the Hub work.** An update that said "copy the new file over the old one" stopped at your safety guard. The guard (v5.3) now lets the Hub's own update tool put a file in place, and only that tool, run from your wiki; your old copy is kept in `archive/hub-updates/`.
+- **A settings file damaged by hand shows as "cannot tell"**, never as the safety guard being off.
+- **ChatGPT owners whose settings live outside the usual folder** (`CODEX_HOME`) are no longer told the guard is off, and the guard protects that folder too.
+- Item descriptions keep their punctuation ("It drafts; you send." had lost its semicolon).
+
+**For maintainers.**
+- New `scripts/first-days.py` (a Claude SessionStart hook, registered by `safety/install-safety.py`; counts days of use per wiki in `~/.config/moblee/state/first-days.json`; silent and exit 0 on any error), `scripts/catalogue-page.py`, `scripts/add-plan-parts.py`, and the mail pass's `mail-list-unread.applescript` and `mail-tidy.applescript` (read and news modes only). `install.sh` and `update.sh` copy them; `update.sh` also adds the Mail Pass page, writes the catalogue page and adds the Plan's parts. The tour is not registered for ChatGPT, which would need every ChatGPT owner to press Trust again.
+- `patch-claude-md.py` gains two add-only blocks for the orient and companion sections; `claude-md-known.json` rebuilt with every earlier digest kept; the rules-file token budget in `test-patch-claude-md.py` raised from 4,600 to 5,000.
+- `moblee-setup.py --parts` has a new core part `tour` and a new state `unreadable`; the check-up has `check_tour` (F11) and reads CANNOT TELL for an unparseable settings file; both honour `CODEX_HOME`.
+- `safety/bash-guard.py` v5.3: `python3 hub/tools/{apply_update,record_take,check_recipe}.py` from the wiki root against the wiki's own `hub/` clone may move a file into place (content still scanned; only `shutil.move(` and `os.replace(` let through); the guard and hooks file under `CODEX_HOME` protected.
+- The starter allow list includes the mail pass's two scripts.
+- App: new `HomeMenu.swift`; `ScreenFrame(listenInCorner:)`; `SmallButtonStyle`; `HomeModel` reads guard state as on, off or cannot tell (`GuardReading`) and finds ChatGPT's folder from `CODEX_HOME`, which the app also passes to the pack's scripts; Add more is a two-pane view (`AddMoreSection`); 100 screens drawn (was 96).
+
 ## v0.15.2 (28 October 2026)
 
 **Moblee no longer says something is missing when it is there.** Nothing changes in how you use Moblee, and your wiki is not touched.

@@ -53,9 +53,9 @@
 		</dict>
 	</array>
 	<key>CFBundleShortVersionString</key>
-	<string>0.15.2</string>
+	<string>0.16.0</string>
 	<key>CFBundleVersion</key>
-	<string>20</string>
+	<string>21</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
 	<key>LSMinimumSystemVersion</key>

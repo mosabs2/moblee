@@ -83,10 +83,28 @@ SKILLS = HOME / ".claude" / "skills"
 AGENTS = HOME / "Library" / "LaunchAgents"
 PACK_HERE = Path(__file__).resolve().parent.parent
 
-# ChatGPT's agent (Codex) keeps its own files.
-CODEX_GUARD = HOME / ".codex" / "hooks" / "bash-guard.py"
-CODEX_HOOKS = HOME / ".codex" / "hooks.json"
-CODEX_CONFIG = HOME / ".codex" / "config.toml"
+# ChatGPT's agent (Codex) keeps its own files: in CODEX_HOME when that is set,
+# else ~/.codex, as the safety installer does (0.16.0; before, CODEX_HOME was
+# not read here and a guard installed there was reported missing).
+_CODEX_HOME = os.environ.get("CODEX_HOME", "").strip()
+
+
+def _recorded_codex_dir():
+    """The folder the safety installer noted in ~/.config/moblee/codex-home
+    (written when it installed into a CODEX_HOME), or None."""
+    try:
+        line = (CONFIG / "codex-home").read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        return None
+    return Path(line) if line and "\n" not in line and line.startswith("/") else None
+
+
+CODEX_DIR = (Path(_CODEX_HOME).expanduser().absolute() if _CODEX_HOME
+             else (_recorded_codex_dir() or HOME / ".codex"))
+CODEX_SHOWN = "~/.codex" if CODEX_DIR == HOME / ".codex" else str(CODEX_DIR).replace(str(HOME), "~", 1)
+CODEX_GUARD = CODEX_DIR / "hooks" / "bash-guard.py"
+CODEX_HOOKS = CODEX_DIR / "hooks.json"
+CODEX_CONFIG = CODEX_DIR / "config.toml"
 CODEX_SKILLS = HOME / ".agents" / "skills"
 CODEX_IN_APP = Path("/Applications/ChatGPT.app/Contents/Resources/codex")
 CODEX_MATCHER = "Bash|apply_patch"
@@ -346,6 +364,26 @@ def vault_rules(vault: Path | None) -> tuple[list, list]:
     return allow, deny
 
 
+def vault_rules_unreadable(vault: Path | None) -> list:
+    """(0.16.0) The wiki's own settings files that are there and do not load."""
+    bad = []
+    for name in ("settings.local.json", "settings.json") if vault is not None else ():
+        p = vault / ".claude" / name
+        if p.exists():
+            try:
+                if not isinstance(json.loads(p.read_text()), dict):
+                    bad.append(name)
+            except (OSError, ValueError):
+                bad.append(name)
+    return bad
+
+
+# (0.16.0) What check_settings hands check_guard when Claude's settings file is
+# there and cannot be read: whether the guard is entered in it cannot be told,
+# which is not the same answer as "not entered".
+SETTINGS_UNREADABLE = {"__unreadable__": True}
+
+
 def check_settings(f: Findings, vault: Path | None) -> dict | None:
     if not SETTINGS.exists():
         f.add(PROBLEM, "Claude has no settings file, so the safety guard is not switched on.", "F02")
@@ -354,7 +392,10 @@ def check_settings(f: Findings, vault: Path | None) -> dict | None:
         data = json.loads(SETTINGS.read_text())
     except (OSError, ValueError) as exc:
         f.add(PROBLEM, f"Claude's settings file does not load ({exc}). Claude should not edit it; the owner restores a copy.", "F03")
-        return None
+        return SETTINGS_UNREADABLE
+    if not isinstance(data, dict):
+        f.add(PROBLEM, "Claude's settings file loads but is not a set of settings. Claude should not edit it; the owner restores a copy.", "F03")
+        return SETTINGS_UNREADABLE
     f.add(OK, "Claude's settings file loads.")
     v_allow, v_deny = vault_rules(vault)
     perms = data.get("permissions") if isinstance(data, dict) else None
@@ -363,7 +404,13 @@ def check_settings(f: Findings, vault: Path | None) -> dict | None:
     deny = (perms.get("deny") if isinstance(perms.get("deny"), list) else []) + v_deny
     # Moblee's starter rules number about fifty; a handful of the owner's own
     # rules does not mean the starter set is there.
-    if len(v_allow) < 10:
+    damaged = vault_rules_unreadable(vault)
+    if len(v_allow) < 10 and damaged:
+        # (0.16.0) a rules file that does not load says nothing either way
+        f.add(UNSURE, f"The wiki's own settings file (.claude/{damaged[0]}) does not load, so whether Moblee's "
+                      "permission rules are in it cannot be told. Claude should not edit it; the owner restores a copy "
+                      "(Moblee keeps dated copies under ~/.config/moblee/backups/).", "F03")
+    elif len(v_allow) < 10:
         f.add(PROBLEM, "Moblee's permission rules are not in the wiki's settings, so Claude will ask before almost everything.", "F01")
     else:
         f.add(OK, f"Permission rules are in place ({len(allow)} allowed, {len(deny)} refused).")
@@ -435,7 +482,7 @@ def guard_version(path: Path) -> str | None:
     somebody has edited still says which guard it began as."""
     try:
         with open(path, "r", errors="replace") as fh:
-            head = fh.read(8000)
+            head = fh.read(16000)  # (0.16.0) the guard's VERSION line sat at byte 7990 of 8000
     except OSError:
         return None
     m = GUARD_VERSION_RE.search(head)
@@ -473,11 +520,18 @@ def check_guard(f: Findings, settings: dict | None, pack: Path | None) -> None:
     if not GUARD.exists():
         f.add(PROBLEM, "The delete guard is not installed.", "F02")
         return
+    if settings is SETTINGS_UNREADABLE:
+        f.add(UNSURE, "The delete guard is on the Mac, but Claude's settings file does not load, so whether it is "
+                      "switched on cannot be told. Once the owner restores a copy of the settings file, the check-up "
+                      "can say.", "F03")
+        return
     registered = False
     if settings:
-        for entry in settings.get("hooks", {}).get("PreToolUse", []) or []:
-            for h in entry.get("hooks", []) or []:
-                if "bash-guard.py" in str(h.get("command", "")):
+        hooks = settings.get("hooks") if isinstance(settings.get("hooks"), dict) else {}
+        pre = hooks.get("PreToolUse") if isinstance(hooks.get("PreToolUse"), list) else []
+        for entry in pre:
+            for h in (entry.get("hooks") or []) if isinstance(entry, dict) else []:
+                if isinstance(h, dict) and "bash-guard.py" in str(h.get("command", "")):
                     registered = True
     if not registered:
         f.add(PROBLEM, "The delete guard is on the Mac but not switched on in Claude's settings.", "F02")
@@ -1319,21 +1373,26 @@ def check_codex_guard(f: Findings, pack: Path | None) -> bool:
         f.add(PROBLEM, "The delete guard is not installed for ChatGPT.", "F02")
         return False
     if not CODEX_HOOKS.exists():
-        f.add(PROBLEM, "ChatGPT has no hooks file (~/.codex/hooks.json), so the delete guard is not switched on there.", "F02")
+        f.add(PROBLEM, f"ChatGPT has no hooks file ({CODEX_SHOWN}/hooks.json), so the delete guard is not switched on there.", "F02")
         return False
     try:
         data = json.loads(CODEX_HOOKS.read_text())
     except (OSError, ValueError) as exc:
-        f.add(PROBLEM, f"ChatGPT's hooks file (~/.codex/hooks.json) does not load ({exc}), so the delete guard "
-                       "is not switched on there. Moblee keeps dated copies under ~/.config/moblee/backups/.", "F02")
+        # (0.16.0) A file that does not load says nothing either way: the guard
+        # may well be entered in it. "Not switched on" was a guess.
+        f.add(UNSURE, f"ChatGPT's hooks file ({CODEX_SHOWN}/hooks.json) does not load ({exc}), so whether the delete "
+                      "guard is switched on there cannot be told. ChatGPT should not edit it; the owner restores a copy "
+                      "(Moblee keeps dated copies under ~/.config/moblee/backups/).", "F02")
         return False
     hooks = data.get("hooks") if isinstance(data, dict) else None
     entries = hooks.get("PreToolUse") if isinstance(hooks, dict) else None
     full = shell_only = False
+    # the installer's own marks: the full path, and the "$HOME/.codex/…" spelling when it is the usual folder
+    marks = [str(CODEX_GUARD)] + ([".codex/hooks/bash-guard.py"] if CODEX_DIR == HOME / ".codex" else [])
     for entry in entries if isinstance(entries, list) else []:
         if not isinstance(entry, dict):
             continue
-        names_guard = any(isinstance(h, dict) and ".codex/hooks/bash-guard.py" in str(h.get("command", ""))
+        names_guard = any(isinstance(h, dict) and any(m in str(h.get("command", "")) for m in marks)
                           for h in entry.get("hooks", []) or [])
         if names_guard and entry.get("matcher") == CODEX_MATCHER:
             full = True
@@ -1387,11 +1446,11 @@ def check_codex_limit(f: Findings) -> tuple[int, bool]:
     present, value = read_doc_limit()
     if not present:
         f.add(LOOK, f"The setting that lets ChatGPT read a long instruction file ({DOC_LIMIT_KEY}) is not in "
-                    f"~/.codex/config.toml, so ChatGPT reads the first {DOC_LIMIT_DEFAULT:,} bytes only. "
+                    f"{CODEX_SHOWN}/config.toml, so ChatGPT reads the first {DOC_LIMIT_DEFAULT:,} bytes only. "
                     "The next update adds it.", "F27")
         return DOC_LIMIT_DEFAULT, False
     if value is None or value <= 0:
-        f.add(LOOK, f"The setting {DOC_LIMIT_KEY} in ~/.codex/config.toml could not be read as a number, so how "
+        f.add(LOOK, f"The setting {DOC_LIMIT_KEY} in {CODEX_SHOWN}/config.toml could not be read as a number, so how "
                     f"much of the instruction file ChatGPT reads is judged at the usual {DOC_LIMIT_DEFAULT:,} bytes.",
                   "F38")
         return DOC_LIMIT_DEFAULT, True
@@ -1473,7 +1532,7 @@ def check_codex_instructions(f: Findings, vault: Path | None, assistant: str, li
     if size <= limit:
         f.add(OK, f"The instruction file ChatGPT reads is {shape}: {size:,} bytes, within the {limit:,} it reads.")
     else:
-        fix = (f"Raising {DOC_LIMIT_KEY} in ~/.codex/config.toml, or shortening the file, puts it right."
+        fix = (f"Raising {DOC_LIMIT_KEY} in {CODEX_SHOWN}/config.toml, or shortening the file, puts it right."
                if key_present else "The next update lifts the limit.")
         f.add(PROBLEM, f"The instruction file ChatGPT reads ({shape}) is {size:,} bytes, and ChatGPT reads only the "
                        f"first {limit:,}, so it never sees the last {size - limit:,}. {fix}",
@@ -1761,7 +1820,7 @@ SAVING_NO = "The wiki does not save itself after every reply."
 SAVING_UNSURE = "Whether the wiki saves itself after every reply cannot be told from here."
 
 
-def hook_script_paths(data) -> list[str]:
+def hook_script_paths(data, event: str = TURN_END_EVENT, name: str = TURN_END_NAME) -> list[str]:
     """Every path a registered end-of-reply save names, read out of a settings
     or hooks file that has already been loaded.
 
@@ -1769,10 +1828,12 @@ def hook_script_paths(data) -> list[str]:
     holds a space, so it is read back the way a shell would read it. A command
     that cannot be read that way falls back to the whole string, which then
     matches nothing and is reported as naming somewhere else — the safe way
-    round, since the alternative is calling a wiki saved when it is not."""
+    round, since the alternative is calling a wiki saved when it is not.
+    (0.16.0) `event` and `name` pick another of the wiki's own hook scripts,
+    read the same way (the first-week tour)."""
     out = []
     hooks = data.get("hooks") if isinstance(data, dict) else None
-    entries = hooks.get(TURN_END_EVENT) if isinstance(hooks, dict) else None
+    entries = hooks.get(event) if isinstance(hooks, dict) else None
     for entry in entries if isinstance(entries, list) else []:
         if not isinstance(entry, dict):
             continue
@@ -1780,15 +1841,54 @@ def hook_script_paths(data) -> list[str]:
             if not isinstance(h, dict):
                 continue
             command = str(h.get("command", ""))
-            if TURN_END_NAME not in command:
+            if name not in command:
                 continue
             try:
                 words = shlex.split(command)
             except ValueError:
                 words = [command]
-            named = [w for w in words if w.endswith(TURN_END_NAME)]
+            named = [w for w in words if w.endswith(name)]
             out += named or [command]
     return out
+
+
+# (0.16.0) The first-week tour: the wiki's scripts/first-days.py, entered as
+# Claude's SessionStart hook by its full path (Claude only; the installer does
+# not enter it for ChatGPT).
+FIRST_DAYS_NAME = "first-days.py"
+FIRST_DAYS_IN_VAULT = ("scripts", FIRST_DAYS_NAME)
+FIRST_DAYS_EVENT = "SessionStart"
+
+
+def check_tour(f: Findings, vault: Path | None, assistant: str) -> None:
+    """Whether the first-week tour is entered for this wiki, read from the hook
+    entries by the whole path as the save is; an unreadable settings file is
+    'cannot tell'."""
+    if vault is None or assistant not in ("claude", "both"):
+        return
+    wanted = vault.joinpath(*FIRST_DAYS_IN_VAULT)
+    if not wanted.is_file():
+        return  # a wiki from before 0.16.0: its version line already says an update is due
+    if not SETTINGS.exists():
+        f.add(LOOK, "The first-week tour is in the wiki but not entered in Claude's settings, because Claude has no "
+                    "settings file. The next Moblee update enters it.", "F11")
+        return
+    try:
+        data = json.loads(SETTINGS.read_text())
+    except (OSError, ValueError):
+        f.add(UNSURE, "Whether the first-week tour is switched on cannot be told: Claude's settings file does not load.",
+              "F03")
+        return
+    named = hook_script_paths(data, FIRST_DAYS_EVENT, FIRST_DAYS_NAME)
+    if any(same_file(n, wanted) for n in named):
+        f.add(OK, "The first-week tour is switched on: on the first five days of use, Claude offers one thing the "
+                  "wiki can do each day.")
+    elif named:
+        f.add(LOOK, "A first-week tour for a different folder is entered in Claude's settings, so this wiki's own is "
+                    "not the one that runs. The next Moblee update enters this wiki's beside it.", "F11")
+    else:
+        f.add(LOOK, "The first-week tour is in the wiki but not entered in Claude's settings, so it never runs. "
+                    "The next Moblee update enters it.", "F11")
 
 
 def same_file(named: str, wanted: Path) -> bool:
@@ -2147,8 +2247,10 @@ def prove_saving(f: Findings, pack: Path | None, vault: Path | None, assistant: 
     # The three overrides the pack's own tests use. They are what keeps the
     # owner's wiki and the owner's record out of this: the hook the owner has
     # registered runs, and works on the scratch wiki.
+    # (0.16.0) MOBLEE_NO_TOUR keeps the first-week tour out of this test: it
+    # would put a note into the test's conversation and count a day of use.
     overrides = {"MOBLEE_VAULT": practice, "MOBLEE_TURN_END_STATE": record,
-                 "MOBLEE_TURN_END_LOG": log}
+                 "MOBLEE_TURN_END_LOG": log, "MOBLEE_NO_TOUR": "1"}
     if who == "claude":
         cmd = [program, "-p", PROVE_SAVING_PROMPT, "--max-turns", "4",
                "--permission-mode", "acceptEdits"]
@@ -3498,6 +3600,7 @@ def main() -> int:
         f.add(OK, "--prove-guard tests the delete guard inside ChatGPT, and this wiki is set up for Claude only, "
                   "so there was nothing to put to the test.")
     check_saving(f, vault, assistant, proving=bool(args.prove_saving))
+    check_tour(f, vault, assistant)
     if args.prove_saving:
         prove_saving(f, pack, vault, assistant, announce=not (args.json or args.card))
     check_mods(f, vault, assistant)

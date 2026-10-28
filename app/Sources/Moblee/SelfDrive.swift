@@ -118,6 +118,20 @@ enum SelfDrive {
             }
             click(p)
         }
+        /// (0.16.0) A card's own small button on the home screen, where it
+        /// says it is drawn. Each card adds its own thing now; the big button
+        /// is Open Claude.
+        func clickTile(_ key: String, within seconds: Double = 4) async {
+            let id = "tile-" + key
+            let by = Date().addingTimeInterval(seconds)
+            while control(id) == nil && Date() < by { await pause(0.1) }
+            guard let p = control(id) else {
+                say("FAILED: the \(key) card's button did not say where it is drawn; "
+                    + "drawn: \(DrawnPlaces.frames.keys.sorted().joined(separator: ", "))")
+                exit(1)
+            }
+            click(p)
+        }
         /// Tab moves the keyboard on to the next control it can reach; the
         /// control itself says when it has it (`FocusedControl`). Nothing but
         /// the keyboard is used here.
@@ -567,32 +581,21 @@ enum SelfDrive {
         }
         let videosTile = flow.homeModel.tiles.first { $0.key == "videos" }!
         let tripsTile = flow.homeModel.tiles.first { $0.key == "trips" }!
-        let onATileListen = await tabUntil(RequestTile.listenId(videosTile))
-        say("Tab reached the videos tile's own listen control: \(onATileListen) "
-            + "(the keyboard is on \(FocusedControl.id ?? "nothing"))")
-        await expect("Tab alone reaches a tile's own listen control") { onATileListen }
+        // (0.16.0) One read-aloud for the whole home screen, in the corner. The
+        // cards have no speaker of their own: it reads every one of them.
+        let onTheCorner = await tabUntil("read-aloud")
+        say("Tab reached the corner's read-aloud: \(onTheCorner) (the keyboard is on \(FocusedControl.id ?? "nothing"))")
+        await expect("Tab alone reaches the one read-aloud in the corner") { onTheCorner }
         pressSpace()
-        await expect("and Space alone starts it reading that tile", within: 5) {
-            Speaker.shared.speakingId == RequestTile.listenId(videosTile)
-        }
-        // Starting one stops another. The tile beside it is pressed next, and
-        // only that one may say it is speaking.
-        let onTheOtherListen = await tabUntil(RequestTile.listenId(tripsTile))
-        await expect("Tab reaches the listen control on the tile beside it") { onTheOtherListen }
-        pressSpace()
-        await expect("starting one stops the other: one voice at a time, and the new one says it is the one", within: 5) {
-            Speaker.shared.speakingId == RequestTile.listenId(tripsTile)
-        }
-        say("one voice at a time: the keyboard moved from one tile's listen control to the next "
-            + "and only \(Speaker.shared.speakingId ?? "nothing") says it is speaking")
-        // And the screen's own big sentence, which is the control that has always
-        // been there: pressing it must stop the tile that was reading.
-        let onTheHeadline = await tabUntil("read-aloud")
-        await expect("Tab reaches the listen control beside the screen's own sentence") { onTheHeadline }
-        pressSpace()
-        await expect("and it stops the tile that was reading", within: 5) {
+        await expect("and Space alone starts it reading the whole screen, every card in it", within: 5) {
             Speaker.shared.speakingId == "read-aloud"
+                && HomeScreen.speech(flow.homeModel).plain.contains(videosTile.title)
+                && HomeScreen.speech(flow.homeModel).plain.contains(tripsTile.title)
         }
+        pressSpace()
+        await expect("and pressing it again stops it", within: 5) { Speaker.shared.speakingId == nil }
+        pressSpace()
+        await expect("and it starts again", within: 5) { Speaker.shared.speakingId == "read-aloud" }
         // Leaving the screen stops it. The tile's own button is pressed, which
         // takes the explanation's screen in place of this one.
         let backOnATile = await tabUntil(RequestTile.buttonId(videosTile))
@@ -642,14 +645,8 @@ enum SelfDrive {
         // The ring is required to be exactly this, in this order, so that the
         // screen's own list and the real keyboard cannot drift apart: a control
         // added to one and not the other fails here.
-        let shouldBe = HomeScreen.stops(
-            shown: HomeScreen.shown(from: flow.homeModel.tiles),
-            nextTileWaiting: flow.homeModel.nextTile != nil,
-            canChangeAssistant: flow.homeModel.canChangeAssistant,
-            wantsChatGPT: flow.homeModel.assistant.wantsChatGPT,
-            newerRelease: flow.homeModel.newerRelease != nil && flow.homeModel.newerReleaseLineAllowed,
-            // (0.14.0) The second big button is "Add more", on this screen always.
-            showsExample: true)
+        let shouldBe = HomeScreen.stops(shown: HomeScreen.shown(from: flow.homeModel.tiles),
+                                        unknownLine: flow.homeModel.safetyUnknown)
         say("and the screen's own list of its controls is: \(shouldBe.joined(separator: ", "))")
         // And then the keyboard is let go, exactly as the app lets it go when a
         // control it was on goes away (see `FocusedControl.letGoIfNothingTookIt`),
@@ -657,61 +654,53 @@ enum SelfDrive {
         // instead of from the end of the list.
         window.makeFirstResponder(nil)
         await pause(1.0)
-        // (v0.9.6) Twenty, not nineteen: this version put two more controls on
-        // this screen, the way into the example wiki and "Check my wiki". See the
-        // same ceiling in `LogicCheck`, which says what the honest options are if
-        // twenty turns out to be too many.
+        // (0.16.0) Everything round the foot of the screen is inside one menu,
+        // and the card speakers are one read-aloud, so the round is short.
         await expect("the keyboard crosses the busiest screen in twenty presses or fewer, listening controls and all") {
-            ring.count <= 20 && ring.count >= 8
+            ring.count <= 20 && ring.count >= 4
         }
         await expect("and the keyboard's real round is exactly the round the screen says it has, in that order") {
             ring == shouldBe
         }
-        await expect("and every tile's own button and its listen control are both on that round") {
-            [tripsTile, videosTile].allSatisfy {
-                ring.contains(RequestTile.buttonId($0)) && ring.contains(RequestTile.listenId($0))
-            } && ring.contains("read-aloud") && ring.contains("listen-quiet")
+        await expect("and every tile's own button, the read-aloud, the menu and Add more are on that round") {
+            [tripsTile, videosTile].allSatisfy { ring.contains(RequestTile.buttonId($0)) }
+                && ring.contains("read-aloud") && ring.contains(HomeMenu.buttonId) && ring.contains("quiet")
         }
-        // (v0.9.5) Each listen control STANDS BESIDE the words it reads, on the
-        // real window and not only in a list. All three tile speakers used to
-        // come one after another before any of the three Add buttons, and the
-        // quiet words' speaker was two places away from the quiet words with a
-        // control from the opposite corner of the screen in between.
-        func besides(_ id: String) -> [String] {
-            guard let at = ring.firstIndex(of: id) else { return [] }
-            return [at - 1, at + 1].filter { ring.indices.contains($0) }.map { ring[$0] }
+        await expect("with one listening control on the whole round") {
+            ring.filter { $0.hasPrefix("listen-") || $0 == "read-aloud" } == ["read-aloud"]
         }
-        // A control that is not on this screen at all is not a failure of
-        // adjacency: the newer-Moblee line only shows when a newer Moblee has
-        // been published, and "Prove the guard" only for a wiki that uses
-        // ChatGPT. Asking `besides` about an absent control gets an empty list,
-        // and an empty list satisfies nothing, so this said FAILED on every
-        // walk where no newer release was on record — which is every walk but
-        // the one test-app.sh starts with a stand-in for GitHub's answer.
-        func standsBeside(_ id: String, oneOf neighbours: [String]) -> Bool {
-            guard ring.contains(id) else { return true }
-            return besides(id).contains { neighbours.contains($0) }
+        // (0.16.0) The menu: Space opens it, everything that was round the foot
+        // of the screen is in it by its old name, and Escape closes it.
+        let onTheMenu = await tabUntil(HomeMenu.buttonId)
+        await expect("Tab alone reaches the corner menu") { onTheMenu }
+        pressSpace()
+        await expect("and Space alone opens it", within: 4) { flow.homeModel.menuOpen }
+        await pause(1.0)
+        let inTheMenu = HomeMenu.stops(hub: flow.homeModel.hub != nil,
+                                       canChangeAssistant: flow.homeModel.canChangeAssistant,
+                                       wantsChatGPT: flow.homeModel.assistant.wantsChatGPT,
+                                       newerRelease: flow.homeModel.newerReleaseLineAllowed,
+                                       showsExample: flow.hasExample)
+        say("the menu says it holds: \(inTheMenu.joined(separator: ", ")); drawn: "
+            + inTheMenu.filter { control($0) != nil }.joined(separator: ", "))
+        await expect("and every control the menu says it holds is drawn in it", within: 4) {
+            inTheMenu.allSatisfy { control($0) != nil }
         }
-        await expect("every listen control on the round stands next to the very words it reads") {
-            HomeScreen.shown(from: flow.homeModel.tiles).allSatisfy { tile in
-                standsBeside(RequestTile.listenId(tile),
-                             oneOf: [RequestTile.buttonId(tile), RequestTile.doneId(tile)])
-            }
-                && standsBeside("listen-quiet", oneOf: ["quiet"])
-                && standsBeside("listen-newer-line", oneOf: ["download-newer", "newer-not-now"])
-                // (v0.9.6) "Check my wiki" joined this corner, on the line above
-                // the one about the assistant, so it is one of the controls that
-                // line's listen control may stand beside.
-                && standsBeside("listen-assistant-line",
-                                oneOf: ["change-assistant", "prove-guard", "check-wiki"])
+        // (0.16.0) While it is open the keyboard stays inside it: the first
+        // item has it as it opens, and Tab never reaches the screen underneath.
+        var whereTabWent: [String] = []
+        for _ in 0..<(inTheMenu.count + 2) {
+            whereTabWent.append(FocusedControl.id ?? "nothing")
+            key("\t", code: 48)
+            await pause(0.4)
         }
-        await expect("and no tile's listen control stands next to another tile's") {
-            ring.filter { $0.hasPrefix("listen-tile-") }
-                .allSatisfy { !besides($0).contains { $0.hasPrefix("listen-tile-") } }
+        say("with the menu open, Tab went: \(whereTabWent.joined(separator: ", "))")
+        await expect("and while it is open the keyboard stays inside it") {
+            whereTabWent.allSatisfy { inTheMenu.contains($0) }
         }
-        await expect("with the listening controls never more than half of what the keyboard has to step through") {
-            ring.filter { $0.hasPrefix("listen-") }.count * 2 <= ring.count
-        }
+        pressEscape()
+        await expect("and Escape closes it", within: 4) { !flow.homeModel.menuOpen }
+        await pause(0.8)
         say("the keyboard is on: \(FocusedControl.id ?? "nothing")")
         let videosButton = RequestTile.buttonId(flow.homeModel.tiles.first { $0.key == "videos" }!)
         let reached = await tabUntil(videosButton)
@@ -752,24 +741,55 @@ enum SelfDrive {
         // which was run and held; this is here for the first Mac that can run a
         // window again.
         if flow.hasExample {
-            // (0.14.0) The home screen's second big button is now "Add more", and
-            // the way into the example is that screen's own second big button.
+            // (0.16.0) "Add more" is the quiet line under the home screen's
+            // one big button, and the way into the example is in the corner
+            // menu (it was Add more's second big button in 0.14 and 0.15).
             window.makeFirstResponder(nil)
             await pause(0.6)
-            let onAddMore = await tabUntil("second-button")
+            let onAddMore = await tabUntil("quiet")
             say("Tab reached Add more: \(onAddMore)")
             await expect("Tab alone reaches Add more on the home screen") { onAddMore }
             pressSpace()
             await expect("and Space alone opens it", within: 5) { flow.homeModel.addMoreOpen }
+            await expect("and it opens on For you", within: 5) { flow.homeModel.addMoreSection == .forYou }
             await expect("and its list of what is in place is read", within: 20) {
                 flow.homeModel.parts.map { !$0.core.isEmpty } ?? false
             }
             await pause(1.0)
+            // A section on the left, by the keyboard, and a row in it opened in
+            // place, then closed again.
             window.makeFirstResponder(nil)
             await pause(0.6)
-            let onTheWayIn = await tabUntil("second-button")
+            let onAGroup = await tabUntil(AddMore.sectionId(.group(""), index: 1))
+            await expect("Tab alone reaches the first group on the left of Add more") { onAGroup }
+            pressSpace()
+            await expect("and Space alone shows it", within: 4) {
+                if case .group = flow.homeModel.addMoreSection { return true }; return false
+            }
+            await pause(0.8)
+            let firstKey = flow.homeModel.catalogueOrder.first { flow.homeModel.itemTile($0, why: "") != nil } ?? ""
+            let onARow = await tabUntil(AddMore.rowId(firstKey), taps: 30)
+            await expect("Tab reaches the first row of that group") { onARow }
+            pressSpace()
+            await expect("and Space opens it in place", within: 4) { flow.homeModel.addMoreOpenRow == firstKey }
+            pressSpace()
+            await expect("and Space again closes it", within: 4) { flow.homeModel.addMoreOpenRow == nil }
+            await pause(0.6)
+            pressReturn()
+            await expect("Return presses Done, which puts the owner back on the home screen", within: 5) {
+                !flow.homeModel.addMoreOpen
+            }
+            await pause(1.0)
+            window.makeFirstResponder(nil)
+            await pause(0.6)
+            let onTheMenuAgain = await tabUntil(HomeMenu.buttonId)
+            await expect("Tab reaches the corner menu again") { onTheMenuAgain }
+            pressSpace()
+            await expect("and Space opens it", within: 4) { flow.homeModel.menuOpen }
+            await pause(0.8)
+            let onTheWayIn = await tabUntil(HomeMenu.exampleId)
             say("Tab reached the way into the example wiki: \(onTheWayIn)")
-            await expect("Tab alone reaches the way into the example wiki, inside Add more") { onTheWayIn }
+            await expect("Tab alone reaches the way into the example wiki, inside the menu") { onTheWayIn }
             pressSpace()
             await expect("and Space alone opens it, on the page it opens on and not on the catalogue", within: 5) {
                 flow.example?.showing == .page(ExamplePages.firstPage)
@@ -813,13 +833,8 @@ enum SelfDrive {
             say("nothing spoke inside the example: \(Speaker.shared.speakingId == nil)")
             await expect("nothing spoke inside the example unasked") { Speaker.shared.speakingId == nil }
             await clickBigButton()
-            await expect("and the way out puts an owner back on the Add more screen they came from", within: 5) {
-                flow.example == nil && flow.mode == .home && flow.homeModel.addMoreOpen
-            }
-            await pause(1.0)
-            await clickBigButton()
-            await expect("and Done there puts them back on the home screen", within: 5) {
-                !flow.homeModel.addMoreOpen
+            await expect("and the way out puts an owner back on the home screen they came from", within: 5) {
+                flow.example == nil && flow.mode == .home && !flow.homeModel.addMoreOpen && !flow.homeModel.menuOpen
             }
             await pause(1.0)
         } else {
@@ -831,6 +846,15 @@ enum SelfDrive {
         // so whatever it was left at, the control itself is pressed until the
         // words are back to normal; then round the three, and back to normal
         // for the rest of the walk. Nothing but the keyboard is used.
+        // (0.16.0) On the home screen "Bigger text" is inside the corner menu,
+        // which stays open while it is pressed so the three sizes can be
+        // stepped through.
+        window.makeFirstResponder(nil)
+        await pause(0.6)
+        _ = await tabUntil(HomeMenu.buttonId)
+        if !flow.homeModel.menuOpen { pressSpace() }
+        await expect("the corner menu is open, for Bigger text", within: 4) { flow.homeModel.menuOpen }
+        await pause(0.8)
         let onTheControl = await tabUntil("bigger-text")
         say("Tab reached Bigger text, at \(TextSize.shared.step.name.lowercased()): \(onTheControl)")
         await expect("Tab reaches Bigger text") { onTheControl }
@@ -853,6 +877,8 @@ enum SelfDrive {
         say("the window came back down with them: \(Int(window.frame.width))x\(Int(window.frame.height)), "
             + "and it started at \(Int(wasWide)) wide")
         await expect("and the window with them", within: 5) { window.frame.width <= wasWide + 1 }
+        pressEscape()
+        await expect("and Escape closes the menu again", within: 4) { !flow.homeModel.menuOpen }
 
         // (v0.9.4) The window made bigger, as an owner drags it by its corner:
         // the screens are drawn at the new size, the big button stays in the
@@ -897,6 +923,11 @@ enum SelfDrive {
         func stillTheOwnersSize() -> Bool {
             window.frame.width >= ownersSize.width - 1 && window.frame.height >= ownersSize.height - 1
         }
+        window.makeFirstResponder(nil)
+        await pause(0.6)
+        _ = await tabUntil(HomeMenu.buttonId)
+        if !flow.homeModel.menuOpen { pressSpace() }
+        await pause(0.8)
         let onTheOwnersWindow = await tabUntil("bigger-text")
         await expect("Tab reaches Bigger text on a window the owner has sized") { onTheOwnersWindow }
         pressSpace()
@@ -917,6 +948,8 @@ enum SelfDrive {
         await expect("and the words coming back down bring the window back to exactly the size the owner left it") {
             abs(window.frame.width - ownersSize.width) < 2 && abs(window.frame.height - ownersSize.height) < 2
         }
+        pressEscape()
+        await pause(0.6)
 
         window.setContentSize(CGSize(width: 320, height: 240))
         await pause(1.2)
@@ -927,8 +960,8 @@ enum SelfDrive {
         await pause(0.8)
 
         // The big button adds the next thing, and it is pressed for real.
-        await expect("the big button offers the first thing, trips") { flow.homeModel.nextTile?.key == "trips" }
-        await clickBigButton(); say("clicked the big button (Add the first one)")
+        await expect("the first card waiting to be added is trips") { flow.homeModel.nextTile?.key == "trips" }
+        await clickTile("trips"); say("clicked Add on the trips card")
         await expect("the click started adding trips", within: 5) {
             let s = flow.homeModel.tiles.first(where: { $0.key == "trips" })?.state
             return s == .running || s == .done
@@ -940,8 +973,8 @@ enum SelfDrive {
         let tripsState = flow.homeModel.tiles.first(where: { $0.key == "trips" })?.state
         say("trips ended: \(String(describing: tripsState))")
 
-        await expect("the big button moves on to videos") { flow.homeModel.nextTile?.key == "videos" }
-        await clickBigButton(); say("explaining the Terminal window")
+        await expect("the next card waiting is videos") { flow.homeModel.nextTile?.key == "videos" }
+        await clickTile("videos"); say("explaining the Terminal window")
         await expect("the click opened the explanation first, and nothing else") { flow.homeModel.explaining?.key == "videos" }
         await pause(1.0)
         // (v0.9.4) The three pictures come one at a time, and nothing is opened
@@ -982,8 +1015,8 @@ enum SelfDrive {
         // connections. On the first stranger's run the tile said none of this
         // and could never finish. (Done is pressed through the model here: the
         // small button's place on the tile is not fixed.)
-        await expect("the big button moves on to Google") { flow.homeModel.nextTile?.key == "google" }
-        await clickBigButton(); say("explaining the clicks inside Claude")
+        await expect("the next card waiting is Google") { flow.homeModel.nextTile?.key == "google" }
+        await clickTile("google"); say("explaining the clicks inside Claude")
         await expect("the three cards are the pack's own: where, what by name, how to tell it worked") {
             guard let t = flow.homeModel.explaining, t.key == "google", t.steps.count == 3 else { return false }
             return t.steps[1][1].contains("Gmail") && t.steps[2][1].contains("calendar")
@@ -1017,8 +1050,8 @@ enum SelfDrive {
         say("skill brain: \(String(describing: skill("brain")?.state))")
         say("a key with a path in it made a tile: \(flow.homeModel.tiles.contains { $0.key.contains("/") || $0.key.contains(";") })")
 
-        await expect("the big button moves on to the drafted skill") { flow.homeModel.nextTile?.key == "gym-log" }
-        await clickBigButton(); say("looking at gym-log before adding it")
+        await expect("the next card waiting is the drafted skill") { flow.homeModel.nextTile?.key == "gym-log" }
+        await clickTile("gym-log"); say("looking at gym-log before adding it")
         await expect("the skill is shown first, the whole of it, and nothing is added yet", within: 10) {
             flow.homeModel.explaining?.key == "gym-log"
                 && (flow.homeModel.explaining?.body.contains("Write the sets to the Gym Log page") ?? false)
@@ -1153,6 +1186,12 @@ enum SelfDrive {
             flow.homeModel.newerRelease == "99.0.0" && installOffered == nil
         }
         await pause(1.0)
+        // (0.16.0) The line is inside the corner menu now, which is opened by
+        // its own button, really clicked.
+        await expect("the corner menu says where it is drawn", within: 5) { control(HomeMenu.buttonId) != nil }
+        if let m = control(HomeMenu.buttonId), !flow.homeModel.menuOpen { click(m) }
+        await expect("and a click opens it", within: 4) { flow.homeModel.menuOpen }
+        await pause(0.8)
         if control("download-newer") == nil {
             // Which small controls are drawn, and a picture of the window, so
             // a failure here says whether the line was missing or merely not found.
@@ -1164,7 +1203,7 @@ enum SelfDrive {
                 say("picture of the window: \(file.path)")
             }
         }
-        await expect("the line is on the screen, with Download and Not now", within: 5) {
+        await expect("the line is in the menu, with Install and Not now", within: 5) {
             control("download-newer") != nil && control("newer-not-now") != nil
         }
         if let p = control("newer-not-now") { click(p) }
@@ -1207,7 +1246,7 @@ enum SelfDrive {
         await expect("and the receipt's own button, really clicked, puts the owner back where they were") {
             Dropped.shared.showing == nil
         }
-        await expect("which is the home screen they were on", within: 6) { control("change-assistant") != nil }
+        await expect("which is the home screen they were on", within: 6) { control(HomeMenu.buttonId) != nil }
 
         // The Dock icon, through the delegate method macOS really calls.
         let dockFile = theirs.appendingPathComponent("Scan 1.pdf")
@@ -1350,6 +1389,12 @@ enum SelfDrive {
         // the same code runs the same check-up against a practice wiki; this is
         // here for the first walk that starts.
         var checkUp = false
+        // (0.16.0) "Check my wiki" is inside the corner menu: the menu is
+        // opened by its own button first, really clicked.
+        await pause(1.2)
+        if let m = control(HomeMenu.buttonId), !flow.homeModel.menuOpen { click(m) }
+        await expect("the corner menu opens, for Check my wiki", within: 4) { flow.homeModel.menuOpen }
+        await pause(0.8)
         if let button = control("check-wiki") {
             // The receipt the walk has just dismissed takes the home screen a
             // moment to slide back from, and a click in that moment lands on a

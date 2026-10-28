@@ -36,6 +36,9 @@
 #      page that carries it is there.
 #   7. Adds wiki/Identity.md if the vault has none, the starting memories, and
 #      (v0.7) the Habits and Tools page the companion's first conversation fills in.
+#      (0.16.0) Adds the Mail Pass page if absent, writes the page of what the
+#      wiki can do (What Your Wiki Can Do.md, generated), and gives the daily
+#      note template the Plan's two extra parts where it has neither.
 #   8. Offers the weekly health-check schedule (Mac).
 #   9. Offers the optional learning path (refreshes it if already added).
 #  10. Writes the new VERSION and commits the update in the vault.
@@ -291,7 +294,7 @@ echo ""
 OWNER_DIRTY=()
 OWNER_SUM=()
 if [[ -d "$VAULT/.git" ]]; then
-  for p in wiki/Identity.md "wiki/Wiki Operations/Habits and Tools.md" "wiki/Wiki Operations/Moblee Learning Path.md" "wiki/Wiki Operations/Assistant Memory.md" "wiki/Wiki Operations/Wiki Conventions.md" "wiki/Wiki Operations/Git and Commits.md" "wiki/Wiki Operations/Tools and Connections.md" "wiki/Wiki Operations/Readwise.md"; do
+  for p in wiki/Identity.md "wiki/Wiki Operations/Habits and Tools.md" "wiki/Wiki Operations/Moblee Learning Path.md" "wiki/Wiki Operations/Assistant Memory.md" "wiki/Wiki Operations/Wiki Conventions.md" "wiki/Wiki Operations/Git and Commits.md" "wiki/Wiki Operations/Tools and Connections.md" "wiki/Wiki Operations/Readwise.md" "wiki/Wiki Operations/What Your Wiki Can Do.md" "wiki/Wiki Operations/Mail Pass.md"; do
     if git -C "$VAULT" ls-files --error-unmatch -- "$p" >/dev/null 2>&1; then
       if ! git -C "$VAULT" diff --quiet -- "$p" 2>/dev/null || ! git -C "$VAULT" diff --cached --quiet -- "$p" 2>/dev/null; then
         OWNER_DIRTY+=("$p")
@@ -405,7 +408,11 @@ fi
 # (v0.10.0) turn-end-commit.py joins the list: the end-of-reply save lives in
 # the wiki beside the commit gate, and the safety step (step 4 below) registers
 # it as the assistant's Stop hook once it is there.
-for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh log-append.py weekly-card.py turn-end-commit.py compact-rotate.py; do
+# (0.16.0) first-days.py, the first-week tour, which the safety step registers
+# as Claude's SessionStart hook; catalogue-page.py, which writes the page of
+# everything the wiki can do; and the two Mail scripts the morning pass uses
+# once the owner has said yes to it.
+for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh log-append.py weekly-card.py turn-end-commit.py compact-rotate.py first-days.py catalogue-page.py mail-list-unread.applescript mail-tidy.applescript; do
   if [[ -f "$SCRIPT_DIR/$tool" ]]; then
     if [[ -f "$VAULT/scripts/$tool" ]] && ! cmp -s "$SCRIPT_DIR/$tool" "$VAULT/scripts/$tool"; then
       keep_copy "$VAULT/scripts/$tool"
@@ -806,6 +813,63 @@ python3 "$SCRIPT_DIR/seed-memory.py" --vault "$VAULT" --assistant "$ASSISTANT" |
   || { echo "   (starting memories not seeded; harmless)"; ustep_note "the starting memories were not seeded"; }
 python3 "$SCRIPT_DIR/add-habits-page.py" --vault "$VAULT" | sed 's/^/   /' \
   || { echo "   (Habits and Tools page not added; ask $ASSISTANT_LABEL to create it from the template)"; ustep_note "the Habits and Tools page was not added"; }
+# (0.16.0) The morning pass's method page, added only where the wiki has none;
+# a page of that name already there is the owner's and is left alone. The pass
+# itself stays off until the owner says yes to it.
+MAIL_PASS_ADDED=0
+MAIL_PASS_REL="wiki/Wiki Operations/Mail Pass.md"
+# A page of that name anywhere in the wiki counts: two pages of one name
+# confuse Obsidian's links, so Moblee's is not added beside the owner's.
+MAIL_PASS_ELSEWHERE="$(find "$VAULT/wiki" -name 'Mail Pass.md' -print 2>/dev/null | head -1 || true)"
+if [[ -z "$MAIL_PASS_ELSEWHERE" && -f "$PACKAGE_ROOT/vault-template/$MAIL_PASS_REL" ]]; then
+  # A page that cannot be written (a folder the owner locked) is noted and
+  # the update goes on, as the Habits and Tools page is.
+  if mkdir -p "$VAULT/wiki/Wiki Operations" 2>/dev/null \
+     && cp "$PACKAGE_ROOT/vault-template/$MAIL_PASS_REL" "$VAULT/$MAIL_PASS_REL" 2>/dev/null; then
+    MAIL_PASS_ADDED=1
+    echo "   added $MAIL_PASS_REL (the morning mail pass; off until you say yes to it)"
+    diary "added the Mail Pass page; the pass stays off until the owner says yes"
+  else
+    echo "   (Mail Pass page not added; ask $ASSISTANT_LABEL to create it from the template)"
+    ustep_note "the Mail Pass page was not added"
+  fi
+fi
+# (0.16.0) The page of everything the wiki can do, generated from this pack's
+# own checklist. It is written whole each time and only where it carries
+# Moblee's generated mark; a page of that name without the mark is left alone.
+CATALOGUE_REL="wiki/Wiki Operations/What Your Wiki Can Do.md"
+python3 "$SCRIPT_DIR/catalogue-page.py" --vault "$VAULT" --package "$PACKAGE_ROOT" 2>&1 | sed 's/^/   /' \
+  || ustep_note "the page of what the wiki can do was not refreshed"
+if [[ ! -e "$VAULT/$CATALOGUE_REL" && -f "$PACKAGE_ROOT/vault-template/$CATALOGUE_REL" ]]; then
+  # could not be generated here: the template's short page stands in, so the
+  # links to it resolve, until the owner says "show me everything"
+  cp "$PACKAGE_ROOT/vault-template/$CATALOGUE_REL" "$VAULT/$CATALOGUE_REL" 2>/dev/null \
+    || ustep_note "the page of what the wiki can do was not added"
+fi
+# (0.16.0) The Plan's three parts in the daily note template: two subheadings
+# added at the end of its Plan, only where neither is there yet.
+# Committed with the update only where the template held no uncommitted work
+# of the owner's beforehand; otherwise it is left with their work for their
+# own next commit, as the other pages are.
+PLAN_PARTS_ADDED=0
+PLAN_TEMPLATE_CLEAN=1
+if [[ -d "$VAULT/.git" && -f "$VAULT/Daily Notes/_TEMPLATE.md" ]]; then
+  if ! git -C "$VAULT" diff --quiet -- "Daily Notes/_TEMPLATE.md" 2>/dev/null \
+     || ! git -C "$VAULT" diff --cached --quiet -- "Daily Notes/_TEMPLATE.md" 2>/dev/null; then
+    PLAN_TEMPLATE_CLEAN=0
+  fi
+fi
+PLAN_PARTS_OUT="$(python3 "$SCRIPT_DIR/add-plan-parts.py" --vault "$VAULT" 2>&1 || true)"
+if [[ -n "$PLAN_PARTS_OUT" ]]; then echo "   $PLAN_PARTS_OUT"; fi
+if [[ "$PLAN_PARTS_OUT" == added* ]]; then
+  if [[ $PLAN_TEMPLATE_CLEAN -eq 1 ]]; then
+    PLAN_PARTS_ADDED=1
+  else
+    echo "   Daily Notes/_TEMPLATE.md held changes of yours that were not yet committed, so the two"
+    echo "   new parts are left for your own next commit, with those changes."
+    diary "    Daily Notes/_TEMPLATE.md held uncommitted changes of the owner's; the Plan's parts were left for their own commit"
+  fi
+fi
 # A wiki made before 0.8.1 still has a first log entry headed "YYYY-MM-DD".
 # It is dated from the wiki's first commit; a line already written over is left
 # alone. Each of the three pages that had no uncommitted work of the owner's
@@ -1028,7 +1092,8 @@ if [[ -d "$VAULT/.git" ]]; then
       if [[ "$p" == "AGENTS.md" && "$ASSISTANT" == "claude" && ! -L "$p" ]]; then continue; fi
       # (v0.9.1) the Daily Notes template goes in only when this run added it,
       # so an owner's own notes folder is never swept into Moblee's commit
-      if [[ "$p" == "Daily Notes/_TEMPLATE.md" && $DAILY_NOTES_ADDED -eq 0 ]]; then continue; fi
+      # (0.16.0) or when it gained the Plan's two parts and was clean beforehand
+      if [[ "$p" == "Daily Notes/_TEMPLATE.md" && $DAILY_NOTES_ADDED -eq 0 && $PLAN_PARTS_ADDED -eq 0 ]]; then continue; fi
       # a rules file renamed while it held the owner's uncommitted changes is
       # left, under both names, for the owner's own next commit
       if [[ $RULES_DIRTY -eq 1 && ( "$p" == "CLAUDE.md" || "$p" == "AGENTS.md" ) ]]; then continue; fi
@@ -1082,7 +1147,11 @@ if [[ -d "$VAULT/.git" ]]; then
     # before its commit left them untracked, and the next run, finding them
     # present, never committed them. A page the owner has uncommitted work in
     # is still left for them.
-    for p in "wiki/Wiki Operations/Wiki Conventions.md" "wiki/Wiki Operations/Git and Commits.md" "wiki/Wiki Operations/Tools and Connections.md" "wiki/Wiki Operations/Readwise.md"; do
+    # (0.16.0) and the page of what the wiki can do, which the update writes
+    # whole each time; the Mail Pass page only on the run that added it.
+    TOUR_PAGES=("wiki/Wiki Operations/What Your Wiki Can Do.md")
+    if [[ $MAIL_PASS_ADDED -eq 1 ]]; then TOUR_PAGES+=("wiki/Wiki Operations/Mail Pass.md"); fi
+    for p in "wiki/Wiki Operations/Wiki Conventions.md" "wiki/Wiki Operations/Git and Commits.md" "wiki/Wiki Operations/Tools and Connections.md" "wiki/Wiki Operations/Readwise.md" "${TOUR_PAGES[@]}"; do
       if owner_dirty_sum "$p" >/dev/null; then continue; fi
       if [[ -e "$p" ]]; then
         git add -- "$p" 2>/dev/null || true

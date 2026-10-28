@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Test suite for safety/bash-guard.py (v5.1).
+Test suite for safety/bash-guard.py (v5.3).
 
 Runs the guard as a subprocess, exactly as Claude Code does (JSON on stdin,
 exit 2 = blocked, exit 0 = allowed), against a throwaway fake vault built in
@@ -218,6 +218,46 @@ def build_fixture():
         if not os.path.exists(rdst):
             with open(rdst, "wb") as fh:
                 fh.write(rblob)
+    # (v5.3) The Moblee Hub's own tools get no allowance: they come from other
+    # members, so they are scanned like any script. The updater is written as
+    # the hub's tools/apply_update.py is (a temp file beside the archive, the
+    # old copy moved into the archive with os.rename, the new one swapped in
+    # with os.replace, git read through subprocess) and passes on its own.
+    updater = ('import os, subprocess, tempfile\n'
+               'def git(*a):\n'
+               '    return subprocess.run(["git", "-C", "hub", *a], capture_output=True, text=True).stdout\n'
+               'git("log", "--format=%H", "--raw", "--", "recipes/x/kit/tool.py")\n'
+               'fd, tmp = tempfile.mkstemp(dir="archive/hub-updates/x-1.0.0", prefix=".incoming-")\n'
+               'os.rename("scripts/ok.py", "archive/hub-updates/x-1.0.0/scripts/ok.py")\n'
+               'os.replace(tmp, "scripts/ok.py")\n')
+    recorder = ('import subprocess\n'
+                'def git(*a):\n'
+                '    return subprocess.run(["git", "-C", "hub", *a], capture_output=True, text=True).returncode\n'
+                'git("add", "--", "reports/x.md")\ngit("commit", "-m", "hub: took x")\n'
+                'git("pull", "--rebase", "--autostash")\ngit("push")\n')
+    write(os.path.join(vault, "hub", ".git", "HEAD"), "ref: refs/heads/main\n")
+    write(os.path.join(vault, "hub", "hub.json"), '{"name": "Moblee Hub"}\n')
+    write(os.path.join(vault, "hub", "tools", "apply_update.py"), updater)
+    write(os.path.join(vault, "hub", "tools", "record_take.py"), recorder)
+    write(os.path.join(vault, "hub", "tools", "check_recipe.py"), 'print("PASS")\n')
+    # what a pushed hub tool could try, under the real tool's own name
+    write(os.path.join(vault, "hub", "tools", "mover.py"),
+          'import os, shutil\nshutil.move("wiki", "/tmp/gone")\nos.replace("/tmp/x", "wiki/A.md")\n')
+    write(os.path.join(vault, "hub", "tools", "renamer.py"), 'import os\nos.rename("wiki", "/tmp/gone")\n')
+    write(os.path.join(vault, "scripts", "renamer.py"), 'import os\nos.rename("wiki/A.md", "/tmp/A.md")\n')
+    write(os.path.join(vault, "scripts", "atomic-rename.py"),
+          'import os, tempfile\nfd, tmp = tempfile.mkstemp(dir="outputs")\nos.rename(tmp, "outputs/report.md")\n')
+    bad = os.path.join(root, "HubBad")
+    write(os.path.join(bad, "CLAUDE.md"), "# CLAUDE.md\n")
+    write(os.path.join(bad, "wiki", "A.md"), "# A\n")
+    write(os.path.join(bad, "hub", ".git", "HEAD"), "ref: refs/heads/main\n")
+    write(os.path.join(bad, "hub", "hub.json"), "{}\n")
+    write(os.path.join(bad, "hub", "tools", "apply_update.py"),
+          'import os, shutil\nshutil.move("wiki", "/tmp/gone")\nos.replace("/tmp/x", "wiki/A.md")\n')
+    # (v5.3) ChatGPT's settings folder moved by CODEX_HOME
+    write(os.path.join(root, "codexhome", "hooks", "bash-guard.py"), "# the guard\n")
+    write(os.path.join(root, "codexhome", "hooks.json"), '{"hooks": {}}\n')
+    write(os.path.join(root, "codexhome", "notes.txt"), "not the guard\n")
     return root, vault, tmpdir
 
 
@@ -1210,6 +1250,47 @@ V51 = [
 
 
 # Contract cases: (label, payload-or-None, expected exit)
+# (v5.3) The Moblee Hub's own tools and os.rename: (label, where, expected
+# exit, command). The hub's tools pass the ordinary scan as written, however
+# they are spelled; a hub tool that moves the wiki away is refused whatever its
+# name, since hub tools get no allowance of their own. `where` is "vault" (the
+# wiki folder), "wiki" (its wiki/ folder) or "bad" (a wiki whose hub's
+# apply_update.py moves the wiki away).
+HUB = [
+    ("hub tool: apply_update, as written", "vault", 0, "python3 hub/tools/apply_update.py hub-in-your-dock"),
+    ("hub tool: apply_update --apply --force-file", "vault", 0,
+     "python3 hub/tools/apply_update.py hub-in-your-dock --apply --force-file scripts/x.py"),
+    ("hub tool: apply_update by its absolute path", "vault", 0, "python3 {VAULT}/hub/tools/apply_update.py x --apply"),
+    ("hub tool: apply_update from the wiki/ folder", "wiki", 0, "python3 ../hub/tools/apply_update.py x --apply"),
+    ("hub tool: record_take --send", "vault", 0,
+     "python3 hub/tools/record_take.py hub-in-your-dock --result matches --report /tmp/r.md --send"),
+    ("hub tool: check_recipe --all", "vault", 0, "python3 hub/tools/check_recipe.py --all"),
+    ("hub tool: then git status in the hub", "vault", 0,
+     "python3 hub/tools/apply_update.py x --apply && git -C hub status --short"),
+    ("hub tool that moves the wiki away (shutil.move + os.replace)", "vault", 2, "python3 hub/tools/mover.py x"),
+    ("the same under apply_update.py's own name, in the exact form", "bad", 2,
+     "python3 hub/tools/apply_update.py x --apply"),
+    ("hub tool that renames the wiki away", "vault", 2, "python3 hub/tools/renamer.py x"),
+    ("os.rename of a page out of the wiki, in a script", "vault", 2, "python3 scripts/renamer.py"),
+    ("os.rename of the wiki, in python -c", "vault", 2, "python3 -c \"import os; os.rename('wiki', '/tmp/gone')\""),
+    ("os.rename of a page inside the wiki, in python -c (mv is the way)", "vault", 2,
+     "python3 -c \"import os; os.rename('wiki/A.md', 'wiki/B.md')\""),
+    ("os.rename of a temp file into place (atomic write) passes", "vault", 0, "python3 scripts/atomic-rename.py"),
+]
+
+# (v5.3) With CODEX_HOME set, ChatGPT's guard and hooks file live there and are
+# protected as under ~/.codex. (label, expected exit, command); {CODEX} is the folder.
+CODEX_HOME_CASES = [
+    ("CODEX_HOME: redirect over its hooks.json", 2, "echo '{}' > {CODEX}/hooks.json"),
+    ("CODEX_HOME: copy over its guard", 2, "cp /tmp/x.sh {CODEX}/hooks/bash-guard.py"),
+    ("CODEX_HOME: move its hooks folder away", 2, "mv {CODEX}/hooks /tmp/old-hooks"),
+    ("CODEX_HOME: chmod its guard", 2, "chmod 000 {CODEX}/hooks/bash-guard.py"),
+    ("CODEX_HOME: python writes its hooks.json", 2,
+     "python3 -c \"open('{CODEX}/hooks.json', 'w').write('{}')\""),
+    ("CODEX_HOME: reading its hooks.json passes", 0, "cat {CODEX}/hooks.json"),
+    ("CODEX_HOME: another file in the folder is ordinary", 0, "echo x >> {CODEX}/notes.txt"),
+]
+
 CONTRACT = [
     ("malformed JSON fails open", "not json", 0),
     ("non-Bash tool passes", {"tool_name": "Read", "tool_input": {"file_path": "x"}}, 0),
@@ -1396,6 +1477,15 @@ def main():
             ("MOBLEE_VAULT: redirect over a page, from a throwaway folder", "echo x > \"{VAULT}/wiki/A.md\"", 2),
             ("MOBLEE_VAULT: ls the wiki, from a throwaway folder", "ls \"{VAULT}/wiki\"", 0)):
         check(label, cmd, expect, "vault-root", "/tmp", env_var)
+    # (v5.3) the hub's own tools, and ChatGPT's folder moved by CODEX_HOME
+    hub_where = {"vault": vault, "wiki": os.path.join(vault, "wiki"), "bad": os.path.join(root, "HubBad")
+                 }
+    for label, where, expect, cmd in HUB:
+        check(label, cmd, expect, "hub", hub_where[where])
+    env_codex = dict(env)
+    env_codex["CODEX_HOME"] = os.path.join(root, "codexhome")
+    for label, expect, cmd in CODEX_HOME_CASES:
+        check(label, cmd.replace("{CODEX}", env_codex["CODEX_HOME"]), expect, "codex", vault, env_codex)
     for label, payload, expect in CONTRACT:
         rc, err = run(payload, vault if isinstance(payload, dict) and "cwd" in payload else None, env)
         ok = rc == expect

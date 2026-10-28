@@ -308,7 +308,19 @@ def self_written() -> set[tuple[str, str]]:
         if where != "section-after" or not text.startswith("## "):
             continue
         heading, _, body = text.partition("\n")
-        found.add((heading_key(heading[3:].strip()), digest_body(body)))
+        # (0.16.0) The same run may then add a paragraph block to the section
+        # it has just written (the orient section gains the day's Plan rule,
+        # the companion section the first-week line), and whether it does
+        # depends on markers elsewhere in the file. Every combination, in the
+        # order the blocks run, is this script's own writing as well.
+        paras = [t for _n, a, w, _m, t in BLOCKS
+                 if w == "append-para" and re.match(a, heading.strip())]
+        for mask in range(1 << len(paras)):
+            lines = body.rstrip("\n").split("\n")
+            for i, para in enumerate(paras):
+                if mask & (1 << i):
+                    append_para(lines, -1, len(lines), para)
+            found.add((heading_key(heading[3:].strip()), digest_body("\n".join(lines))))
     return found
 
 
@@ -546,6 +558,26 @@ BLOCKS = [
         "append-para",
         "outputs/lint/",
         "The programmatic lint runs itself every Saturday morning through the scheduled job Moblee installed and writes its report to `outputs/lint/`. At orient, if that folder holds a report newer than the last one read, read its findings and carry anything that needs the owner's decision into the sitrep, in plain English. Findings are named to the owner, never acted on unasked.\n",
+    ),
+    (
+        # (0.16.0) The morning pass, from the Hub recipe "Orient, the morning
+        # pass". Where the owner has not touched the orient section the engine
+        # has already written the new wording, which carries the marker, so
+        # this does nothing; where they have, this adds the rule after their
+        # words and takes none of them away.
+        "the day's Plan and the mail pass at orient (0.16.0)",
+        r"^## The \"orient\" command\s*$",
+        "append-para",
+        "Waiting on others",
+        "**Today's Plan, and the mail pass (0.16.0).** At orient, if [[Habits and Tools]] records a yes to the mail pass, run it as [[Mail Pass]] says and put its one line and action items in the sitrep; if it records no answer, that page says when to offer it, once. Then top up today's daily note (`Daily Notes/YYYY-MM-DD.md`, dated from `date`, made from the template if missing): its `## Plan` is the day's to-do list in three parts, the owner's to-dos most urgent first, then `### Waiting on others`, then `### Standing`. Add the day's new to-dos at the top, one line each (a checkbox, a bold label with the colon after the bold, one plain sentence), and tick an item in the same pass as the work that settles it. An unticked box means \"planned\", not \"unresolved\": whether an item is done is read from `wiki/log.md` and the wiki, never from the box. Never tell the owner to close the day, whatever the hour.\n",
+    ),
+    (
+        # (0.16.0) The first-week tour. Same reasoning as the block above.
+        "the first-week tour (0.16.0)",
+        r"^## The companion\s*$",
+        "append-para",
+        "first-days.py",
+        "**The first week (0.16.0).** On the first five days of use a note at the start of the conversation asks for one line at the end of the first reply, offering one thing the wiki can do; that line is the only exception to the one-offer rule, and after day five there is none. \"Show me everything\" runs `python3 scripts/catalogue-page.py` and reads out [[What Your Wiki Can Do]], grouped and brief. \"Stop the tour\" runs `python3 scripts/first-days.py --stop`.\n",
     ),
     (
         "plain prose rule (v0.5.1)",

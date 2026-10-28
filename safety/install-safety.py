@@ -20,8 +20,10 @@ What it does for Claude, in order, stopping at the first failure:
      refused, exit code 2) and a harmless command (must pass, exit code 0).
   3. Registers the guard in ~/.claude/settings.json as a PreToolUse hook on
      Bash, and the end-of-reply save (the wiki's own
-     scripts/turn-end-commit.py) as a Stop hook. The file is backed up first;
-     existing hooks are kept; the result is parsed again before it is accepted.
+     scripts/turn-end-commit.py) as a Stop hook, and (0.16.0) the first-week
+     tour (scripts/first-days.py) as a SessionStart hook. The file is backed
+     up first; existing hooks are kept; the result is parsed again before it
+     is accepted.
   4. Merges the starter permission rules into <vault>/.claude/settings.local.json:
      the allow list that stops the constant permission prompts, and the
      deny ring that refuses deletion, history rewriting and force pushes at
@@ -123,11 +125,49 @@ TURN_END_EVENT = "Stop"           # the hook that runs once a reply has finished
 # wants the key all the same, and "*" is its own word for "whatever this is".
 CODEX_STOP_MATCHER = "*"
 
+# (0.16.0) The first-week tour. Like the end-of-reply save it lives in the wiki
+# (<wiki>/scripts/first-days.py) and is named by its full path; it is entered
+# and identified exactly as that one is, by the whole path and never by name.
+# It runs when a conversation starts and adds one line of context on the first
+# five days of use, and nothing after.
+#
+# For Claude only, for now. OpenAI's Codex hooks page
+# (https://learn.chatgpt.com/docs/hooks) does document SessionStart, with the
+# same hookSpecificOutput.additionalContext shape. It is not entered for
+# ChatGPT because ChatGPT runs a new hook only after the owner trusts it in its
+# settings, so entering it would ask every ChatGPT owner for the Trust steps
+# again on update (and the steps the installer and the updater print name two
+# hooks, not three), for a tour whose extras are Claude's only. That is a
+# decision for a later version, not something to slip in.
+FIRST_DAYS_NAME = "first-days.py"
+FIRST_DAYS_IN_VAULT = ("scripts", FIRST_DAYS_NAME)
+FIRST_DAYS_EVENT = "SessionStart"
+
 # ChatGPT (its agent, Codex, keeps its settings under ~/.codex, or under
 # CODEX_HOME when that is set)
 CODEX_DEFAULT_DIR = Path.home() / ".codex"
+# (0.16.0) Where a CODEX_HOME came from the environment, the folder is also
+# written to ~/.config/moblee/codex-home, because the Moblee app opened from
+# the Dock never sees a shell's variables; the app, the setup checklist and the
+# check-up read that file when CODEX_HOME is not set. Order: CODEX_HOME, then
+# the file (one absolute path), then ~/.codex.
+CODEX_RECORD = Path.home() / ".config" / "moblee" / "codex-home"
+
+
+def _recorded_codex_dir():
+    try:
+        line = CODEX_RECORD.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        return None
+    if line and "\n" not in line and line.startswith("/"):
+        return Path(line)
+    return None
+
+
 _CODEX_HOME = os.environ.get("CODEX_HOME", "").strip()
-CODEX_DIR = Path(_CODEX_HOME).expanduser().absolute() if _CODEX_HOME else CODEX_DEFAULT_DIR
+CODEX_FROM_ENV = bool(_CODEX_HOME)
+CODEX_DIR = (Path(_CODEX_HOME).expanduser().absolute() if _CODEX_HOME
+             else (_recorded_codex_dir() or CODEX_DEFAULT_DIR))
 CODEX_HOOKS_DIR = CODEX_DIR / "hooks"
 CODEX_GUARD_DST = CODEX_HOOKS_DIR / "bash-guard.py"
 CODEX_HOOKS_JSON = CODEX_DIR / "hooks.json"
@@ -366,8 +406,9 @@ def codex_entry_present(pre: list) -> bool:
     return False
 
 
-def hook_script_paths(stop: list) -> list:
+def hook_script_paths(stop: list, name: str = TURN_END_NAME) -> list:
     """Every path an entered end-of-reply save names, in the order found.
+    (0.16.0) `name` picks another of the wiki's own hook scripts, the same way.
 
     The command is written as `python3 <path>`, with the path quoted where it
     holds a space, so it is read back the way a shell would read it. A command
@@ -381,18 +422,18 @@ def hook_script_paths(stop: list) -> list:
             if not isinstance(h, dict):
                 continue
             command = str(h.get("command", ""))
-            if TURN_END_NAME not in command:
+            if name not in command:
                 continue
             try:
                 words = shlex.split(command)
             except ValueError:
                 words = [command]
-            named = [w for w in words if w.endswith(TURN_END_NAME)]
+            named = [w for w in words if w.endswith(name)]
             out += named or [command]
     return out
 
 
-def stop_state(stop: list, vault: Path) -> tuple:
+def stop_state(stop: list, vault: Path, rel: tuple = TURN_END_IN_VAULT) -> tuple:
     """(whether this wiki's own end-of-reply save is entered, the paths of any
     entered for some other folder).
 
@@ -410,9 +451,9 @@ def stop_state(stop: list, vault: Path) -> tuple:
     may be another wiki's and perfectly good, and this script only ever adds at
     the end of a list; so the correction is to enter this wiki's own beside it,
     and to say plainly that the other one is there and was left alone."""
-    want = vault.joinpath(*TURN_END_IN_VAULT)
+    want = vault.joinpath(*rel)
     mine, others = False, []
-    for named in hook_script_paths(stop):
+    for named in hook_script_paths(stop, rel[-1]):
         try:
             same = os.path.realpath(Path(named).expanduser()) == os.path.realpath(want)
         except (OSError, ValueError):
@@ -944,6 +985,13 @@ def main() -> int:
         if CODEX_DIR != CODEX_DEFAULT_DIR:
             say(f"ChatGPT settings folder: {short(CODEX_DIR)} (from CODEX_HOME, "
                 f"in place of {short(CODEX_DEFAULT_DIR)})")
+            if CODEX_FROM_ENV and _recorded_codex_dir() != CODEX_DIR:
+                try:
+                    CODEX_RECORD.parent.mkdir(parents=True, exist_ok=True)
+                    CODEX_RECORD.write_text(str(CODEX_DIR) + "\n", encoding="utf-8")
+                    say(f"  noted in {short(CODEX_RECORD)}, so the Moblee app finds it too")
+                except OSError:
+                    say("  (could not note it for the Moblee app; open Moblee from Terminal to see it)")
 
     # 0. read the settings first, so a file this script cannot merge into stops
     #    it before anything on the machine has changed
@@ -1076,11 +1124,17 @@ def claude_branch(vault: Path, settings: dict, stamp: str, dry_run: bool) -> Non
     # stop_state() for what matching on the name alone cost.
     stop_present, stop_others = stop_state(hooks.get(TURN_END_EVENT, []) or [], vault)
     script_there = turn_end_script(vault).is_file()
+    # (0.16.0) the first-week tour, entered the same way as the save
+    tour_present, tour_others = stop_state(hooks.get(FIRST_DAYS_EVENT, []) or [], vault,
+                                           FIRST_DAYS_IN_VAULT)
+    tour_there = vault.joinpath(*FIRST_DAYS_IN_VAULT).is_file()
     adding = []
     if not present:
         adding.append("the delete guard, before a command runs")
     if not stop_present and script_there:
         adding.append("the end-of-reply save, once a reply has finished")
+    if not tour_present and tour_there:
+        adding.append("the first-week tour, when a conversation starts")
     if present:
         say("  the delete guard is already registered; nothing to change")
     for named in stop_others:
@@ -1094,6 +1148,14 @@ def claude_branch(vault: Path, settings: dict, stamp: str, dry_run: bool) -> Non
         say(f"  {TURN_END_NAME} is not in the wiki yet, so the end-of-reply save was not "
             "registered; the installer and the updater put it there, so run this again "
             "after one of them")
+    for named in tour_others:
+        say(f"  a first-week tour for another folder is already registered ({named}); it is "
+            "left as it is, and this wiki's own is registered beside it")
+    if tour_present:
+        say("  the first-week tour is already registered; nothing to change")
+    elif not tour_there:
+        say(f"  {FIRST_DAYS_NAME} is not in the wiki yet, so the first-week tour was not "
+            "registered; the installer and the updater put it there")
     if not adding:
         pass
     elif dry_run:
@@ -1111,6 +1173,13 @@ def claude_branch(vault: Path, settings: dict, stamp: str, dry_run: bool) -> Non
             # script, by its full path.
             hooks.setdefault(TURN_END_EVENT, []).append(
                 {"hooks": [{"type": "command", "command": turn_end_cmd(vault)}]})
+        if not tour_present and tour_there:
+            # No matcher: it runs however the conversation started (new,
+            # resumed, cleared), and the script itself speaks only once a day.
+            # A short ceiling: it reads and writes one small file.
+            hooks.setdefault(FIRST_DAYS_EVENT, []).append(
+                {"hooks": [{"type": "command", "timeout": 10,
+                            "command": f"python3 {shlex.quote(str(vault.joinpath(*FIRST_DAYS_IN_VAULT)))}"}]})
         after = hook_count(hooks)
         for k, n in before.items():
             if after.get(k, 0) < n:

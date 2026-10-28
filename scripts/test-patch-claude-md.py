@@ -113,7 +113,10 @@ def test_clean_file_shrinks() -> None:
               and engine.normalise_body(got[h]) != engine.normalise_body(want[h])]
     check(not differ, "and every one of them word for word as the template has it", str(differ))
     tokens = len(new) // 4
-    check(tokens < 4600, f"the result is under 4,600 tokens (it is {tokens:,})")
+    # (0.16.0) 4,600 until the orient section took in the morning pass's Plan
+    # rule and the companion section the first-week line: about 330 tokens,
+    # read every session. The ceiling moves by that much and no more.
+    check(tokens < 5000, f"the result is under 5,000 tokens (it is {tokens:,})")
     check(plan.skipped == [], "nothing was skipped", ", ".join(plan.skipped))
     check(len(plan.dropped) == 11, f"eleven sections moved to a page (got {len(plan.dropped)})")
     check(("Readwise conventions", "Readwise") in plan.dropped,

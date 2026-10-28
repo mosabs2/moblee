@@ -29,6 +29,16 @@ You almost never need to tell your assistant where to put things, what to name f
 
 **Your own unfinished work is never swept into it.** Anything you have half-written yourself — in the rules file, or in Moblee's own folders — is left for your own next commit rather than saved under Moblee's name, and the check-up tells you it was left.
 
+## Your first week
+
+For the first five days you use the wiki, your assistant adds one line to the end of its first answer each day: one thing the wiki can do that fits what you have been doing, with an offer to show you. On the first day that line comes with a short map of what there is. Say yes and it shows you; say no and it is written down and not offered again for ninety days; say "not now" and nothing is written down. A day counts only when you use the wiki, so a week away does not use it up. Say "stop the tour" to end it early, and "show me everything" at any time to hear the whole list, which is kept on the page `What Your Wiki Can Do`. After the fifth day it goes quiet, and offers only when you say "guide me". **With ChatGPT:** there is no tour yet; "show me everything" still works.
+
+## Saying orient each morning
+
+Say **orient** when you come back to the wiki. You get one short report: the date and time, the three things most alive in your wiki, any decision waiting on you, and what is sitting in `raw/` and `Clippings/`. Your daily note's Plan becomes the day's to-do list in three parts: your to-dos, most urgent first; what you are waiting on from others; and standing items. At each orient your assistant adds the day's new to-dos at the top, and when a piece of work settles one, it ticks it straight away. The dashboard shows the same list. An unticked box means "planned this morning", never "you failed to do it": what is done is read from the wiki's record, not from the box.
+
+**The mail pass, if you want it.** If your mail is in Apple Mail, your assistant offers once to sort your unread mail at each orient. It reads only the sender, subject and date of each unread message, never the message itself. Mail from people, money mail and things you must act on stay unread, and the things to act on go to the top of your to-do list; promotions are marked read, and newsletters are marked read and moved to a mailbox called News. Nothing is ever deleted, sent, unsubscribed or put in junk. The first time, macOS asks whether your assistant may control Mail, and you click OK; the first pass shows you what it would do and waits for your yes. Say no and it is not offered again for ninety days. The method is on the page `Mail Pass` in `wiki/Wiki Operations/`.
+
 ## Common requests
 
 Here are some examples of the kinds of things you might say, and what your assistant will do. You do not need exact wording; it triggers the relevant skill from the phrasing.

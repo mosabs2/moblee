@@ -24,29 +24,13 @@ struct HomeScreen: View {
     /// live walk can work out what the screen in front of it is showing and
     /// ask whether the keyboard really crosses it in that order. (v0.9.5)
     static func shown(from tiles: [HomeModel.Tile]) -> [HomeModel.Tile] {
-        let rank: (HomeModel.Tile) -> Int = { t in
-            switch t.state {
-            case .running: return 0
-            case .waiting, .failed: return 1
-            case .handedOver: return 2
-            case .blocked: return 3
-            case .done: return 4
-            }
-        }
-        return Array(tiles.sorted { rank($0) < rank($1) }.prefix(3))
+        Array(tiles.sorted { HomeModel.rank($0.state) < HomeModel.rank($1.state) }.prefix(3))
     }
 
     /// The Trust screen is open: because the step is waiting, or because the
-    /// owner pressed "Prove the guard". It stays until the owner leaves it.
-    @State private var trustOpen = false
-    /// (v0.13.0) "Open the hub" was just pressed: say so, and take no second press for a moment.
-    @State private var openingHub = false
-
-    private var showsTrust: Bool { (home.trustPending && !home.trustSetAside) || trustOpen }
-    private var showsMain: Bool {
-        home.explaining == nil && !home.updateAvailable && !home.needsRepair
-            && !home.showsForeignSkills && !showsTrust && !home.addMoreOpen
-    }
+    /// owner pressed "Prove the guard" in the menu. It stays until the owner
+    /// leaves it. (0.16.0: the model holds it; see `HomeModel.trustOpen`.)
+    private var showsTrust: Bool { (home.trustPending && !home.trustSetAside) || home.trustOpen }
 
     var body: some View {
         ZStack {
@@ -67,39 +51,42 @@ struct HomeScreen: View {
                 foreignSkillPrompt
             } else if showsTrust {
                 TrustScreen(start: home.trustPending ? Trust.firstStage : .offer, vault: home.vault?.path) {
-                    trustOpen = false
+                    home.trustOpen = false
                     home.trustSetAside = true
                 }
-                .onAppear { trustOpen = true }
+                .onAppear { home.trustOpen = true }
             } else if home.assistant == .chatgpt {
-                // (v0.9.6) On this screen and the two below it, the second big
-                // button is the way into everything the wiki can have (0.14.0;
-                // the example wiki before it); see `secondTitle`.
+                // (0.16.0) On this screen and the two below it there is one big
+                // button and one quiet line, "Add more". Everything else that
+                // was round the foot of the screen is in the corner menu
+                // (`HomeMenu`), and the one read-aloud in that corner reads the
+                // whole screen (`HomeScreen.speech`).
                 // The tiles are extras that Moblee sets up for Claude only. An
                 // owner who uses ChatGPT alone is told so once, plainly, in
                 // their place, and is never offered something that would do
                 // nothing for them.
-                ScreenFrame(sentence: "Connections and other extras are set up for Claude. "
-                                + "Moblee does not set them up for ChatGPT yet.",
+                ScreenFrame(sentence: Self.sentence(home),
                             buttonTitle: "Open ChatGPT", showsBack: false,
-                            secondTitle: secondTitle, secondAction: secondAction,
+                            quietTitle: AddMore.wayIn, quietAction: { home.openAddMore() },
+                            listenInCorner: true, subline: unknownLine,
                             action: openChatGPT) {
                     Image(systemName: "bubble.left.and.bubble.right.fill")
                         .font(Theme.font(96, .regular, .default)).foregroundStyle(Theme.accent)
                         .accessibilityHidden(true)
                 }
             } else if home.listUnreadable {
-                ScreenFrame(sentence: "Moblee could not read its list. Tell \(home.assistant.talksTo): run a check-up.",
-                            buttonTitle: "Open Claude", showsBack: false, action: openClaude) {
+                ScreenFrame(sentence: Self.sentence(home),
+                            buttonTitle: "Open Claude", showsBack: false,
+                            listenInCorner: true, subline: unknownLine, action: openClaude) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(Theme.font(90, .regular, .default)).foregroundStyle(Theme.waiting)
                         .accessibilityHidden(true)
                 }
             } else if waiting.isEmpty {
-                ScreenFrame(sentence: home.tiles.isEmpty ? "Nothing is waiting. Talk to Claude."
-                                                         : "All added. Tell Claude it is done.",
+                ScreenFrame(sentence: Self.sentence(home),
                             buttonTitle: "Open Claude", showsBack: false,
-                            secondTitle: secondTitle, secondAction: secondAction,
+                            quietTitle: AddMore.wayIn, quietAction: { home.openAddMore() },
+                            listenInCorner: true, subline: unknownLine,
                             action: openClaude) {
                     Image(systemName: home.tiles.isEmpty ? "bubble.left.and.bubble.right.fill" : "checkmark.circle.fill")
                         .font(Theme.font(96, .regular, .default))
@@ -107,36 +94,22 @@ struct HomeScreen: View {
                         .accessibilityHidden(true)
                 }
             } else {
-                // The big button does the job the screen is for: it adds the next
-                // thing. Going back to Claude is the quiet one underneath.
-                ScreenFrame(sentence: waitingSentence,
-                            buttonTitle: home.nextTile.map { $0.kind == .skill ? "Look at the first one" : "Add the first one" } ?? "Open Claude",
-                            showsBack: false,
-                            quietTitle: home.nextTile == nil ? nil : "Open Claude",
-                            quietAction: home.nextTile == nil ? nil : openClaude,
-                            secondTitle: secondTitle, secondAction: secondAction,
-                            // (v0.9.5) A skill Claude wrote wears the name the
-                            // owner asked for, in their own words, so the list is
-                            // read in pieces rather than in one voice.
-                            //
-                            // No `spoken` beside it: `Headline.speech` gives the
-                            // `speech` back before it looks at `spoken`, so the
-                            // `listSpeech.plain` that used to sit here was a
-                            // flattened second copy of these same words that
-                            // nothing could ever read.
-                            speech: listSpeech,
-                            action: { if let t = home.nextTile { home.press(t) } else { openClaude() } }) {
+                // (0.16.0) Each card carries its own small Add, so the big
+                // button no longer adds "the first one": it is Open Claude, as
+                // on every other home screen, and Add more is the quiet line.
+                ScreenFrame(sentence: Self.sentence(home),
+                            buttonTitle: "Open Claude", showsBack: false,
+                            quietTitle: AddMore.wayIn, quietAction: { home.openAddMore() },
+                            listenInCorner: true, subline: unknownLine,
+                            action: openClaude) {
                     VStack(spacing: Theme.pt(8)) {
                         HStack(alignment: .top, spacing: Theme.pt(18)) {
                             ForEach(shown) { tile in
                                 RequestTile(tile: tile, press: { home.press(tile) }, done: { home.markDone(tile) })
                             }
                         }
-                        // (v0.9.5) These two short lines belong to the list above
-                        // them rather than standing on their own, so they are read
-                        // by the list's own control at the top of the screen
-                        // instead of growing two more buttons on a screen that
-                        // already carries one for each of the three tiles.
+                        // These two short lines belong to the list above them, and
+                        // are read with it by the one read-aloud in the corner.
                         if let more = Self.moreAfterThese(tiles: home.tiles.count, shown: shown.count) {
                             Text(more)
                                 .font(Theme.font(13, .medium))
@@ -152,95 +125,130 @@ struct HomeScreen: View {
                 }
             }
         }
-        // The bottom corner the reading ends at. The window has no title bar of
-        // its own, so its top strip is where the window is dragged by, and a
-        // small control put there may not take a click at all; the top is also
-        // where a two-line sentence reaches. The big button and the quiet one
-        // under it sit in the middle of the bottom, and this corner is free on
-        // every home screen.
-        //
-        // (v0.9.4) The two corners are named in `Layout` and are SwiftUI's own,
-        // so they swap over when the layout is mirrored and the two lines never
-        // land in the same corner.
-        .overlay(alignment: Layout.assistantCorner) {
-            if showsMain && !repairing { assistantControl }
-        }
-        // The other bottom corner, the one the assistant control leaves free: a
-        // newer Moblee is out. Only on the ordinary home screen, never over an
-        // update, a repair or the Trust steps, and never in an install.
-        .overlay(alignment: Layout.newerReleaseCorner) {
-            if showsMain && !repairing && home.newerReleaseLineAllowed, let v = home.newerRelease { newerReleaseLine(v) }
-        }
         .onAppear {
             guard !still else { return }
             home.startWatching()
         }
-        .onDisappear { home.stopWatching() }
+        .onDisappear {
+            home.stopWatching()
+            // As the screen's own state did before 0.16.0: leaving the home
+            // screen leaves the Trust steps and the menu behind it.
+            home.trustOpen = false
+            home.menuOpen = false
+        }
     }
 
-    /// The sentence at the top of the home screen when something is waiting.
-    /// Named, so that the listen control beside it reads the screen's own words
-    /// and not a second copy of them. (v0.9.5)
-    private var waitingSentence: String {
+    /// (0.16.0) The sentence at the top of the ordinary home screen, in each of
+    /// its states. A function of the model alone, so that the read-aloud in the
+    /// window's corner, which is drawn outside this screen, reads the screen's
+    /// own words and not a second copy of them.
+    static func sentence(_ home: HomeModel) -> String {
+        if home.assistant == .chatgpt {
+            return "Connections and other extras are set up for Claude. Moblee does not set them up for ChatGPT yet."
+        }
+        if home.listUnreadable { return "Moblee could not read its list. Tell \(home.assistant.talksTo): run a check-up." }
+        let waiting = home.tiles.filter { $0.state != .done }
+        if waiting.isEmpty {
+            return home.tiles.isEmpty ? "Nothing is waiting. Talk to Claude." : "All added. Tell Claude it is done."
+        }
         guard home.nextTile == nil else { return "Claude has these ready for you." }
         return waiting.contains { $0.state == .handedOver && $0.how == .clicks }
             ? "Finish these where they opened. Then press Done here."
             : "Finish these where they opened, then tell Claude."
     }
 
+    /// (0.16.0) The one quiet line under the sentence when a settings file
+    /// cannot be read, so Moblee cannot tell whether the guard is on. It does
+    /// not claim the guard is off; it says what it cannot see, and offers the
+    /// check-up, which looks at the file and says what is wrong with it.
+    static func unknownSentence(_ home: HomeModel) -> String? {
+        home.unreadableSettingsOf.map {
+            "Moblee cannot read \($0)'s settings file, so it cannot tell whether the safety guard is on."
+        }
+    }
+    static let unknownCheckId = "unknown-check-wiki"
+
+    private var unknownLine: AnyView? {
+        guard let line = Self.unknownSentence(home) else { return nil }
+        let check = { if flow.canBeginClinic { flow.beginClinic() } }
+        return AnyView(
+            HStack(spacing: Theme.pt(10)) {
+                Text(line)
+                    .font(Theme.font(13, .medium))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button(Self.checkWiki, action: check)
+                    .buttonStyle(SmallButtonStyle())
+                    .disabled(!flow.canBeginClinic)
+                    .keyboardReachable(Self.unknownCheckId, corner: 7, press: check)
+            }
+            .frame(maxWidth: Theme.pt(620))
+        )
+    }
+
     static func moreAfterThese(tiles: Int, shown: Int) -> String? {
         tiles > shown ? "and \(tiles - shown) more after these" : nil
+    }
+
+    /// (0.16.0) What the one read-aloud in the corner says: the whole screen,
+    /// top to bottom. The sentence; each card in the words the card itself
+    /// shows, cost and state included; the two short lines under the cards;
+    /// then the two things that can be pressed below them.
+    ///
+    /// (v0.9.5) A skill Claude wrote wears the name the owner asked for, in
+    /// their own words, so a list with one in it is read in pieces rather
+    /// than in one voice; `RequestTile.speech` does that.
+    static func speech(_ home: HomeModel) -> Speech {
+        var said = Speech(sentence(home))
+        if let line = unknownSentence(home) {
+            said = said + Speech(line + " Press \(checkWiki) beside it.")
+        }
+        let onScreenTiles = home.assistant != .chatgpt && !home.listUnreadable
+            && home.tiles.contains { $0.state != .done }
+        if onScreenTiles {
+            let shown = Self.shown(from: home.tiles)
+            for tile in shown where tile.state != .done { said = said + RequestTile.speech(for: tile) }
+            if let more = moreAfterThese(tiles: home.tiles.count, shown: shown.count) { said = said + Speech(more) }
+            if home.assistant == .both { said = said + Speech(claudeOnly) }
+        }
+        let big = home.assistant == .chatgpt ? "Open ChatGPT" : "Open Claude"
+        said = said + Speech(home.listUnreadable ? "The big button: \(big)."
+                             : "The big button: \(big). Under it: \(AddMore.wayIn).")
+        // (0.16.0) A newer Moblee is in the menu, which an owner who cannot
+        // read would never open on the chance: 0.15.2 gave its line a speaker
+        // of its own for exactly that reason, so it is said here.
+        if home.newerReleaseLineAllowed, let v = home.newerRelease {
+            said = said + Speech(newerReleaseSpoken(v))
+        }
+        return said
+    }
+
+    static func newerReleaseSpoken(_ version: String) -> String {
+        "Moblee \(version) is out. Install it from the menu at the top of the window."
     }
 
     /// (v0.9.5) Every control the keyboard stops at on this screen, in the
     /// order Tab reaches them, written here beside the code that draws them.
     ///
     /// It is here and not in the check because a list of names typed out in a
-    /// check is a list of what somebody believed the screen had on it. The one
-    /// that used to stand there was sixteen strings long and was asserted to
-    /// have no repeats and to be no longer than sixteen — both of which are
-    /// true of any list of sixteen different strings, so neither could ever
-    /// have failed. It also left out the Done button that each handed-over
-    /// tile grows, which is three more stops than anybody had counted.
+    /// check is a list of what somebody believed the screen had on it. The live
+    /// walk presses Tab round the real window and requires the real ring to be
+    /// exactly this, so the two cannot drift apart.
     ///
-    /// The live walk presses Tab round the real window and requires the real
-    /// ring to be exactly this, so the two cannot drift apart: a control added
-    /// to the screen and not to this fails the walk, and a control here that
-    /// the screen does not draw fails it too.
-    ///
-    /// The order is the one the keyboard really takes, which on this Mac is row
-    /// by row down the window and, within a row, from the reading edge across —
-    /// so the bottom row is the newer-Moblee line in the near corner, then the
-    /// quiet words in the middle, then the line about the assistant in the far
-    /// corner. Each listen control is inside its own group and never between
-    /// two of another's; see `newerReleaseLine` for the one that had to move.
-    static func stops(shown: [HomeModel.Tile], nextTileWaiting: Bool,
-                      canChangeAssistant: Bool, wantsChatGPT: Bool,
-                      newerRelease: Bool, showsExample: Bool = false) -> [String] {
-        var ring = ["bigger-text", "read-aloud"]
+    /// (0.16.0) Far shorter than it was. The corner comes first, at the top of
+    /// the window: the one read-aloud and the one menu. Then each card's own
+    /// buttons, card by card, and then the quiet "Add more" under the big
+    /// button. The big button is not on the round and never has been: it is
+    /// the window's default action, pressed by Return from anywhere. Every
+    /// card's own speaker, the quiet words' speaker, and the two lines along
+    /// the bottom with their three speakers have gone: the lines are inside the
+    /// menu (`HomeMenu.stops`), and the corner's read-aloud reads it all.
+    static func stops(shown: [HomeModel.Tile], addMore: Bool = true, unknownLine: Bool = false) -> [String] {
+        var ring = ["read-aloud", HomeMenu.buttonId]
+        // The quiet line under the sentence, when a settings file cannot be read.
+        if unknownLine { ring.append(unknownCheckId) }
         for tile in shown { ring += RequestTile.stops(tile) }
-        // (v0.9.6) The second big button, in the row of big buttons, which the
-        // keyboard reaches after the cards above it and before the three quiet
-        // lines along the bottom. "See an example wiki" until 0.14.0, "Add
-        // more" from then; the example is now inside the Add more screen. The first big button is
-        // not on this round at all and never has been: it is the window's default
-        // action, pressed by Return from anywhere. The second one is not, so it
-        // takes the keyboard like every other control.
-        if showsExample { ring.append("second-button") }
-        if nextTileWaiting { ring += ["quiet", "listen-quiet"] }
-        // (v0.9.6) The check-up the owner runs themselves, in the corner with
-        // the line about the assistant and on the line above it. It is read by
-        // that line's own listen control rather than growing one of its own,
-        // which is why it adds one stop and not two. Being on a line of its own
-        // above the bottom row, the keyboard reaches it before anything on that
-        // row: before the newer-Moblee line, "Change" and "Prove the guard".
-        // (First written after them; the live-window walk of 27 September 2026
-        // measured the real round and put it here.)
-        ring.append("check-wiki")
-        if newerRelease { ring += ["listen-newer-line", "download-newer", "newer-not-now"] }
-        if canChangeAssistant { ring.append("change-assistant") }
-        if wantsChatGPT { ring.append("prove-guard") }
-        ring.append("listen-assistant-line")
+        if addMore { ring.append("quiet") }
         return ring
     }
 
@@ -248,9 +256,8 @@ struct HomeScreen: View {
     /// number the keyboard has to be able to cross.
     ///
     /// Worked out from `stops` rather than counted by eye: one tile still to
-    /// be added (which is what puts the quiet words under the big button) and
-    /// two handed over by clicks (which is what grows a Done button each),
-    /// with both corner lines showing and an owner who uses both assistants.
+    /// be added, and two handed over by clicks (which is what grows a Done
+    /// button each).
     static func busiestTiles() -> [HomeModel.Tile] {
         var waiting = HomeModel.Tile(kind: .item, key: "one", title: "", why: "", detail: "",
                                      how: .silent, paid: false)
@@ -264,40 +271,9 @@ struct HomeScreen: View {
         return [waiting] + handedOver
     }
 
-    static func busiest() -> [String] {
-        stops(shown: busiestTiles(), nextTileWaiting: true,
-              canChangeAssistant: true, wantsChatGPT: true, newerRelease: true,
-              // (0.14.0) The second big button is "Add more", on every home
-              // screen of this kind, with or without the example.
-              showsExample: true)
-    }
-
-    /// (0.14.0) The second big button on the ordinary home screen: everything
-    /// the wiki can have, and what is in place. It took the place of the way
-    /// into the example wiki (v0.9.6), on Mohammed's word of 26 October 2026,
-    /// rather than add one more control to a screen already at the twenty the
-    /// check allows; the example is now the Add more screen's own second big
-    /// button, and still the welcome screen's for an owner with no wiki.
-    private var secondTitle: String? { AddMore.wayIn }
-    private var secondAction: (() -> Void)? { { home.openAddMore() } }
+    static func busiest() -> [String] { stops(shown: busiestTiles()) }
 
     static let claudeOnly = "These are set up for Claude. Moblee does not set them up for ChatGPT yet."
-
-    /// (v0.9.5) The whole of what is waiting, read from the top of the screen:
-    /// the sentence, then each tile in the words the tile itself shows, then the
-    /// two short lines under the tiles. It was the sentence and the tiles' titles
-    /// and reasons only, in one voice, and it left out what each thing costs,
-    /// where each had got to, how many more there were, and the line saying these
-    /// are for Claude alone.
-    private var listSpeech: Speech {
-        var said = Speech(waitingSentence)
-        for tile in shown where tile.state != .done { said = said + RequestTile.speech(for: tile) }
-        if let more = Self.moreAfterThese(tiles: home.tiles.count, shown: shown.count) {
-            said = said + Speech(more)
-        }
-        if home.assistant == .both { said = said + Speech(Self.claudeOnly) }
-        return said
-    }
 
     private var updatePrompt: some View {
         ScreenFrame(sentence: "A newer Moblee is ready for your wiki. Your pages are not touched.",
@@ -423,159 +399,10 @@ struct HomeScreen: View {
         ChatGPTApp.open(folder: home.vault?.path, practice: flow.isTestMode)
     }
 
-    /// Small and quiet, in the corner: which assistant the wiki is for, a way
-    /// to change it (the question, then the updater with the answer), and, for
-    /// an owner who uses ChatGPT, a way to put the guard to the test.
-    ///
-    /// Change is made by this app's updater, so it is not offered on a wiki a
-    /// newer Moblee made (the words say where to go instead), nor while
-    /// something is being added.
-    private var assistantControl: some View {
-        VStack(alignment: .trailing, spacing: Theme.pt(0)) {
-            if home.wikiIsNewerThanApp {
-                Text(Self.changeNeedsNewest)
-                    .font(Theme.font(12, .medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.trailing, Theme.pt(9))
-            }
-            // (v0.9.6) One press, and the pack's own read-only check-up runs and
-            // saves its report where whoever looks after Moblee expects it. It
-            // used to take a file dropped in `raw/`, an exact sentence said to an
-            // assistant, a permission prompt for every command and then a hunt
-            // through Finder, and several owners could not do it.
-            //
-            // On a line of its own above the assistant's, not beside it. On the
-            // line, an owner who uses both assistants had "Assistant: Both",
-            // "Change", "Prove the guard" and this one in a row long enough to
-            // run under the quiet words in the middle of the window, and the two
-            // touched. Above, it sits at the same height as those quiet words and
-            // well clear of them, in the corner the reading ends at.
-            // (v0.13.0) On a wiki whose hub/ is a real clone, and nowhere
-            // else: the Hub's own page, started the way its README says. It
-            // opens in the browser and stops by itself when the tab closes.
-            if let hub = home.hub {
-                if openingHub {
-                    Text(Hub.openingSentence)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, Theme.pt(9)).padding(.vertical, Theme.pt(6))
-                } else {
-                    cornerButton(Hub.openTitle, id: "open-hub") {
-                        Hub.open(hub, vault: hub.folder.deletingLastPathComponent(), home: flow.home, practice: flow.isTestMode)
-                        openingHub = true
-                        // The page opens in the browser by itself; a second press
-                        // in the meantime would start a second page.
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 6) { openingHub = false }
-                    }
-                }
-            }
-            cornerButton(Self.checkWiki, id: "check-wiki",
-                         enabled: flow.canBeginClinic) { flow.beginClinic() }
-            HStack(spacing: Theme.pt(2)) {
-                Text("Assistant: \(home.assistant.name)")
-                    .foregroundStyle(.secondary)
-                    .padding(.trailing, home.canChangeAssistant || home.assistant.wantsChatGPT ? 6 : 9)
-                if home.canChangeAssistant {
-                    cornerButton("Change", id: "change-assistant") { flow.beginUpdate(changingAssistant: true) }
-                }
-                if home.assistant.wantsChatGPT {
-                    cornerButton("Prove the guard", id: "prove-guard") { trustOpen = true }
-                }
-                // (v0.9.5) One control for the whole quiet line, its own small
-                // buttons included: their words are the only thing saying what
-                // they do, and an owner who would rather be told than read had no
-                // way to find out. One rather than one each, because the line is
-                // read as a line — "Assistant: Claude. Change. Prove the guard."
-                ListenButton(id: "listen-assistant-line", speech: assistantLineSpeech,
-                             what: "the line about your assistant", size: 13)
-                    .padding(.leading, Theme.pt(4))
-            }
-        }
-        .font(Theme.font(12, .semibold))
-        // Low enough that the upper line clears the big button, and far enough
-        // right that the lower one clears the quiet button in the middle.
-        .padding(.trailing, Theme.pt(12)).padding(.bottom, Theme.pt(4))
-    }
-
-    /// What the quiet line in the other bottom corner says, its own two small
-    /// buttons included. (v0.9.5)
-    private var assistantLineSpeech: Speech {
-        var said = "Assistant: \(home.assistant.name)."
-        if home.wikiIsNewerThanApp { said += " " + Self.changeNeedsNewest }
-        if home.canChangeAssistant { said += " There is a button beside it: Change." }
-        if home.assistant.wantsChatGPT { said += " And a button: Prove the guard." }
-        // (v0.9.6) The check-up is on this line too, and this is the only thing
-        // on the screen that says what its words do.
-        said += " And a button: \(Self.checkWiki). It looks at your wiki and saves a report you can send."
-        if home.hub != nil { said += " And a button: \(Hub.openTitle). It opens the group's hub in your browser." }
-        return Speech(said)
-    }
-
     /// The words on the check-up's button. Plain, and about the owner's wiki
     /// rather than about a clinic or a check-up, which are the maintainer's
     /// words and not theirs. (v0.9.6)
     static let checkWiki = "Check my wiki"
-
-    static func newerReleaseSaid(_ version: String) -> String {
-        "Moblee \(version) is out. There are two buttons beside it: Install, and Not now."
-    }
-
-    /// "Moblee 0.9.3 is out." with Install and Not now (this version is not
-    /// offered again). (v0.15.0) Install hands over to the updater (`Updater`),
-    /// which shows what is new and, on the owner's Install there, replaces this
-    /// app and opens the new one. Until 0.14 the button was Download and opened
-    /// the zip in the browser, leaving the owner to put it in place.
-    private func newerReleaseLine(_ version: String) -> some View {
-        HStack(spacing: Theme.pt(2)) {
-            // (v0.9.5) One control for the whole line, as the other corner has.
-            // An owner who cannot read this line will never press Download, and
-            // Download is the only way a newer Moblee reaches them.
-            //
-            // It stands at the START of this line and not at the end of it, and
-            // the reason is the keyboard. Tab crosses a row of controls from
-            // the reading edge across, and this line ends close to where the
-            // quiet words under the big button begin: with the speaker at the
-            // end, the keyboard went Download, Not now, the quiet words, THIS,
-            // and then the quiet words' own speaker — so neither line's speaker
-            // stood beside the words it reads. At the start of the line the
-            // three of them are one run with nothing of another corner's inside
-            // it, whichever way round the screen is laid out.
-            ListenButton(id: "listen-newer-line", speech: Speech(Self.newerReleaseSaid(version)),
-                         what: "the line about a newer Moblee", size: 13)
-                .padding(.leading, Theme.pt(9)).padding(.trailing, Theme.pt(4))
-            Text("Moblee \(version) is out.")
-                .foregroundStyle(.secondary)
-                .padding(.trailing, Theme.pt(6))
-            cornerButton("Install", id: "download-newer") {
-                Updater.shared.checkForUpdates()
-            }
-            .accessibilityLabel("Install Moblee \(version)")
-            cornerButton("Not now", id: "newer-not-now") { home.setAsideNewerRelease() }
-                .accessibilityLabel("Not now, do not offer Moblee \(version) again")
-        }
-        .font(Theme.font(12, .semibold))
-        .padding(.leading, Theme.pt(12)).padding(.bottom, Theme.pt(4))
-        .accessibilityElement(children: .contain)
-    }
-
-    /// Small words, but a target a finger on a trackpad does not miss: the
-    /// whole padded box takes the click, not the letters alone.
-    /// (v0.9.6) `enabled: false` greys the words and stops both roads into the
-    /// action, the click and the keyboard's own press. A corner button that can
-    /// be pressed and does nothing is worse than one that shows it cannot be.
-    private func cornerButton(_ title: String, id: String, enabled: Bool = true,
-                              action: @escaping () -> Void) -> some View {
-        Button(action: { if enabled { action() } }) {
-            Text(title)
-                .padding(.horizontal, Theme.pt(9)).padding(.vertical, Theme.pt(6))
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(enabled ? Theme.accent : Color.secondary)
-        .disabled(!enabled)
-        // (v0.9.4) Reachable by the keyboard, with a ring that can be seen,
-        // and still where it says it is drawn for the self-drive walk.
-        .keyboardReachable(id, corner: 8, press: { if enabled { action() } })
-    }
 }
 
 /// In a practice run only: where a small control was drawn, in the window's
@@ -637,26 +464,20 @@ struct RequestTile: View {
     /// buttons by. Until now they could be reached by the mouse alone.
     static func buttonId(_ tile: HomeModel.Tile) -> String { "tile-" + tile.key }
     static func doneId(_ tile: HomeModel.Tile) -> String { "tile-" + tile.key + "-done" }
-    /// (v0.9.5) And the tile's own listen control.
-    static func listenId(_ tile: HomeModel.Tile) -> String { "listen-tile-" + tile.key }
-
-    /// (v0.9.5) Every control this tile puts on the keyboard's round, in the
-    /// order it lays them out: its buttons, and then its own listen control
-    /// beside them. Written here beside `body`, which is the only other place
-    /// that decides which buttons a tile in a given state has.
+    /// Every control this tile puts on the keyboard's round, in the order it
+    /// lays them out. Written here beside `body`, which is the only other place
+    /// that decides which buttons a tile in a given state has. (0.16.0: the
+    /// tile's own listen control has gone; the corner's read-aloud reads every
+    /// card, in `HomeScreen.speech`.)
     static func stops(_ tile: HomeModel.Tile) -> [String] {
-        var ring: [String] = []
         switch tile.state {
         case .waiting, .failed:
-            ring.append(buttonId(tile))
+            return [buttonId(tile)]
         case .handedOver:
-            if tile.how == .clicks { ring.append(doneId(tile)) }
-            ring.append(buttonId(tile))
+            return tile.how == .clicks ? [doneId(tile), buttonId(tile)] : [buttonId(tile)]
         case .running, .done, .blocked:
-            break                                   // words, not buttons
+            return []                               // words, not buttons
         }
-        ring.append(listenId(tile))
-        return ring
     }
 
     /// (v0.9.5) Everything a tile says, read aloud: what it is, WHY Claude asked
@@ -711,32 +532,15 @@ struct RequestTile: View {
                 .multilineTextAlignment(.center)
             }
             Spacer(minLength: Theme.pt(0))
-            // (v0.9.5) The tile's own listen control sits in this row, beside
-            // the tile's own buttons, and no longer in the card's top corner.
-            //
-            // The corner was the tidier place to draw it and the wrong place to
-            // reach it from. The keyboard crosses this screen in the order the
-            // controls are laid out down the window, so three speakers in three
-            // top corners came as a run of three, one after another, before any
-            // of the three Add buttons: an owner pressing Tab met "listen,
-            // listen, listen, Add, Add, Add" and could not tell from where they
-            // were which speaker belonged to which tile. Beside the button it
-            // belongs to, the keyboard goes tile by tile, which is how the
-            // screen reads.
-            HStack(spacing: Theme.pt(8)) {
+            // (0.16.0) One small outlined button on each card, drawn by SwiftUI
+            // so a picture file shows it, and no speaker beside it: the corner's
+            // one read-aloud reads every card.
             Group {
                 switch tile.state {
                 case .waiting:
-                    // The words are given their size on the label itself. A
-                    // bordered button keeps its own font and pays no attention
-                    // to one set on everything around it, so at the biggest
-                    // size these were the only small words left on the screen.
-                    // (v0.9.4)
-                    Button(action: press) {
-                        Text(tile.kind == .skill ? "Look" : (tile.kind == .job ? "Switch on" : "Add")).font(Theme.font(14, .semibold))
-                    }
-                    .buttonStyle(.borderedProminent).tint(Theme.accent).controlSize(.large)
-                    .keyboardReachable(Self.buttonId(tile), corner: 6, press: press)
+                    Button(tile.kind == .skill ? "Look" : (tile.kind == .job ? "Switch on" : "Add"), action: press)
+                        .buttonStyle(SmallButtonStyle())
+                        .keyboardReachable(Self.buttonId(tile), corner: 7, press: press)
                 case .running:
                     Label(tile.kind == .job ? "Switching on…" : "Adding…", systemImage: "arrow.triangle.2.circlepath")
                         .foregroundStyle(Theme.waitingText)
@@ -746,30 +550,26 @@ struct RequestTile: View {
                         // pack's list (Google) or not, is finished by the owner's word:
                         // nothing outside Claude can see those connections.
                         if tile.how == .clicks {
-                            Button(action: done) { Text("Done").font(Theme.font(14, .semibold)) }
-                                .buttonStyle(.borderedProminent).tint(Theme.good)
-                                .keyboardReachable(Self.doneId(tile), corner: 6, press: done)
+                            Button("Done", action: done)
+                                .buttonStyle(SmallButtonStyle(tint: Theme.good, filled: true))
+                                .keyboardReachable(Self.doneId(tile), corner: 7, press: done)
                         }
-                        Button(action: press) { Text("Again").font(Theme.font(14, .semibold)) }
-                            .buttonStyle(.bordered)
-                            .keyboardReachable(Self.buttonId(tile), corner: 6, press: press)
+                        Button("Again", action: press)
+                            .buttonStyle(SmallButtonStyle())
+                            .keyboardReachable(Self.buttonId(tile), corner: 7, press: press)
                     }
-                    .controlSize(.regular)
                 case .done:
                     Text("Added").foregroundStyle(Theme.goodText)
                 case .failed:
-                    Button(action: press) { Text("Try again").font(Theme.font(14, .semibold)) }
-                        .buttonStyle(.bordered).controlSize(.large)
-                        .keyboardReachable(Self.buttonId(tile), corner: 6, press: press)
+                    Button("Try again", action: press)
+                        .buttonStyle(SmallButtonStyle())
+                        .keyboardReachable(Self.buttonId(tile), corner: 7, press: press)
                 case .blocked:
                     Text("Tell Claude").foregroundStyle(Theme.badText)
                 }
             }
-            .font(Theme.font(14, .semibold))
-                ListenButton(id: Self.listenId(tile), speech: Self.speech(for: tile),
-                             what: tile.title, size: 16)
-            }
-            .frame(height: Theme.pt(34))
+            .font(Theme.font(13, .semibold))
+            .frame(height: Theme.pt(30))
         }
         .padding(.horizontal, Theme.pt(12)).padding(.vertical, Theme.pt(14))
         .frame(width: Theme.pt(200), height: Theme.pt(262))

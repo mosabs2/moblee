@@ -493,7 +493,10 @@ mkdir -p "$VAULT_LOCATION/scripts"
 # (v0.10.0) turn-end-commit.py is the end-of-reply save. It lives in the wiki
 # beside the commit gate, and the safety step below registers it as the
 # assistant's Stop hook once it is there.
-for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh log-append.py weekly-card.py turn-end-commit.py compact-rotate.py; do
+# (0.16.0) first-days.py (the first-week tour, registered by the safety step as
+# Claude's SessionStart hook), catalogue-page.py and the morning pass's two Mail
+# scripts join them.
+for tool in lint-v2.py vault-gate.py vault-orient-preflight.sh log-append.py weekly-card.py turn-end-commit.py compact-rotate.py first-days.py catalogue-page.py mail-list-unread.applescript mail-tidy.applescript; do
   if [[ -f "$SCRIPT_DIR/$tool" ]]; then
     cp "$SCRIPT_DIR/$tool" "$VAULT_LOCATION/scripts/$tool"
   fi
@@ -736,6 +739,13 @@ if [[ -t 0 && "$ASSISTANT" != "chatgpt" ]]; then
   fi
 fi
 
+# ----- the page of everything the wiki can do (0.16.0) ------------------------
+# Generated from this pack's own checklist, so the first-week tour offers only
+# what is not already here. A page that cannot be written now is written later,
+# when the owner says "show me everything"; nothing stops on it.
+python3 "$SCRIPT_DIR/catalogue-page.py" --vault "$VAULT_LOCATION" --package "$PACKAGE_ROOT" 2>&1 | sed 's/^/  /' \
+  || echo "  (the page of what your wiki can do was not filled in yet; say \"show me everything\" to make it)"
+
 # ----- commit the settings the install wrote (v0.5) ---------------------------
 # The initial commit happened before the safety step; the permission rules and
 # the ignore file it added are committed now, so the vault starts clean.
@@ -752,7 +762,7 @@ step_start finish
   # travels with the wiki and its history is kept; the updater stages it too.
   # Only that one file: .moblee/requests.json beside it is a queue the app
   # empties, and is ignored rather than committed.
-  for p in .claude .gitignore VERSION CLAUDE.md AGENTS.md scripts wiki/Index.md "wiki/Wiki Operations/Moblee Learning Path.md" "wiki/Wiki Operations/Assistant Memory.md" .moblee/seed-state.json; do
+  for p in .claude .gitignore VERSION CLAUDE.md AGENTS.md scripts wiki/Index.md "wiki/Wiki Operations/Moblee Learning Path.md" "wiki/Wiki Operations/Assistant Memory.md" "wiki/Wiki Operations/What Your Wiki Can Do.md" .moblee/seed-state.json; do
     if [[ -e "$p" || -L "$p" ]]; then git add -A -- "$p" 2>/dev/null || true; fi
   done
   if ! git diff --cached --quiet 2>/dev/null; then

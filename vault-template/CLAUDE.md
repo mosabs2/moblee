@@ -20,9 +20,11 @@ At the start of any wiki work, read three things:
 
 ## The "orient" command
 
-When the owner says **orient**, and nothing else, do this without asking questions: run `bash scripts/vault-orient-preflight.sh` if it exists; read `wiki/_context.md` in full; read the last 30 lines of `wiki/log.md`; then give a short sitrep. The sitrep is the date and time, the most active threads, any open decision waiting on the owner, and the state of the `raw/` and `Clippings/` inboxes. No preamble and no "I'll now read…" narration.
+When the owner says **orient**, and nothing else, do this without asking questions: run `bash scripts/vault-orient-preflight.sh` if it exists; read `wiki/_context.md` in full and the last 30 lines of `wiki/log.md`; run the mail pass if [[Habits and Tools]] records a yes to it ([[Mail Pass]] has the steps, and the one offer if there is no answer yet); top up today's Plan; then give a short sitrep: the date and time, the three most active threads, any open decision waiting on the owner, the mail line with its action items (when the pass is on), and the state of the `raw/` and `Clippings/` inboxes. No preamble and no "I'll now read…" narration.
 
 If `outputs/lint/` holds a weekly report newer than the last one read, carry anything needing the owner's decision into the sitrep, in plain English. Findings are named to the owner, never acted on unasked.
+
+**Today's Plan** is the `## Plan` of `Daily Notes/YYYY-MM-DD.md` (made from `_TEMPLATE.md` if missing, carrying over unticked items the log does not show settled): the day's to-do list in three parts, the owner's to-dos most urgent first, then `### Waiting on others`, then `### Standing`. At orient, add the day's new to-dos at the top (the mail's action items, deadlines falling due), one line each: a checkbox, a bold label with the colon after the bold, one plain sentence. Tick an item in the same pass as the work that settles it. An unticked box means "planned", not "unresolved": read whether it is done from the log, never from the box, and never tell the owner to close the day.
 
 **The weekly card.** After the Saturday check has run, offer the owner, once, at their next session, a single short page: what the wiki learned that week, what is still unresolved, and three suggestions. If the week produced nothing, that is one line saying so. Write it to `outputs/weekly/YYYY-MM-DD.md`. Offer it once and drop it; no streaks, no counting of days, and never a word that makes a quiet week sound like a failure.
 
@@ -144,6 +146,8 @@ What each tool is, how to reach it and what the checklist can add is in [[Tools 
 ## The companion
 
 **One guide, one offer, one page.** The `companion` skill is the owner's standing guide. It holds the first conversation ("get me started" or "guide me"), offers at most one next step in a session and only when asked, builds small made-to-measure tools, and runs the read-only check-up (`python3 scripts/moblee-doctor.py`, from the Moblee folder) when something seems wrong. What the owner agrees to add is written to `.moblee/requests.json` in the vault, and the owner adds it by pressing its button in the Moblee app.
+
+**The first week.** For the first five days of use, a note at the start of a conversation asks for one line at the end of the first reply, offering one thing the wiki can do; after day five, only the rule above. "Show me everything" runs `python3 scripts/catalogue-page.py` and reads out [[What Your Wiki Can Do]]; "stop the tour" runs `python3 scripts/first-days.py --stop`.
 
 **Corrections are written down the moment they are made.** When the owner corrects how the assistant works ("shorter", "stop asking me that", "show me first"), add a dated line in their own words under "Working with the owner" on `wiki/Wiki Operations/Habits and Tools.md`, without being asked, and as a note in the assistant's own memory, and follow it from then on.
 

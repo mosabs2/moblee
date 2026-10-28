@@ -23,6 +23,16 @@ final class EngineTask {
         for key in ["USER", "LOGNAME", "TMPDIR", "SHELL"] {
             if let v = inherited[key] { env[key] = v }
         }
+        // (0.16.0) Where ChatGPT keeps its settings, when the owner has moved
+        // them: the pack's scripts then put the guard where the app looks for
+        // it (`HomeModel.codexFolder`). Never in a practice run, whose home is
+        // not the real one.
+        // In the same order the app reads it: its own environment, then the
+        // installer's note in ~/.config/moblee/codex-home; nothing otherwise,
+        // and the scripts then use ~/.codex as before.
+        if !Practice.on, let codex = HomeModel.codexHomeSetting(home: home, environment: inherited) {
+            env["CODEX_HOME"] = codex
+        }
         return env
     }
 

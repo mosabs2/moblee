@@ -11,7 +11,10 @@ What is checked:
   4. ChatGPT, and both assistants: a part counts as in place only where every
      assistant the owner uses has it;
   5. a damaged record is read as no record, never a crash;
-  6. the report is read only: the home folder is the same before and after.
+  6. the report is read only: the home folder is the same before and after;
+  7. (0.16.0) ChatGPT's guard and hooks file are read from CODEX_HOME when set;
+  8. (0.16.0) a settings file damaged by hand reads as 'unreadable', never 'missing';
+  9. (0.16.0) the first-week tour, read from Claude's SessionStart entries by full path.
 
 Run from the Moblee folder: python3 tools/test-parts.py
 """
@@ -41,10 +44,12 @@ def check(cond: bool, what: str) -> None:
         print(f"  FAIL  {what}")
 
 
-def report(home: Path) -> dict:
+def report(home: Path, extra: dict | None = None) -> dict:
     env = dict(os.environ)
     env.pop("MOBLEE_VAULT", None)
+    env.pop("CODEX_HOME", None)
     env["HOME"] = str(home)
+    env.update(extra or {})
     r = subprocess.run([sys.executable, str(SETUP), "--parts"], env=env, capture_output=True, text=True, timeout=120)
     try:
         return json.loads(r.stdout)
@@ -90,7 +95,9 @@ def hooks_file(guard_dir: Path, vault: Path, stop_for: Path | None = None) -> di
     return {"permissions": {"allow": ["Bash(python3 scripts/turn-end-commit.py)"],
                             "autoMode": "turn-end-commit.py and bash-guard.py are Moblee's own"},
             "hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": f"python3 '{guard_dir}/bash-guard.py'"}]}],
-                      "Stop": [{"hooks": [{"type": "command", "command": f"python3 '{stop_for}/scripts/turn-end-commit.py'"}]}]}}
+                      "Stop": [{"hooks": [{"type": "command", "command": f"python3 '{stop_for}/scripts/turn-end-commit.py'"}]}],
+                      "SessionStart": [{"hooks": [{"type": "command", "timeout": 10,
+                                                   "command": f"python3 '{stop_for}/scripts/first-days.py'"}]}]}}
 
 
 def install_everything(home: Path, vault: Path, claude: bool = True, chatgpt: bool = False, galaxy_tool: bool = True) -> None:
@@ -112,6 +119,7 @@ def install_everything(home: Path, vault: Path, claude: bool = True, chatgpt: bo
     if galaxy_tool:
         (vault / "scripts" / "wiki-galaxy" / "build.py").write_text("# build\n")
     (vault / "scripts" / "turn-end-commit.py").write_text("# save\n")
+    (vault / "scripts" / "first-days.py").write_text("# tour\n")
     (vault / "dashboard").mkdir(exist_ok=True)
     (vault / "dashboard" / "server.py").write_text("# dashboard\n")
     (vault / "VERSION").write_text((PKG / "VERSION").read_text())
@@ -120,7 +128,7 @@ def install_everything(home: Path, vault: Path, claude: bool = True, chatgpt: bo
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="moblee-parts-test."))
     print(f"Moblee parts report tests (throwaway folders under {tmp})")
-    core_names = {"guard", "save", "galaxy", "dashboard"} | {p.name for p in (PKG / "skills").iterdir() if p.is_dir()}
+    core_names = {"guard", "save", "tour", "galaxy", "dashboard"} | {p.name for p in (PKG / "skills").iterdir() if p.is_dir()}
 
     print("\n1. A Mac with nothing on it")
     home = tmp / "empty"
@@ -193,6 +201,7 @@ def main() -> int:
           "for ChatGPT the skills are read from ChatGPT's own folder")
     check(st.get("guard") == "unseen" and st.get("save") == "unseen",
           "a guard and a save entered for ChatGPT are 'unseen' (whether ChatGPT trusts them cannot be seen), never 'in'")
+    check("tour" not in st, "the first-week tour, entered for Claude only, is not listed for an owner on ChatGPT alone")
     home, vault = make_home(tmp / "both", "both")
     install_everything(home, vault, claude=True, chatgpt=False)
     rep = report(home)
@@ -230,6 +239,70 @@ def main() -> int:
         want = "in" if who == "claude" else "unseen"
         check(st.get("guard") == want and st.get("save") == want,
               f"and the report reads the guard and the save as '{want}' for {who}" + ("" if st.get("guard") == want else f" (guard {st.get('guard')}, save {st.get('save')})"))
+
+    print("\n7. ChatGPT's folder moved by CODEX_HOME (0.16.0)")
+    home, vault = make_home(tmp / "codex-home", "chatgpt")
+    install_everything(home, vault, claude=False, chatgpt=True)
+    moved = home / "elsewhere" / "codex"
+    (moved / "hooks").mkdir(parents=True)
+    (moved / "hooks" / "bash-guard.py").write_text("# guard\n")
+    (moved / "hooks.json").write_text(json.dumps(hooks_file(moved / "hooks", vault)))
+    st = states(report(home, {"CODEX_HOME": str(moved)}))
+    check(st.get("guard") == "unseen" and st.get("save") == "unseen",
+          "a guard and a save entered in CODEX_HOME are found there ('unseen', as for ~/.codex)" + ("" if st.get("guard") == "unseen" else f" {st}"))
+    empty = home / "elsewhere" / "empty-codex"
+    empty.mkdir(parents=True)
+    st = states(report(home, {"CODEX_HOME": str(empty)}))
+    check(st.get("guard") == "missing", "with CODEX_HOME set, ~/.codex is not read in its place")
+    st = states(report(home, {"CODEX_HOME": "  "}))
+    check(st.get("guard") == "unseen", "a blank CODEX_HOME falls back to ~/.codex")
+
+    print("\n8. A settings file damaged by hand reads as cannot tell, never off (0.16.0)")
+    home, vault = make_home(tmp / "damaged-settings")
+    install_everything(home, vault)
+    (home / ".claude" / "settings.json").write_text('{"hooks": {"PreToolUse": [ broken')
+    st = states(report(home))
+    check(st.get("guard") == "unreadable" and st.get("save") == "unreadable",
+          "an unparseable settings file makes the guard and the save 'unreadable', not 'missing'" + ("" if st.get("guard") == "unreadable" else f" {st}"))
+    home2, vault2 = make_home(tmp / "damaged-no-guard")
+    install_everything(home2, vault2)
+    (home2 / ".claude" / "settings.json").write_text("not json at all")
+    (home2 / ".claude" / "hooks" / "bash-guard.py").rename(home2 / ".claude" / "hooks" / "bash-guard.py.moved")
+    check(states(report(home2)).get("guard") == "missing", "with no guard file on the Mac it is still 'missing'")
+    home3, vault3 = make_home(tmp / "damaged-codex", "both")
+    install_everything(home3, vault3, claude=True, chatgpt=True)
+    (home3 / ".codex" / "hooks.json").write_text("{")
+    st = states(report(home3))
+    check(st.get("guard") == "unreadable", "for both assistants, a damaged ChatGPT hooks file makes the guard 'unreadable'")
+    rep = report(home3)
+    check(all(p["state"] in ("in", "missing", "differs", "unseen", "unreadable") for p in rep.get("core", [])),
+          "every state is one of the report's words")
+    check(states(report(home)).get("tour") == "unreadable", "and the first-week tour is 'unreadable' there too")
+
+    print("\n9. The first-week tour, Claude's SessionStart hook (0.16.0)")
+    home, vault = make_home(tmp / "tour")
+    install_everything(home, vault)
+    tour = next((p for p in report(home).get("core", []) if p["key"] == "tour"), {})
+    check(tour.get("state") == "in" and tour.get("title") == "The first-week tour" and "five days" in tour.get("what", ""),
+          "entered by its full path for this wiki: 'in', with its name and what it is for" + ("" if tour.get("state") == "in" else f" {tour}"))
+    s = hooks_file(home / ".claude" / "hooks", vault)
+    s["hooks"]["SessionStart"] = [{"hooks": [{"type": "command", "command": "python3 scripts/first-days.py"}]}]
+    (home / ".claude" / "settings.json").write_text(json.dumps(s))
+    check(states(report(home)).get("tour") == "missing", "named only by a relative path, it does not count")
+    s["hooks"]["SessionStart"] = [{"hooks": [{"type": "command", "command": f"python3 '{home}/Wiki/Old Wiki/scripts/first-days.py'"}]}]
+    (home / ".claude" / "settings.json").write_text(json.dumps(s))
+    check(states(report(home)).get("tour") == "missing", "entered for another folder, it does not count for this one")
+    s["hooks"].pop("SessionStart")
+    s["permissions"]["allow"].append("Bash(python3 scripts/first-days.py)")
+    (home / ".claude" / "settings.json").write_text(json.dumps(s))
+    check(states(report(home)).get("tour") == "missing", "named only in a permission rule, it is 'missing'")
+    home2, vault2 = make_home(tmp / "tour-no-script")
+    install_everything(home2, vault2)
+    (vault2 / "scripts" / "first-days.py").rename(vault2 / "scripts" / "first-days.py.moved")
+    check(states(report(home2)).get("tour") == "missing", "entered but with no script in the wiki, it is 'missing'")
+    home3, vault3 = make_home(tmp / "tour-both", "both")
+    install_everything(home3, vault3, claude=True, chatgpt=True)
+    check(states(report(home3)).get("tour") == "in", "for both assistants it is judged on Claude's settings alone")
 
     print(f"\n{PASSED} passed, {len(FAILED)} failed")
     for what in FAILED:
