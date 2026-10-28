@@ -103,14 +103,42 @@ enum AddMore {
 
     static func buttonId(_ key: String) -> String { "addmore-" + key }
 
-    /// "Last looked: 26 October, 17:00", from the checklist's own stamp
-    /// (YYYYMMDD-HHMM); nil for a stamp of any other shape.
-    static func lastLooked(_ stamp: String?) -> String? {
-        guard let stamp, stamp.count == 13, stamp[stamp.index(stamp.startIndex, offsetBy: 8)] == "-" else { return nil }
+    /// (0.15.2) Whether Add more should look again by itself on opening: the
+    /// checklist has never looked, its record is more than a day old, or an
+    /// item is one it has never seen. Until 0.15.2 only the first applied, so
+    /// something added another way stayed "Not set up" for good.
+    static func needsFreshLook(_ parts: Parts, now: Date) -> Bool {
+        if parts.extras.values.contains("unknown") { return true }
+        guard let date = stampDate(parts.checked) else { return true }
+        return now.timeIntervalSince(date) > 24 * 3600
+    }
+
+    /// (0.15.2) A Look again that did not finish: stopped or failed to start
+    /// (any exit but 0, or 1 for "something is off"), or one that left the
+    /// record's time as it was although something was off or broke.
+    static func lookFailed(code: Int32, before: String?, after: String?) -> Bool {
+        if code != 0 && code != 1 { return true }
+        return code == 1 && after == before
+    }
+
+    /// The checklist's stamp as a date. (0.15.2) The pack writes it to the
+    /// second (YYYYMMDD-HHMMSS); only the minute form was read before, so no
+    /// real stamp was ever understood and "Last looked" never showed.
+    static func stampDate(_ stamp: String?) -> Date? {
+        guard let stamp, stamp.count == 13 || stamp.count == 15,
+              stamp[stamp.index(stamp.startIndex, offsetBy: 8)] == "-" else { return nil }
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_GB_POSIX")
-        f.dateFormat = "yyyyMMdd-HHmm"
-        guard let date = f.date(from: stamp) else { return nil }
+        f.dateFormat = stamp.count == 15 ? "yyyyMMdd-HHmmss" : "yyyyMMdd-HHmm"
+        return f.date(from: stamp)
+    }
+
+    static let couldNotLook = "Moblee could not look just now, so this is what it saw last time. Press Look again in a minute."
+
+    /// "Last looked: 26 October, 17:00", from the checklist's own stamp
+    /// (YYYYMMDD-HHMMSS, or YYYYMMDD-HHMM); nil for a stamp of any other shape.
+    static func lastLooked(_ stamp: String?) -> String? {
+        guard let date = stampDate(stamp) else { return nil }
         let out = DateFormatter()
         out.locale = Locale(identifier: "en_GB")
         out.dateFormat = "d MMMM, HH:mm"
@@ -209,6 +237,8 @@ struct AddMoreScreen: View {
                 if home.lookingAgain {
                     Text("Looking at everything on this Mac. This can take a minute; nothing you have set up is changed.")
                         .font(Theme.font(13, .medium)).foregroundStyle(.secondary)
+                } else if home.lookFailed {
+                    Text(AddMore.couldNotLook).font(Theme.font(13, .medium)).foregroundStyle(.secondary)
                 } else if let last = AddMore.lastLooked(home.parts?.checked) {
                     Text(last).font(Theme.font(13, .medium)).foregroundStyle(.secondary)
                 }
@@ -321,10 +351,14 @@ struct AddMoreScreen: View {
         let state = home.extraState(key)
         let tile = home.itemTile(key, why: "")
         let failed: Bool = { if case .failed = state { return true }; return false }()
+        // (0.15.2) Until the report is read, an extra says nothing and offers
+        // nothing: "Not looked at yet" with Add was shown while it loaded, and
+        // for good when it could not be read.
+        let known = home.parts != nil
         return row(title: tile?.title ?? key,
                    lines: [home.itemWhat(key), tile?.detail ?? ""],
-                   word: AddMore.extraWord(state), good: state == .on, warn: failed) {
-            if let words = AddMore.extraButton(state), !home.lookingAgain {
+                   word: known ? AddMore.extraWord(state) : "", good: state == .on, warn: failed) {
+            if known, let words = AddMore.extraButton(state), !home.lookingAgain {
                 rowButton(words, id: AddMore.buttonId(key)) {
                     if case .handedOver(let how) = state, how == .clicks { home.doneFromList(key) }
                     else { home.addFromList(key) }

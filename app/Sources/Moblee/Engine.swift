@@ -85,8 +85,11 @@ final class EngineTask {
     }
 
     /// Runs a program to its end in the background and gives back what it
-    /// printed. Never blocks the main thread.
-    static func output(of executable: String, _ arguments: [String], home: URL,
+    /// printed. Never blocks the main thread. (0.15.2) With `timeout`, a program
+    /// still running after that many seconds is stopped and reads as failed, so
+    /// "Looking at everything…" cannot stay on screen for ever; and what it
+    /// prints as errors is let go of, so a chatty one cannot fill the pipe and stall.
+    static func output(of executable: String, _ arguments: [String], home: URL, timeout: TimeInterval? = nil,
                        then: @escaping @MainActor (Int32, Data) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             let p = Process()
@@ -96,11 +99,14 @@ final class EngineTask {
             p.standardInput = FileHandle.nullDevice
             let out = Pipe()
             p.standardOutput = out
-            p.standardError = Pipe()
+            p.standardError = FileHandle.nullDevice
             var data = Data()
             var code: Int32 = -1
             do {
                 try p.run()
+                if let timeout {
+                    DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { if p.isRunning { p.terminate() } }
+                }
                 data = out.fileHandleForReading.readDataToEndOfFile()
                 p.waitUntilExit()
                 code = p.terminationStatus

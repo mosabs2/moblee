@@ -877,7 +877,13 @@ HUB_TOKEN_WARN_DAYS = 31
 
 def hub_norm(address: str) -> str:
     a = (address or "").strip().rstrip("/")
-    return (a[:-4] if a.endswith(".git") else a).lower()
+    a = (a[:-4] if a.endswith(".git") else a).lower()
+    # (0.15.2) One repository on GitHub whether cloned over https or SSH, as the
+    # setup's same_address reads it.
+    for prefix in ("git@github.com:", "ssh://git@github.com/"):
+        if a.startswith(prefix):
+            return "https://github.com/" + a[len(prefix):]
+    return a
 
 
 def hub_frontmatter(path: Path) -> dict:

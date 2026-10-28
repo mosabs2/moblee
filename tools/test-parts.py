@@ -93,7 +93,7 @@ def hooks_file(guard_dir: Path, vault: Path, stop_for: Path | None = None) -> di
                       "Stop": [{"hooks": [{"type": "command", "command": f"python3 '{stop_for}/scripts/turn-end-commit.py'"}]}]}}
 
 
-def install_everything(home: Path, vault: Path, claude: bool = True, chatgpt: bool = False) -> None:
+def install_everything(home: Path, vault: Path, claude: bool = True, chatgpt: bool = False, galaxy_tool: bool = True) -> None:
     for d, on in ((home / ".claude" / "skills", claude), (home / ".agents" / "skills", chatgpt)):
         if on:
             d.mkdir(parents=True, exist_ok=True)
@@ -109,7 +109,8 @@ def install_everything(home: Path, vault: Path, claude: bool = True, chatgpt: bo
         (home / ".codex" / "hooks" / "bash-guard.py").write_text("# guard\n")
         (home / ".codex" / "hooks.json").write_text(json.dumps(hooks_file(home / ".codex" / "hooks", vault)))
     (vault / "scripts" / "wiki-galaxy").mkdir(parents=True, exist_ok=True)
-    (vault / "scripts" / "wiki-galaxy" / "build.py").write_text("# build\n")
+    if galaxy_tool:
+        (vault / "scripts" / "wiki-galaxy" / "build.py").write_text("# build\n")
     (vault / "scripts" / "turn-end-commit.py").write_text("# save\n")
     (vault / "dashboard").mkdir(exist_ok=True)
     (vault / "dashboard" / "server.py").write_text("# dashboard\n")
@@ -160,10 +161,13 @@ def main() -> int:
 
     print("\n3. Copies that are not this Moblee's")
     (home / ".claude" / "skills" / "brain" / "SKILL.md").write_text("an older brain\n")
-    (vault / "scripts" / "wiki-galaxy" / "build.py").unlink()
     rep = report(home)
     check(states(rep).get("brain") == "differs", "a skill under Moblee's name that is not its copy is 'differs'")
-    check(states(rep).get("galaxy") == "missing", "the galaxy skill without its tool in the wiki is 'missing'")
+    # A second home with no galaxy tool, rather than removing the first one's:
+    # the vault's safety gate refuses any test that deletes, even in a scratch folder.
+    nohome, novault = make_home(tmp / "nogalaxy")
+    install_everything(nohome, novault, galaxy_tool=False)
+    check(states(report(nohome)).get("galaxy") == "missing", "the galaxy skill without its tool in the wiki is 'missing'")
     s = hooks_file(home / ".claude" / "hooks", vault)
     s["hooks"] = {}
     (home / ".claude" / "settings.json").write_text(json.dumps(s))
@@ -204,6 +208,28 @@ def main() -> int:
     (home / ".config" / "moblee" / "setup-state.json").write_text(json.dumps({"status": ["odd"], "unseen": "odd"}))
     rep = report(home)
     check("error" not in rep and set(rep.get("extras", {}).values()) == {"unknown"}, "nor does a record of the wrong shape")
+
+    print("\n6. The guard and the save as the real installer enters them (0.15.2)")
+    # Until 0.15.2 the fixtures above wrote the guard's command as a full path,
+    # while the installer writes python3 "$HOME/.claude/hooks/bash-guard.py";
+    # the report read only ~, so every installed guard showed as Missing. Here
+    # the installer itself runs in a throwaway home and the report reads what
+    # it wrote.
+    for who in ("claude", "chatgpt"):
+        home, vault = make_home(tmp / f"installed-{who}", who)
+        (vault / "scripts").mkdir(parents=True, exist_ok=True)
+        (vault / "scripts" / "turn-end-commit.py").write_text("# save\n")
+        (vault / ("CLAUDE.md" if who == "claude" else "AGENTS.md")).write_text("# Wiki\n")
+        env = dict(os.environ, HOME=str(home))
+        for k in ("MOBLEE_VAULT", "CODEX_HOME"):
+            env.pop(k, None)
+        r = subprocess.run([sys.executable, str(PKG / "safety" / "install-safety.py"), "--vault", str(vault), "--assistant", who],
+                           env=env, capture_output=True, text=True, timeout=300)
+        check(r.returncode == 0, f"the installer puts the guard in for {who}" + ("" if r.returncode == 0 else "\n" + (r.stdout + r.stderr)[-600:]))
+        st = states(report(home))
+        want = "in" if who == "claude" else "unseen"
+        check(st.get("guard") == want and st.get("save") == want,
+              f"and the report reads the guard and the save as '{want}' for {who}" + ("" if st.get("guard") == want else f" (guard {st.get('guard')}, save {st.get('save')})"))
 
     print(f"\n{PASSED} passed, {len(FAILED)} failed")
     for what in FAILED:

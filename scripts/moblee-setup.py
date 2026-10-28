@@ -207,11 +207,38 @@ def brew_prefix() -> Path | None:
     return None
 
 
+def _usual_tool_dirs() -> list:
+    """(0.15.2) Where a working tool sits that the app's short PATH misses:
+    nodejs.org's and GitHub's own installers on Apple silicon (/usr/local/bin),
+    Anthropic's installer for Claude (~/.local/bin), and Claude's engine inside
+    the Claude app. Added after the PATH, so the owner's own copy still wins."""
+    import glob
+    dirs = [Path("/usr/local/bin"), Path.home() / ".local" / "bin"]
+    engines = newest_first(glob.glob(str(Path.home() / "Library" / "Application Support" / "Claude" / "claude-code"
+                                         / "*" / "*" / "claude.app" / "Contents" / "MacOS")))
+    if engines:
+        dirs.append(Path(engines[0]))
+    return [str(d) for d in dirs if d.is_dir()]
+
+
+def newest_first(paths: list) -> list:
+    """(0.15.2) Newest copy first, by when it was put there: sorting the names
+    put 2.9.0 after 2.10.0, so an older copy left on disk was the one used."""
+    def when(p):
+        try:
+            return os.path.getmtime(p)
+        except OSError:
+            return 0.0
+    return sorted(paths, key=when, reverse=True)
+
+
 def env_with_brew() -> dict:
     env = dict(os.environ)
     prefix = brew_prefix()
     extra = [str(prefix / "bin"), str(prefix / "sbin")] if prefix else []
-    env["PATH"] = ":".join(extra + [env.get("PATH", "/usr/bin:/bin")])
+    path = env.get("PATH", "/usr/bin:/bin")
+    after = [d for d in _usual_tool_dirs() if d not in path.split(":") and d not in extra]
+    env["PATH"] = ":".join(extra + [path] + after)
     env["HOMEBREW_NO_INSTALL_CLEANUP"] = "1"  # Homebrew removes old versions otherwise
     env["HOMEBREW_NO_ENV_HINTS"] = "1"
     return env
@@ -369,11 +396,49 @@ def claude_ok() -> bool:
     return which("claude") is not None
 
 
-def plugin_installed(plugin_id: str) -> bool:
+def plugin_installed(plugin_id: str) -> bool | None:
+    """True or False, or None when Moblee could not ask (no `claude` found, or
+    it did not answer in time), which a check reports as unseen, not as off.
+    (0.15.2) Claude's own record of installed plugins is read first: it is a
+    file, so it answers when the app's PATH cannot find `claude`. Only an
+    install for the whole Mac counts (scope "user", as install_plugin makes
+    it): one made inside another project does not reach this wiki."""
+    record_read = False
+    try:
+        record = json.loads((Path.home() / ".claude" / "plugins" / "installed_plugins.json").read_text(encoding="utf-8"))
+        plugins = record.get("plugins", record) if isinstance(record, dict) else {}
+        if isinstance(plugins, dict):
+            record_read = True
+            entries = plugins.get(plugin_id)
+            if isinstance(entries, list):
+                if any(isinstance(e, dict) and e.get("scope") == "user" for e in entries):
+                    return True
+            elif entries:
+                return True
+    except (OSError, ValueError):
+        pass
+    if not claude_ok():
+        # Claude's own record answered, and the plugin is not in it for this Mac.
+        return False if record_read else None
     code, out = run(["claude", "plugin", "list", "--json"], timeout=120)
+    if code in (124, 127):
+        return None
     if code != 0:
         code, out = run(["claude", "plugin", "list"], timeout=120)
+        if code in (124, 127):
+            return None
     return plugin_id in out
+
+
+def plugin_reading(plugin_id: str, missing: str) -> tuple | None:
+    """The check's answer when the plugin is not plainly installed: unseen when
+    Moblee could not ask, else off with the given words; None when installed."""
+    have = plugin_installed(plugin_id)
+    if have is None:
+        return None, "Moblee could not ask Claude which plugins are installed just now; Look again to try once more"
+    if not have:
+        return False, missing
+    return None
 
 
 def install_plugin(marketplace_repo: str, plugin_id: str) -> bool:
@@ -580,7 +645,9 @@ class Item:
         try:
             return self._check()
         except Exception as exc:  # a check must never crash the checklist
-            return False, f"the check itself failed ({exc})"
+            # (0.15.2) A check that broke saw nothing, so it says so rather than
+            # calling the item off and offering to install it again.
+            return None, f"Moblee could not check this just now ({exc})"
 
     def install(self) -> bool:
         return self._install()
@@ -599,6 +666,7 @@ def orchard_entry() -> Path | None:
     prefix = brew_prefix()
     if prefix:
         roots.append(prefix / "lib" / "node_modules")
+    roots.append(Path("/usr/local/lib/node_modules"))  # (0.15.2) nodejs.org's Node on Apple silicon
     for root in roots:
         p = root / "@l22-io" / "orchard-mcp" / "build" / "index.js"
         if p.exists():
@@ -624,7 +692,11 @@ def check_mac_apps():
     bridge = entry.parent.parent / "swift" / ".build" / "AppleBridge.app"
     if not bridge.exists():
         return False, "installed, but its setup step has not been run (run the checklist item again)"
+    if not claude_ok():
+        return None, "installed; Moblee could not find Claude here to ask whether it is connected"
     code, out = run(["claude", "mcp", "get", "orchard"], timeout=120)
+    if code in (124, 127):
+        return None, "installed; Claude did not answer in time to say whether it is connected"
     if code != 0:
         return False, "installed, but not connected to Claude"
     if "Connected" not in out or "✘" in out:
@@ -724,15 +796,60 @@ def install_google():
 
 # --- GitHub ------------------------------------------------------------------
 
+def github_reachable(timeout: int = 10) -> bool:
+    """(0.15.2) Whether GitHub answers from this Mac at all. `gh auth status`
+    prints the same "token is invalid" offline as for a sign-in GitHub has
+    revoked, so this is what tells the two apart. Any answer from GitHub, even
+    an error page, counts as reached."""
+    import urllib.error
+    import urllib.request
+    try:
+        urllib.request.urlopen("https://api.github.com/zen", timeout=timeout).close()
+        return True
+    except urllib.error.HTTPError:
+        return True
+    except Exception:
+        return False
+
+
+def gh_signed_in(gh: str) -> bool | None:
+    """(0.15.2) Whether GitHub's tool is signed in to github.com: True only
+    when GitHub accepts the sign-in, False when it has none or GitHub turns it
+    down, and None when the answer could not be had (offline, or the tool did
+    not answer): until 0.15.2 an offline Mac read as "not signed in"."""
+    code, out = run([gh, "auth", "token", "--hostname", "github.com"], timeout=30)
+    if code in (124, 127):
+        return None
+    if code != 0 and ("no oauth token" in out.lower() or "not logged" in out.lower()):
+        return False
+    # A sign-in is kept (or this gh is from before 2.17, with no `auth token`):
+    # ask GitHub whether it still takes it.
+    code, out = run([gh, "auth", "status", "--hostname", "github.com"], timeout=60)
+    if code == 0:
+        return True
+    if code in (124, 127):
+        return None
+    if "not logged" in out.lower():
+        return False
+    return False if github_reachable() else None
+
+
 def check_github():
-    if not which("gh"):
+    gh = gh_tool()
+    if not gh:
         return False, "GitHub's tool is not installed"
-    if run(["gh", "auth", "status"], timeout=60)[0] != 0:
+    signed = gh_signed_in(gh)
+    if signed is None:
+        return None, "GitHub's tool is installed; Moblee could not tell just now whether it is signed in"
+    if not signed:
         return False, "installed, but not signed in"
     return True, "signed in to GitHub"
 
 
 def install_github():
+    gh = gh_tool()
+    if gh and gh_signed_in(gh):
+        return True                                # already working, wherever it was installed from
     if not brew_install(["gh"]):
         return False
     if run(["gh", "auth", "status"], timeout=60)[0] == 0:
@@ -797,8 +914,9 @@ def check_videos():
     missing = [t for t in ("yt-dlp", "ffmpeg") if not which(t)]
     if missing:
         return False, "missing " + ", ".join(missing)
-    if not plugin_installed("watch@claude-video"):
-        return False, "the watch tool is not installed in Claude Code"
+    off = plugin_reading("watch@claude-video", "the watch tool is not installed in Claude Code")
+    if off:
+        return off
     return True, "Claude can watch and summarise videos (type /watch and a link)"
 
 
@@ -822,16 +940,38 @@ def pdf_python() -> str | None:
     return None
 
 
+def pdf_pythons() -> list:
+    """(0.15.2) Every Python that may hold the PDF renderer: Homebrew's, and the
+    one recorded where the wiki-to-pdf skill reads it (which an owner may have
+    set up with another Python, as that skill's own notes allow)."""
+    found = [pdf_python()]
+    try:
+        found.append(PDF_PYTHON_FILE.read_text(encoding="utf-8").strip())
+    except OSError:
+        pass
+    out = []
+    for py in found:
+        if py and Path(py).is_file() and py not in out:
+            out.append(py)
+    return out
+
+
+def renders_pdfs(py: str) -> bool:
+    return run([py, "-c", "import weasyprint, markdown, jinja2, yaml, pypdf"], timeout=120)[0] == 0
+
+
 def weasyprint_ok() -> bool:
-    py = pdf_python()
-    return bool(py) and run([py, "-c", "import weasyprint, markdown, jinja2, yaml, pypdf"], timeout=120)[0] == 0
+    return any(renders_pdfs(py) for py in pdf_pythons())
 
 
 def check_documents():
     problems = []
     if not weasyprint_ok():
         problems.append("the PDF renderer")
-    if not plugin_installed("document-skills@anthropic-agent-skills"):
+    off = plugin_reading("document-skills@anthropic-agent-skills", "")
+    if off and off[0] is None and not problems:
+        return off
+    if off and off[0] is False:
         problems.append("the Word, PowerPoint and Excel tools")
     if problems:
         return False, "missing " + " and ".join(problems)
@@ -841,11 +981,14 @@ def check_documents():
 def install_documents():
     ok = brew_install(["python", "cairo", "pango", "gdk-pixbuf", "libffi"])
     py = pdf_python()
-    if py and not weasyprint_ok():
+    # (0.15.2) Homebrew's own Python is the one set up and recorded here, so it is
+    # the one asked: another Python that already renders is not overwritten
+    # in the record unless Homebrew's renders too.
+    if py and not renders_pdfs(py):
         ok = run_logged([py, "-m", "pip", "install", "--user", "--break-system-packages",
                          "weasyprint", "markdown", "jinja2", "PyYAML", "pypdf"],
                         "Installing the PDF renderer", timeout=1800) and ok
-    if py and weasyprint_ok():
+    if py and renders_pdfs(py):
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         PDF_PYTHON_FILE.write_text(py + "\n")
     elif not py:
@@ -858,8 +1001,9 @@ def check_film():
     missing = [t for t in ("node", "ffmpeg") if not which(t)]
     if missing:
         return False, "missing " + ", ".join(missing)
-    if not plugin_installed("remotion@remotion"):
-        return False, "the video studio plugin is not installed"
+    off = plugin_reading("remotion@remotion", "the video studio plugin is not installed")
+    if off:
+        return off
     if not skill_installed("film"):
         return False, skill_problem("film")
     return True, "video editing works (say 'make a film' or 'edit this video')"
@@ -915,9 +1059,8 @@ def check_x_capture():
 
 
 def check_skill_maker():
-    if plugin_installed("skill-creator@claude-plugins-official"):
-        return True, "say 'make a skill for ...' to teach Claude a routine"
-    return False, "not installed"
+    off = plugin_reading("skill-creator@claude-plugins-official", "not installed")
+    return off or (True, "say 'make a skill for ...' to teach Claude a routine")
 
 
 def install_skill_maker():
@@ -925,9 +1068,8 @@ def install_skill_maker():
 
 
 def check_obsidian_extras():
-    if plugin_installed("obsidian@obsidian-skills"):
-        return True, "canvases, databases and Obsidian's own formats"
-    return False, "not installed"
+    off = plugin_reading("obsidian@obsidian-skills", "not installed")
+    return off or (True, "canvases, databases and Obsidian's own formats")
 
 
 def install_obsidian_extras():
@@ -1102,10 +1244,10 @@ def install_reach():
 def claude_engine() -> str | None:
     """Claude's engine: inside the Claude app, newest first, else on the path."""
     import glob
-    found = sorted(glob.glob(str(Path.home() / "Library" / "Application Support" / "Claude" / "claude-code"
-                                 / "*" / "*" / "claude.app" / "Contents" / "MacOS" / "claude")))
+    found = newest_first(glob.glob(str(Path.home() / "Library" / "Application Support" / "Claude" / "claude-code"
+                                       / "*" / "*" / "claude.app" / "Contents" / "MacOS" / "claude")))
     if found:
-        return found[-1]
+        return found[0]
     return which("claude")
 
 
@@ -1549,6 +1691,12 @@ def hub_settings() -> dict:
 
 
 def same_address(one: str, other: str) -> bool:
+    """(0.15.2) On GitHub, the https and SSH forms of one repository are one
+    address, so a member who cloned over SSH is not told the Hub is elsewhere."""
+    a, b = repo_slug(one), repo_slug(other)
+    if a and b:
+        return a.lower() == b.lower()
+
     def norm(a: str) -> str:
         a = (a or "").strip().rstrip("/")
         if a.endswith(".git"):
@@ -1562,7 +1710,7 @@ def repo_slug(address: str) -> str | None:
     a = (address or "").strip().rstrip("/")
     if a.endswith(".git"):
         a = a[:-4]
-    for prefix in ("https://github.com/", "git@github.com:"):
+    for prefix in ("https://github.com/", "git@github.com:", "ssh://git@github.com/"):
         if a.lower().startswith(prefix):
             rest = a[len(prefix):]
             if rest.count("/") == 1 and all(rest.split("/")):
@@ -1571,7 +1719,14 @@ def repo_slug(address: str) -> str | None:
 
 
 def gh_tool() -> str | None:
-    return os.environ.get("MOBLEE_GH") or which("gh")
+    """GitHub's tool: a test's stand-in, the PATH (with the usual folders), or
+    (0.15.2) the copy the Hub's own join note unpacks under ~/Apps/github-cli/."""
+    found = os.environ.get("MOBLEE_GH") or which("gh")
+    if found:
+        return found
+    import glob
+    kept = newest_first(glob.glob(str(Path.home() / "Apps" / "github-cli" / "*" / "bin" / "gh")))
+    return kept[0] if kept else None
 
 
 def hub_git(args: list, timeout: int = 60) -> tuple[int, str]:
@@ -1629,22 +1784,37 @@ def check_hub():
     manifest = hub_manifest(folder)
     if manifest is None:
         return False, "the hub folder has no hub.json, so it is not a Hub this version of Moblee knows"
-    if not same_address(remote, str(manifest.get("address", ""))):
-        return False, ("the hub folder points somewhere other than the address the Hub itself gives; if GitHub "
-                       "confirms the Hub has moved, choosing this item again points your copy at "
-                       + str(manifest.get("address") or "it"))
+    address = str(manifest.get("address", ""))
+    old_address = ""
+    if not same_address(remote, address):
+        # (0.15.2) A copy cloned before the Hub moved still works (GitHub
+        # forwards the old address), so it is in, at its old address, once
+        # GitHub confirms the move; unseen only when GitHub cannot be reached
+        # (a repository GitHub does not know, or no GitHub tool, stays off,
+        # so the item that points the copy at the Hub is still offered).
+        old, new = repo_slug(remote), repo_slug(address)
+        gh = gh_tool()
+        now = gh_full_name(gh, old) if (old and new and gh) else None
+        if now is None and old and new and gh and not github_reachable():
+            return None, ("the hub folder points at " + remote + ", not the address the Hub gives; Moblee could "
+                          "not reach GitHub just now to ask whether that is the Hub's old address")
+        if not now or now.lower() != new.lower():
+            return False, ("the hub folder points somewhere other than the address the Hub itself gives; if GitHub "
+                           "confirms the Hub has moved, choosing this item again points your copy at "
+                           + (address or "it"))
+        old_address = "; your copy still uses the Hub's old address, which GitHub forwards (choosing this item again updates it)"
     me = hub_me(folder)
     if me is None:
-        return False, "linked, but this Mac has not joined as a member yet (run this item again)"
+        return False, "linked, but this Mac does not know yet which member you are: open the hub once, or run this item again"
     code, _ = hub_git(["-C", str(folder), "cat-file", "-e", f"@{{u}}:members/{me}.json"], timeout=30)
     if code != 0:
         return False, f"joined as {me}, but your member file has not reached GitHub yet (run this item again)"
     gh = gh_tool()
-    if gh and repo_slug(remote) and run([gh, "auth", "status"], timeout=60)[0] != 0:
+    if gh and repo_slug(remote) and gh_signed_in(gh) is False:
         return False, f"joined as {me}, but GitHub's sign-in on this Mac has lapsed (run the GitHub item again)"
     version = manifest.get("version")
     page = f"; the Hub's page is version {version}" if isinstance(version, str) and version else ""
-    return True, f"in {manifest.get('name') or 'the Hub'} as {me}{page}"
+    return True, f"in {manifest.get('name') or 'the Hub'} as {me}{page}{old_address}"
 
 
 def hub_reachable(address: str) -> bool:
@@ -2464,7 +2634,10 @@ def _hook_commands(path: Path, event: str) -> list | None:
 def _names_file(command: str, wanted: Path) -> bool:
     """Whether a hook's command runs this very file: the whole path, read back
     the way a shell reads it, so a hook left pointing at a moved or renamed
-    wiki, or at a second wiki on the Mac, does not count."""
+    wiki, or at a second wiki on the Mac, does not count. (0.15.2) $HOME is
+    read as the shell reads it too: the installer enters the guard as
+    python3 "$HOME/.claude/hooks/bash-guard.py", which only ~ was read for
+    before, so every installed guard showed as Missing on Add more."""
     import shlex
     try:
         words = shlex.split(command)
@@ -2472,7 +2645,7 @@ def _names_file(command: str, wanted: Path) -> bool:
         words = [command]
     for w in words:
         try:
-            if os.path.realpath(Path(w).expanduser()) == os.path.realpath(wanted):
+            if os.path.realpath(Path(os.path.expandvars(w)).expanduser()) == os.path.realpath(wanted):
                 return True
         except (OSError, ValueError):
             continue

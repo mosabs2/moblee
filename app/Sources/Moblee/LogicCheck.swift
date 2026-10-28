@@ -2972,6 +2972,27 @@ enum LogicCheck {
             check("add more: a part entered for ChatGPT, which cannot be seen to run, is said so, with no button",
                   Parts.parse(Data(#"{"core":[{"key":"guard","title":"t","state":"unseen"}],"extras":{}}"#.utf8))
                       .map { AddMore.partWord($0.core[0]) } == "Moblee cannot see whether ChatGPT runs this")
+            // (0.15.2) Add more looks again by itself on a stale or incomplete record,
+            // and says when a look did not finish.
+            if let p = parts, let stamp = AddMore.stampDate("20261026-1700") {
+                var fresh = p
+                fresh.extras = ["hub": "on", "reach": "off"]
+                check("add more: looks again by itself on a record over a day old, or one that never saw an item, and not otherwise",
+                      AddMore.needsFreshLook(fresh, now: stamp.addingTimeInterval(25 * 3600))
+                          && !AddMore.needsFreshLook(fresh, now: stamp.addingTimeInterval(3600))
+                          && AddMore.needsFreshLook(p, now: stamp.addingTimeInterval(3600))
+                          && { var none = fresh; none.checked = nil; return AddMore.needsFreshLook(none, now: stamp) }())
+            }
+            check("add more: the checklist's stamp is read to the second, as the pack writes it, and to the minute",
+                  AddMore.stampDate("20261026-170012") != nil && AddMore.lastLooked("20261026-170012") == "Last looked: 26 October, 17:00."
+                      && AddMore.stampDate("2026102-17001") == nil
+                      && { if let s = AddMore.stampDate("20261026-170012") { return !AddMore.needsFreshLook(
+                            Parts(assistant: "claude", checked: "20261026-170012", core: [], extras: ["hub": "on"]),
+                            now: s.addingTimeInterval(3600)) }; return false }())
+            check("add more: a look that was stopped, failed to start, or left the record as it was is said to have failed",
+                  AddMore.lookFailed(code: 15, before: "a", after: "b") && AddMore.lookFailed(code: -1, before: "a", after: "b")
+                      && AddMore.lookFailed(code: 1, before: "a", after: "a")
+                      && !AddMore.lookFailed(code: 1, before: "a", after: "b") && !AddMore.lookFailed(code: 0, before: "a", after: "a"))
             check("add more: the last look is given as a day and a time, and an odd stamp gives nothing",
                   AddMore.lastLooked("20261026-1700") == "Last looked: 26 October, 17:00."
                       && AddMore.lastLooked("yesterday") == nil && AddMore.lastLooked(nil) == nil)
