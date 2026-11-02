@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.16.1 (2 November 2026)
+
+**Two fixes: the dashboard shows every thread, and the app carries nothing left over from the computer it was built on.** Nothing changes in how you use Moblee, and you do not need to do anything: the app offers you this update itself.
+
+- **Your dashboard shows your threads however your wiki writes them.** The Active threads, Open decisions and Watch list cards showed nothing when a wiki wrote each item as its own paragraph instead of a list. Both ways are read now. Crossed-out items stay hidden. A wiki page saved in an unusual text format no longer stops the dashboard's cards from loading.
+- **Leftover names from the build computer are gone.** Every Moblee app from 0.8.1 to 0.16.0 carried some leftover folder names from the computer it was built on. They held nothing about you or your wiki. This version leaves them out, and the older versions are being removed from the download page. The copy you have keeps working until you update.
+
+**For maintainers.**
+- `open_items()` in `dashboard/server.py` reads bold-paragraph items as well as dashed lines. A bold line counts only when it starts a paragraph at the margin, so an indented or wrapped `**Note:**` line inside an item is not read as an item; lines inside fenced code blocks are skipped; struck-out items are dropped in both shapes, including `**~~Title~~**`; titles are cut at 120 characters. `read_file()` reads with `errors="replace"`, so a `_context.md` that is not UTF-8 no longer raises `UnicodeDecodeError` out of `/api/state`. New `tools/test-dashboard-items.py` (10 checks; 3 fail against 0.16.0's reader). Found through a Hub take report on a dashboard recipe, whose own update carries the same fix for owners on 0.16.0.
+- `app/scripts/build-app.sh` links with `-Xlinker -S`, which leaves the debug map (the list of source and object files with their full paths) out of the program; `strings` never showed those paths because they sit in the symbol table. `app/scripts/release-app.sh` refuses any app, and any update list, in which a file names the builder's home folder or user name, and stops if a file cannot be read to check it. Without the debug map the build's dSYM carries no file-and-line information.
+- The repository's history was rewritten on 2 November 2026 so that every commit and tag carries a GitHub no-reply address, and the Swift build cache committed by mistake on 23 September 2026 is gone from it. Release tags were moved to the rewritten commits; release files are unchanged except where withdrawn. A clone made before the rewrite shares no history with the repository now: clone again.
+- Comments that named the machines used for testing now say "a test Mac" or "the build Mac", and `tools/test-turn-end-commit.py` reads the user name of whoever runs it instead of listing one.
+
 ## v0.16.0 (28 October 2026)
 
 **A calmer app, a first week that shows you what your wiki can do, and a morning orient that writes your day's list.**

@@ -64,7 +64,7 @@ def states(rep: dict) -> dict:
 def snapshot(home: Path) -> dict:
     """Every file under the home folder, except Apple's Python's own cache of
     its compiled standard library (Library/Caches/com.apple.python), which
-    that Python writes whatever script it runs (found on the Mac mini, 26
+    that Python writes whatever script it runs (found on a test Mac, 26
     October 2026)."""
     out = {}
     for p in sorted(home.rglob("*")):

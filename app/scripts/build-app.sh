@@ -25,10 +25,14 @@ bundle="$out/builds/$stamp/Moblee.app"
 mkdir -p "$out/swiftpm"
 
 if [ "${1:-}" = "universal" ]; then arch=(--arch arm64 --arch x86_64); else arch=(); fi
+# (v0.16.1) -Xlinker -S leaves the debug map out of the program. Until 0.16.0
+# that map carried the full paths of the build and source folders, which named
+# the Mac it was built on; release-app.sh refuses any app that still does.
+arch+=(-Xlinker -S)
 swift build --package-path "$app_src" --scratch-path "$out/swiftpm" -c release ${arch[@]+"${arch[@]}"}
 # (v0.15.0) Where the program was built is asked of Swift, never assumed. Until
 # 27 October 2026 a universal build read swiftpm/apple/Products/Release, which
-# newer Swift no longer writes to: every release signed on the MacBook from then
+# newer Swift no longer writes to: every release signed on the build Mac from then
 # on carried the program last built there, on 27 September 2026, under whatever
 # version number Info.plist gave it. Two checks stop it happening again.
 binary="$(swift build --package-path "$app_src" --scratch-path "$out/swiftpm" -c release ${arch[@]+"${arch[@]}"} --show-bin-path)/Moblee"

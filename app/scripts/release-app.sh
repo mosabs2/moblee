@@ -86,6 +86,22 @@ if ! otool -L "$app/Contents/MacOS/Moblee" | grep -q "Sparkle.framework"; then
     echo "The program in the built app does not carry the updater, so it is not this version's program. Nothing was signed."
     exit 1
 fi
+# (v0.16.1) Nothing inside the app may name the Mac it was built on. Releases
+# 0.8.1 to 0.16.0 carried the build folders' paths in the program's debug map,
+# which gave away the maintainer's user name and folder names; build-app.sh now
+# leaves the map out, and this stops any build that still carries such a path.
+# grep answers 0 for a match, 1 for none, and 2 when any file could not be read
+# (even alongside a match), so only a clean 1 lets the release go on.
+names_home() {
+    local rc=0
+    LC_ALL=C grep -r -a -l -F -e "$HOME/" -e "/Users/$(id -un)/" "$@" > "$stage_check" 2>&1 || rc=$?
+    if [ "$rc" -eq 1 ]; then return 0; fi
+    if [ "$rc" -eq 0 ]; then echo "These files name this Mac's home folder, and an owner could read them:"; else echo "Not every file could be read to check it for this Mac's home folder:"; fi
+    cat "$stage_check"
+    return 1
+}
+stage_check="$(mktemp)"
+names_home "$app" || { echo "Nothing was signed."; exit 1; }
 sparkle_bin="$(dirname "$(find "$out/swiftpm/artifacts" -name generate_keys -path '*/bin/*' -maxdepth 5 | head -1)")"
 if [ ! -x "$sparkle_bin/generate_appcast" ]; then echo "Sparkle's tools were not found under $out/swiftpm/artifacts. Nothing was signed."; exit 1; fi
 keychain_key="$("$sparkle_bin/generate_keys" -p 2>/dev/null || true)"
@@ -138,6 +154,8 @@ printf '%s\n' "$notes" > "$feed/Moblee-$version.md"
     "$feed"
 grep -q "sparkle:edSignature" "$feed/appcast.xml" || { echo "The update list has no signature for the zip. Not ready."; exit 1; }
 grep -qE "sparkle:version>$build<|sparkle:version=\"$build\"" "$feed/appcast.xml" || { echo "The update list does not name build $build. Not ready."; exit 1; }
+# (v0.16.1) The list carries the release notes, so it is checked like the app.
+names_home "$feed/appcast.xml" || { echo "Not ready."; exit 1; }
 cp "$feed/appcast.xml" "$stage/appcast.xml"
 echo "Ready to share: $stage/Moblee-$version.zip"
 echo "Its update list: $stage/appcast.xml (attach both to the release)"

@@ -149,7 +149,7 @@ MAX_FILES_PER_CALL = 6
 
 # --- KNOWN_SAFE begin ---
 KNOWN_SAFE_SHA256 = {
-    "238f80a5feaf5f8cd64a61d90386640aa153290537f2bfe8bc1a1ee77b9e44ff": "dashboard/server.py",
+    "4233937421fbb59d78bfe1fc28a186e3bc4c4401c3256cbe6245033ff6429452": "dashboard/server.py",
     "eaeb66d6d49dd061399f203945b330dd7ba88d86b61385592fff92473a46c57d": "extras/recall/install-recall.py",
     "58d03e41cc158f36d736871c1e6b740c7706a748fbcb8f6b60f3856dcc73e1f2": "extras/recall/rebuild-index.sh",
     "0da0d35e4131214cac6564771278bf44f726ac30f672fdf6d5882e8cc720be9a": "extras/recall/recall-inject.py",

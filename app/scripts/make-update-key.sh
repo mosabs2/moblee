@@ -13,7 +13,7 @@
 # replaced. Replacing it would leave every owner's app refusing every update.
 #
 # Keep a copy of the private key somewhere safe and off this Mac (a password
-# manager), because a MacBook lost without one means the next update cannot be
+# manager), because a Mac lost without one means the next update cannot be
 # signed: `generate_keys -x <file>` exports it, and the file must then be moved
 # into the password manager and deleted, never left in a folder or the repository.
 set -euo pipefail

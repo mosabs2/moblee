@@ -73,6 +73,7 @@ Prints a pass/fail table and exits non-zero on any failure.
 """
 import datetime
 import fcntl
+import getpass
 import importlib.util
 import json
 import os
@@ -1057,9 +1058,11 @@ def test_safety():
           set(homes) == {".config"}, sorted(set(homes)))
     # Whole words, so that ordinary English is not mistaken for a relation
     # ("reason" holds "son"). This script is part of a public product: it must
-    # name no person, no family relation and no private place.
+    # name no person, no family relation and no private place. The user name
+    # of whoever runs the test is read from the Mac, so no name is written here.
+    me = re.escape(getpass.getuser().lower())
     private = re.findall(
-        r"\b(?:wife|husband|father|mother|"
+        r"\b(?:" + me + r"|wife|husband|father|mother|"
         r"brother|sister|son|daughter|uncle|aunt|cousin)\b|/users/",
         text.lower())
     check("safety", "the script names nobody, no relation and no private place",

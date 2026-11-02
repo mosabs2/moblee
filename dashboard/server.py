@@ -259,7 +259,9 @@ QUICK_ACTIONS = [
 # --- helpers -----------------------------------------------------------------
 def read_file(path):
     try:
-        with open(path, encoding="utf-8") as f:
+        # A file saved in another encoding is read with stand-in characters
+        # rather than stopping every card on the page from loading.
+        with open(path, encoding="utf-8", errors="replace") as f:
             return f.read()
     except OSError:
         return ""
@@ -289,18 +291,42 @@ def section_lines(text, header):
 
 
 def open_items(lines):
+    """Items in a _context.md section, written either as dashed lines
+    (`- **Title.** ...`) or as bold paragraphs (`**Title.** ...`), the two
+    shapes owners' wikis use. Struck-out items (`~~...~~`) are left out. A
+    bold paragraph counts only when it starts a paragraph at the margin, so a
+    wrapped or indented line inside an item (`  **Note:** ...`) is not read as
+    an item of its own; nor is anything inside a fenced code block."""
     items = []
+    para_start, fenced = True, False
     for ln in lines:
         s = ln.strip()
-        if not s.startswith("- "):
+        if s.startswith("```"):
+            fenced = not fenced
+            para_start = False
             continue
-        body = s[2:].lstrip()
-        if body.startswith("~~"):
+        if fenced:
             continue
-        m = re.search(r"\*\*(.+?)\*\*", body)
-        title = strip_wikilinks((m.group(1) if m else body[:90])).strip().rstrip(".")
+        if not s:
+            para_start = True
+            continue
+        starts = para_start
+        para_start = False
+        if s.startswith("- "):
+            body = s[2:].lstrip()
+            m = re.search(r"\*\*(.+?)\*\*", body)
+            if body.startswith("~~") or (m and m.group(1).startswith("~~")):
+                continue
+            title = strip_wikilinks((m.group(1) if m else body[:90])).strip().rstrip(".")
+        else:
+            if not starts or ln[:1] in (" ", "\t"):
+                continue
+            m = re.match(r"\*\*(.+?)\*\*", s)
+            if not m or m.group(1).startswith("~~"):
+                continue
+            title = strip_wikilinks(m.group(1)).strip().strip("*").rstrip(".:")
         if title:
-            items.append({"title": title})
+            items.append({"title": title[:120]})
     return items
 
 

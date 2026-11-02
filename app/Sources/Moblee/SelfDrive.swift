@@ -161,7 +161,7 @@ enum SelfDrive {
         /// The keyboard, really had. Typed letters and keys go to whichever app
         /// has it, and macOS may not hand it over at once to an app started
         /// from a script, least of all straight after another copy of it has
-        /// just quit (seen on the mini, 20 September 2026). Asked for until it
+        /// just quit (seen on a test Mac, 20 September 2026). Asked for until it
         /// is really had. (v0.9.4: was written out at the name screen, and is
         /// now wanted from the welcome screen on, because the install is walked
         /// from the keyboard.)
